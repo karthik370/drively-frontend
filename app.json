@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "DriveMate",
+    "slug": "drivemate",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.drivemate.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "DriveMate needs your location to show nearby drivers and track your ride.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "DriveMate needs your location to provide real-time tracking during rides.",
+        "NSCameraUsageDescription": "DriveMate needs camera access to capture documents and profile photos.",
+        "NSPhotoLibraryUsageDescription": "DriveMate needs photo library access to upload documents and profile photos."
+      },
+      "config": {
+        "googleMapsApiKey": "AIzaSyA_Dun255HHND3b_lX5N05zvGT77NhDeCI"
+      }
+    },
+    "android": {
+      "package": "com.drivemate.app",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyA_Dun255HHND3b_lX5N05zvGT77NhDeCI"
+        }
+      }
+    },
+    "web": {},
+    "plugins": [
+      "expo-dev-client",
+      "@react-native-community/datetimepicker"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "f83fb1ee-b304-4120-bb2d-6d950b6f569a"
+      }
+    },
+    "owner": "govardhan30"
+  }
+}

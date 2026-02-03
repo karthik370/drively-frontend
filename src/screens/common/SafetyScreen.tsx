@@ -1,0 +1,84 @@
+import React from 'react';
+import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+
+const SafetyScreen = ({ navigation }: any) => {
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+          <Icon name="arrow-left" size={22} color="#111827" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Safety</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.card}>
+          <Text style={styles.title}>Drive safe. Earn more. Stay protected.</Text>
+          <Text style={styles.text}>
+            MateDrive is built for professional drivers. Your safety and the customer’s safety are the top priority.
+          </Text>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Before you start</Text>
+          <Text style={styles.text}>Keep your phone charged and internet ON.</Text>
+          <Text style={styles.text}>Check brakes, lights, tyres and mirrors.</Text>
+          <Text style={styles.text}>Keep documents ready and vehicle clean.</Text>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>During the trip</Text>
+          <Text style={styles.text}>Follow speed limits and avoid harsh braking.</Text>
+          <Text style={styles.text}>Use navigation safely. Don’t use the phone while driving.</Text>
+          <Text style={styles.text}>Be polite, professional and follow app rules.</Text>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>If you feel unsafe</Text>
+          <Text style={styles.text}>Stop at a safe public place.</Text>
+          <Text style={styles.text}>Call emergency services if required.</Text>
+          <Text style={styles.text}>Report the issue in Help & Support with booking details.</Text>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#ffffff' },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#f3f4f6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  headerTitle: { fontSize: 16, fontWeight: '800', color: '#111827' },
+  content: { padding: 16, paddingBottom: 24 },
+  card: {
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
+  },
+  title: { fontSize: 18, fontWeight: '900', color: '#111827' },
+  sectionTitle: { fontSize: 16, fontWeight: '900', color: '#111827' },
+  text: { marginTop: 8, color: '#374151', fontWeight: '700', lineHeight: 20 },
+});
+
+export default SafetyScreen;

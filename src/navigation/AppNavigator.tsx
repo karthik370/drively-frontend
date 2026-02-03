@@ -1,0 +1,219 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { AppState, AppStateStatus, ActivityIndicator, View, StyleSheet } from 'react-native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useAppSelector, useAppDispatch } from '../redux/store';
+import { loadUser } from '../redux/slices/authSlice';
+import { loadDriverVerificationStatus } from '../redux/slices/driverSlice';
+import AuthNavigator from './AuthNavigator';
+import DrawerNavigator from './DrawerNavigator';
+import { clearCurrentBooking, setCurrentBooking } from '../redux/slices/bookingSlice';
+import {
+  clearLocations,
+  clearRoute,
+  setDropAddress,
+  setDropLocation,
+  setPickupAddress,
+  setPickupLocation,
+} from '../redux/slices/locationSlice';
+import { getActiveBooking } from '../services/api';
+import { BookingStatus } from '../types';
+import socketService from '../services/socketService';
+
+const Stack = createNativeStackNavigator();
+
+const navigationRef = createNavigationContainerRef<any>();
+
+const AppNavigator = () => {
+  const dispatch = useAppDispatch();
+  const { isAuthenticated, user } = useAppSelector((state) => state.auth);
+  const booking = useAppSelector((state) => state.booking.currentBooking);
+  const [isBootLoading, setIsBootLoading] = useState(true);
+  const hydrateRef = useRef(false);
+  const hydrateInFlightRef = useRef(false);
+  const verificationHydratedRef = useRef(false);
+
+  const isActiveTripStatus = (status: any) => {
+    return [
+      BookingStatus.REQUESTED,
+      BookingStatus.SEARCHING,
+      BookingStatus.ACCEPTED,
+      BookingStatus.DRIVER_ARRIVING,
+      BookingStatus.ARRIVED,
+      BookingStatus.STARTED,
+      BookingStatus.IN_PROGRESS,
+    ].includes(status);
+  };
+
+  const hydrateActiveTrip = async () => {
+    if (hydrateInFlightRef.current) return;
+    hydrateInFlightRef.current = true;
+    try {
+      const raw = await getActiveBooking();
+      if (!raw || !raw.id) {
+        if (booking?.id && isActiveTripStatus(booking.status)) {
+          dispatch(clearCurrentBooking());
+          dispatch(clearLocations());
+          dispatch(clearRoute());
+        }
+        return;
+      }
+
+      const status = (raw as any)?.status;
+      if (!isActiveTripStatus(status)) {
+        if (booking?.id && isActiveTripStatus(booking.status)) {
+          dispatch(clearCurrentBooking());
+          dispatch(clearLocations());
+          dispatch(clearRoute());
+        }
+        return;
+      }
+
+      const now = new Date().toISOString();
+
+      const pickupLat = Number((raw as any)?.pickupLocationLat ?? (raw as any)?.pickupLatitude ?? (raw as any)?.pickup?.latitude);
+      const pickupLng = Number((raw as any)?.pickupLocationLng ?? (raw as any)?.pickupLongitude ?? (raw as any)?.pickup?.longitude);
+      if (Number.isFinite(pickupLat) && Number.isFinite(pickupLng)) {
+        dispatch(setPickupLocation({ latitude: pickupLat, longitude: pickupLng }));
+      }
+      dispatch(setPickupAddress(typeof (raw as any)?.pickupAddress === 'string' ? (raw as any).pickupAddress : null));
+
+      const dropLatRaw = (raw as any)?.dropLocationLat ?? (raw as any)?.dropLatitude ?? (raw as any)?.drop?.latitude;
+      const dropLngRaw = (raw as any)?.dropLocationLng ?? (raw as any)?.dropLongitude ?? (raw as any)?.drop?.longitude;
+      const dropLat = dropLatRaw !== undefined && dropLatRaw !== null ? Number(dropLatRaw) : NaN;
+      const dropLng = dropLngRaw !== undefined && dropLngRaw !== null ? Number(dropLngRaw) : NaN;
+      if (Number.isFinite(dropLat) && Number.isFinite(dropLng)) {
+        dispatch(setDropLocation({ latitude: dropLat, longitude: dropLng }));
+      }
+      dispatch(setDropAddress(typeof (raw as any)?.dropAddress === 'string' ? (raw as any).dropAddress : null));
+
+      dispatch(
+        setCurrentBooking({
+          id: String((raw as any)?.id),
+          bookingNumber: String((raw as any)?.bookingNumber ?? ''),
+          status: status as any,
+          customer: (raw as any)?.customer as any,
+          driver: (raw as any)?.driver as any,
+          otp: (raw as any)?.otp ?? null,
+          pickupLocation: {
+            latitude: Number.isFinite(pickupLat) ? pickupLat : 0,
+            longitude: Number.isFinite(pickupLng) ? pickupLng : 0,
+          },
+          pickupAddress: String((raw as any)?.pickupAddress ?? 'Pickup'),
+          dropLocation:
+            Number.isFinite(dropLat) && Number.isFinite(dropLng)
+              ? { latitude: dropLat, longitude: dropLng }
+              : undefined,
+          dropAddress: typeof (raw as any)?.dropAddress === 'string' ? (raw as any).dropAddress : undefined,
+          scheduledTime: (raw as any)?.scheduledTime ? String((raw as any).scheduledTime) : undefined,
+          vehicleType: (raw as any)?.vehicleType as any,
+          tripType: (raw as any)?.tripType as any,
+          totalAmount: typeof (raw as any)?.totalAmount === 'number' ? (raw as any).totalAmount : Number((raw as any)?.totalAmount || 0),
+          paymentMethod: (raw as any)?.paymentMethod as any,
+          createdAt: (raw as any)?.createdAt ? String((raw as any).createdAt) : now,
+          updatedAt: (raw as any)?.updatedAt ? String((raw as any).updatedAt) : now,
+        } as any)
+      );
+
+      if (navigationRef.isReady()) {
+        (navigationRef as any).navigate('Main', {
+          screen: 'MainTabs',
+          params: { screen: 'Tracking' },
+        });
+      }
+    } catch {
+    } finally {
+      hydrateInFlightRef.current = false;
+    }
+  };
+
+  useEffect(() => {
+    dispatch(loadUser()).finally(() => {
+      setIsBootLoading(false);
+    });
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    try {
+      void socketService.connect();
+    } catch {
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (isAuthenticated) return;
+    try {
+      socketService.disconnect();
+    } catch {
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (verificationHydratedRef.current) return;
+
+    const ut = String((user as any)?.userType || '');
+    if (ut !== 'DRIVER' && ut !== 'BOTH') return;
+
+    verificationHydratedRef.current = true;
+    void dispatch(loadDriverVerificationStatus());
+  }, [dispatch, isAuthenticated, user]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (hydrateRef.current) return;
+    hydrateRef.current = true;
+    void hydrateActiveTrip();
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (isAuthenticated) return;
+    hydrateRef.current = false;
+    verificationHydratedRef.current = false;
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    const handler = (state: AppStateStatus) => {
+      if (state !== 'active') return;
+      if (!isAuthenticated) return;
+      void hydrateActiveTrip();
+    };
+
+    const sub = AppState.addEventListener('change', handler);
+    return () => {
+      sub.remove();
+    };
+  }, [booking?.id, booking?.status, isAuthenticated]);
+
+  if (isBootLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#2563eb" />
+      </View>
+    );
+  }
+
+  return (
+    <NavigationContainer ref={navigationRef}>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        {isAuthenticated ? (
+          <Stack.Screen name="Main" component={DrawerNavigator} />
+        ) : (
+          <Stack.Screen name="Auth" component={AuthNavigator} />
+        )}
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+};
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+  },
+});
+
+export default AppNavigator;
