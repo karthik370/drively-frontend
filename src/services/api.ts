@@ -1297,9 +1297,9 @@ export const getDriverWalletTransactions = async (limit = 50): Promise<any[]> =>
   }
 };
 
-export const requestDriverPayout = async (amount: number, method: 'BANK' | 'UPI'): Promise<any> => {
+export const requestDriverPayout = async (amount: number, method: 'BANK' | 'UPI', details?: any): Promise<any> => {
   try {
-    const res = await api.post<ApiResponse<any>>('/driver-wallet/payout', { amount, method });
+    const res = await api.post<ApiResponse<any>>('/driver-wallet/payout', { amount, method, ...details });
     return unwrap(res);
   } catch (error) {
     return handleAxiosError(error);

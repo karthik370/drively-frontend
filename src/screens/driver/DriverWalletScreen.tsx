@@ -18,8 +18,13 @@ const DriverWalletScreen = ({ navigation }: any) => {
     const [refreshing, setRefreshing] = useState(false);
     const [showPayoutModal, setShowPayoutModal] = useState(false);
     const [payoutAmount, setPayoutAmount] = useState('');
-    const [payoutMethod] = useState<'BANK'>('BANK');
+    const [payoutMethod, setPayoutMethod] = useState<'UPI' | 'BANK'>('UPI');
+    const [upiId, setUpiId] = useState('');
+    const [bankAcc, setBankAcc] = useState('');
+    const [bankIfsc, setBankIfsc] = useState('');
+    const [bankName, setBankName] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isEditingPayoutMethod, setIsEditingPayoutMethod] = useState(false);
 
     const fetchData = useCallback(async () => {
         try {
@@ -47,12 +52,40 @@ const DriverWalletScreen = ({ navigation }: any) => {
             Alert.alert('Insufficient balance', `Available: ₹${(summary?.withdrawableBalance ?? 0).toFixed(0)}`);
             return;
         }
+        let details: any = {};
+        if (payoutMethod === 'UPI') {
+            const effectiveUpi = upiId.trim() || summary?.payoutMethods?.upiId;
+            if (!effectiveUpi) {
+                Alert.alert('UPI ID Required', 'Please enter your UPI ID');
+                return;
+            }
+            // Always send details so backend knows what UPI to use
+            // forceRecreate on backend happens when details differ from saved
+            if (upiId.trim()) details.upiId = upiId.trim();
+        } else {
+            const hasBank = summary?.payoutMethods?.bank;
+            if (!hasBank || isEditingPayoutMethod) {
+                if (!bankAcc.trim() || !bankIfsc.trim() || !bankName.trim()) {
+                    Alert.alert('Bank Details Required', 'Please fill all bank details');
+                    return;
+                }
+                details.bankAccountNumber = bankAcc.trim();
+                details.bankIfscCode = bankIfsc.trim();
+                details.bankAccountHolderName = bankName.trim();
+            }
+        }
+
         setIsSubmitting(true);
         try {
-            await requestDriverPayout(amt, payoutMethod);
-            Alert.alert('Payout Requested', `₹${amt.toFixed(0)} withdrawal requested via Bank Transfer. It will be processed within 24 hours.`);
+            await requestDriverPayout(amt, payoutMethod, Object.keys(details).length > 0 ? details : undefined);
+            Alert.alert('Payout Requested', `₹${amt.toFixed(0)} withdrawal requested via ${payoutMethod}. It will be processed shortly.`);
             setShowPayoutModal(false);
+            setIsEditingPayoutMethod(false);
             setPayoutAmount('');
+            setUpiId('');
+            setBankAcc('');
+            setBankIfsc('');
+            setBankName('');
             fetchData();
         } catch (e: any) {
             Alert.alert('Payout Failed', e?.message || 'Could not process payout');
@@ -145,8 +178,33 @@ const DriverWalletScreen = ({ navigation }: any) => {
                 {/* Payout Methods */}
                 <View style={styles.methodsCard}>
                     <Text style={styles.sectionTitle}>Payout Methods</Text>
-                    {summary?.payoutMethods?.bank ? (
+                    
+                    {summary?.payoutMethods?.upiId && (
                         <View style={styles.methodRow}>
+                            <View style={[styles.methodIcon, { backgroundColor: '#141414' }]}>
+                                <Icon name="cellphone" size={18} color="#C9A84C" />
+                            </View>
+                            <View style={styles.methodInfo}>
+                                <Text style={styles.methodTitle}>UPI ID</Text>
+                                <Text style={styles.methodSub}>{summary.payoutMethods.upiId}</Text>
+                            </View>
+                            <TouchableOpacity
+                                onPress={() => {
+                                    setPayoutMethod('UPI');
+                                    setUpiId(summary.payoutMethods.upiId);
+                                    setIsEditingPayoutMethod(true);
+                                    setPayoutAmount(String(Math.floor(summary?.withdrawableBalance ?? 0)));
+                                    setShowPayoutModal(true);
+                                }}
+                                style={styles.editBtn}
+                            >
+                                <Text style={styles.editBtnText}>Edit</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
+
+                    {summary?.payoutMethods?.bank && (
+                        <View style={[styles.methodRow, { marginTop: summary?.payoutMethods?.upiId ? 8 : 0 }]}>
                             <View style={[styles.methodIcon, { backgroundColor: '#141414' }]}>
                                 <Icon name="bank" size={18} color="#C9A84C" />
                             </View>
@@ -156,14 +214,29 @@ const DriverWalletScreen = ({ navigation }: any) => {
                                     {summary.payoutMethods.bank.holderName} • {summary.payoutMethods.bank.accountNumber}
                                 </Text>
                             </View>
-                            <Icon name="check-circle" size={18} color="#10b981" />
+                            <TouchableOpacity
+                                onPress={() => {
+                                    setPayoutMethod('BANK');
+                                    setBankName(summary.payoutMethods.bank.holderName || '');
+                                    setBankAcc('');
+                                    setBankIfsc(summary.payoutMethods.bank.ifsc || '');
+                                    setIsEditingPayoutMethod(true);
+                                    setPayoutAmount(String(Math.floor(summary?.withdrawableBalance ?? 0)));
+                                    setShowPayoutModal(true);
+                                }}
+                                style={styles.editBtn}
+                            >
+                                <Text style={styles.editBtnText}>Edit</Text>
+                            </TouchableOpacity>
                         </View>
-                    ) : (
+                    )}
+
+                    {!summary?.payoutMethods?.bank && !summary?.payoutMethods?.upiId && (
                         <View style={styles.methodRow}>
                             <View style={[styles.methodIcon, { backgroundColor: '#141414' }]}>
-                                <Icon name="bank" size={18} color="#9ca3af" />
+                                <Icon name="alert-circle-outline" size={18} color="#fbbf24" />
                             </View>
-                            <Text style={styles.methodTitle}>No bank account linked</Text>
+                            <Text style={styles.methodTitle}>No payout method set</Text>
                         </View>
                     )}
                 </View>
@@ -206,7 +279,9 @@ const DriverWalletScreen = ({ navigation }: any) => {
             <Modal visible={showPayoutModal} transparent animationType="slide">
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalCard}>
-                        <Text style={styles.modalTitle}>Withdraw Earnings</Text>
+                        <Text style={styles.modalTitle}>
+                            {isEditingPayoutMethod ? 'Edit Payout Method' : 'Withdraw Earnings'}
+                        </Text>
                         <Text style={styles.modalHint}>
                             Available: ₹{withdrawable.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                         </Text>
@@ -219,13 +294,70 @@ const DriverWalletScreen = ({ navigation }: any) => {
                             onChangeText={setPayoutAmount}
                             editable={!isSubmitting}
                         />
+                        <Text style={styles.methodLabel}>Transfer Method</Text>
+                        <View style={styles.methodToggleRow}>
+                            <TouchableOpacity
+                                style={[styles.methodToggle, payoutMethod === 'UPI' && styles.methodToggleActive]}
+                                onPress={() => setPayoutMethod('UPI')}
+                            >
+                                <Icon name="cellphone" size={16} color={payoutMethod === 'UPI' ? '#fff' : '#CCC'} />
+                                <Text style={[styles.methodToggleText, payoutMethod === 'UPI' && styles.methodToggleTextActive]}>UPI</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.methodToggle, payoutMethod === 'BANK' && styles.methodToggleActive]}
+                                onPress={() => setPayoutMethod('BANK')}
+                            >
+                                <Icon name="bank" size={16} color={payoutMethod === 'BANK' ? '#fff' : '#CCC'} />
+                                <Text style={[styles.methodToggleText, payoutMethod === 'BANK' && styles.methodToggleTextActive]}>Bank</Text>
+                            </TouchableOpacity>
+                        </View>
 
+                        {payoutMethod === 'UPI' && (!summary?.payoutMethods?.upiId || isEditingPayoutMethod) && (
+                            <TextInput
+                                style={styles.modalInput}
+                                placeholder="Enter your UPI ID (e.g. name@upi)"
+                                placeholderTextColor="#666"
+                                value={upiId}
+                                onChangeText={setUpiId}
+                                autoCapitalize="none"
+                                editable={!isSubmitting}
+                            />
+                        )}
 
-
+                        {payoutMethod === 'BANK' && (!summary?.payoutMethods?.bank || isEditingPayoutMethod) && (
+                            <>
+                                <TextInput
+                                    style={styles.modalInput}
+                                    placeholder="Account Holder Name"
+                                    placeholderTextColor="#666"
+                                    value={bankName}
+                                    onChangeText={setBankName}
+                                    editable={!isSubmitting}
+                                />
+                                <TextInput
+                                    style={styles.modalInput}
+                                    placeholder="Account Number"
+                                    placeholderTextColor="#666"
+                                    value={bankAcc}
+                                    onChangeText={setBankAcc}
+                                    keyboardType="numeric"
+                                    editable={!isSubmitting}
+                                />
+                                <TextInput
+                                    style={styles.modalInput}
+                                    placeholder="IFSC Code"
+                                    placeholderTextColor="#666"
+                                    value={bankIfsc}
+                                    onChangeText={setBankIfsc}
+                                    autoCapitalize="characters"
+                                    editable={!isSubmitting}
+                                />
+                            </>
+                        )}
                         <View style={styles.modalActions}>
                             <TouchableOpacity
                                 style={styles.modalCancelBtn}
-                                onPress={() => { if (!isSubmitting) setShowPayoutModal(false); }}
+                                onPress={() => { if (!isSubmitting) { setShowPayoutModal(false); setIsEditingPayoutMethod(false); } }}
                             >
                                 <Text style={styles.modalCancelText}>Cancel</Text>
                             </TouchableOpacity>
@@ -295,6 +427,12 @@ const styles = StyleSheet.create({
     methodInfo: { flex: 1, marginLeft: 12 },
     methodTitle: { fontSize: 14, fontWeight: '700', color: '#FFFFFF', marginLeft: 12 },
     methodSub: { fontSize: 12, color: '#8A8A8A', marginTop: 1 },
+    editBtn: {
+        paddingHorizontal: 12, paddingVertical: 6,
+        backgroundColor: 'rgba(201,168,76,0.15)', borderRadius: 8,
+        borderWidth: 1, borderColor: 'rgba(201,168,76,0.4)',
+    },
+    editBtnText: { fontSize: 12, fontWeight: '700', color: '#C9A84C' },
 
     // Empty & Transactions
     emptyCard: {
