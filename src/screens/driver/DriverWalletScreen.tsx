@@ -78,7 +78,10 @@ const DriverWalletScreen = ({ navigation }: any) => {
         setIsSubmitting(true);
         try {
             await requestDriverPayout(amt, payoutMethod, Object.keys(details).length > 0 ? details : undefined);
-            Alert.alert('Payout Requested', `₹${amt.toFixed(0)} withdrawal requested via ${payoutMethod}. It will be processed shortly.`);
+            Alert.alert(
+                'Withdrawal Initiated',
+                `₹${amt.toFixed(0)} withdrawal via ${payoutMethod} has been submitted. Your balance will update once the transfer completes.`
+            );
             setShowPayoutModal(false);
             setIsEditingPayoutMethod(false);
             setPayoutAmount('');
@@ -266,8 +269,22 @@ const DriverWalletScreen = ({ navigation }: any) => {
                                         })}
                                     </Text>
                                 </View>
-                                <Text style={[styles.txAmount, tx.amount >= 0 ? styles.txPlus : styles.txMinus]}>
-                                    {tx.amount >= 0 ? '+' : ''}₹{Math.abs(tx.amount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                                <Text style={[
+                                    styles.txAmount,
+                                    tx.amount >= 0
+                                        ? (tx.type === 'PAYOUT' && tx.status === 'PROCESSING'
+                                            ? { color: '#fbbf24' }    // yellow for in-flight
+                                            : tx.type === 'PAYOUT' && tx.status === 'FAILED'
+                                                ? { color: '#ef4444' }  // red for failed
+                                                : styles.txPlus)
+                                        : styles.txMinus
+                                ]}>
+                                    {tx.type === 'PAYOUT' && tx.status === 'PROCESSING'
+                                        ? `⏳ ₹${Math.abs(tx.amount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
+                                        : tx.type === 'PAYOUT' && tx.status === 'FAILED'
+                                            ? `✗ ₹${Math.abs(tx.amount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
+                                            : `${tx.amount >= 0 ? '+' : '-'}₹${Math.abs(tx.amount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
+                                    }
                                 </Text>
                             </View>
                         );
