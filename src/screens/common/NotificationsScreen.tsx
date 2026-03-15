@@ -14,14 +14,14 @@ const NotificationsScreen = ({ navigation }: any) => {
     if (type === 'success') return <Icon name="check-circle" size={18} color="#166534" />;
     if (type === 'booking_request') return <Icon name="car" size={18} color="#1e40af" />;
     if (type === 'support_chat') return <Icon name="headset" size={18} color="#1e40af" />;
-    return <Icon name="information" size={18} color="#111827" />;
+    return <Icon name="information" size={18} color="#C9A84C" />;
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.headerRow}>
         <View style={styles.header}>
-          <Icon name="bell" size={22} color="#111827" />
+          <Icon name="bell" size={22} color="#C9A84C" />
           <Text style={styles.title}>Notifications</Text>
         </View>
         <TouchableOpacity
@@ -81,7 +81,7 @@ const NotificationsScreen = ({ navigation }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9fafb',
+    backgroundColor: '#111111',
   },
   headerRow: {
     padding: 16,
@@ -98,16 +98,16 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   clearBtn: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 12,
-    backgroundColor: '#111827',
+    backgroundColor: '#1E1E1E',
   },
   clearBtnDisabled: {
-    backgroundColor: '#e5e7eb',
+    backgroundColor: '#1E1E1E',
   },
   clearText: {
     color: '#ffffff',
@@ -115,25 +115,25 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   clearTextDisabled: {
-    color: '#6b7280',
+    color: '#8A8A8A',
   },
   emptyCard: {
     marginHorizontal: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
     padding: 16,
   },
   cardTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   cardSub: {
     marginTop: 6,
     fontSize: 13,
-    color: '#6b7280',
+    color: '#8A8A8A',
     lineHeight: 18,
   },
   list: {
@@ -142,10 +142,10 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   item: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
     padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
@@ -155,7 +155,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#141414',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -166,12 +166,12 @@ const styles = StyleSheet.create({
   itemMessage: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   itemMeta: {
     marginTop: 6,
     fontSize: 12,
-    color: '#6b7280',
+    color: '#8A8A8A',
   },
 });
 

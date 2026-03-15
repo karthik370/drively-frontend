@@ -25,7 +25,7 @@ const LanguageSelectionScreen = () => {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
-          <Icon name="translate" size={22} color="#111827" />
+          <Icon name="translate" size={22} color="#C9A84C" />
           <Text style={styles.title}>Language</Text>
         </View>
 
@@ -41,7 +41,7 @@ const LanguageSelectionScreen = () => {
                 }}
               >
                 <Text style={[styles.rowText, isSelected && styles.rowTextSelected]}>{l.label}</Text>
-                {isSelected ? <Icon name="check" size={20} color="#2563eb" /> : null}
+                {isSelected ? <Icon name="check" size={20} color="#C9A84C" /> : null}
               </TouchableOpacity>
             );
           })}
@@ -54,7 +54,7 @@ const LanguageSelectionScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9fafb',
+    backgroundColor: '#111111',
   },
   content: {
     padding: 16,
@@ -68,31 +68,31 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   card: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
     overflow: 'hidden',
   },
   row: {
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
+    borderBottomColor: 'rgba(255,255,255,0.3)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   rowSelected: {
-    backgroundColor: '#eff6ff',
+    backgroundColor: '#141414',
   },
   rowText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   rowTextSelected: {
     color: '#1d4ed8',

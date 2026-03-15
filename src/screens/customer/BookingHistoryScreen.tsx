@@ -66,7 +66,7 @@ const BookingHistoryScreen = ({ navigation }: any) => {
 
       <View style={styles.bookingFooter}>
         <View style={styles.driverInfo}>
-          <Icon name="account-circle" size={20} color="#6b7280" />
+          <Icon name="account-circle" size={20} color="#8A8A8A" />
           <Text style={styles.driverName}>
             {authedUserType === UserType.DRIVER || authedUserType === UserType.BOTH
               ? item?.customer
@@ -124,24 +124,24 @@ const getStatusColor = (status: string) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9fafb',
+    backgroundColor: '#111111',
   },
   header: {
     padding: 24,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: 'rgba(255,255,255,0.3)',
   },
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   listContent: {
     padding: 16,
   },
   bookingCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
@@ -160,11 +160,11 @@ const styles = StyleSheet.create({
   bookingNumber: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   bookingDate: {
     fontSize: 12,
-    color: '#6b7280',
+    color: '#8A8A8A',
     marginTop: 2,
   },
   statusBadge: {
@@ -188,12 +188,12 @@ const styles = StyleSheet.create({
   locationText: {
     flex: 1,
     fontSize: 14,
-    color: '#374151',
+    color: '#CCCCCC',
   },
   connector: {
     width: 2,
     height: 16,
-    backgroundColor: '#d1d5db',
+    backgroundColor: '#1E1E1E',
     marginLeft: 5,
     marginVertical: 4,
   },
@@ -212,12 +212,12 @@ const styles = StyleSheet.create({
   },
   driverName: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#8A8A8A',
   },
   amount: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   emptyContainer: {
     alignItems: 'center',
@@ -227,12 +227,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#111827',
+    color: '#FFFFFF',
     marginTop: 16,
   },
   emptySubtitle: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#8A8A8A',
     marginTop: 8,
   },
 });

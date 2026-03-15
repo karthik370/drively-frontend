@@ -5,6 +5,7 @@ import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppSelector } from '../redux/store';
 import { UserType } from '../types';
+import { colors, tabBarTheme } from '../theme';
 
 import HomeScreen from '../screens/customer/HomeScreen';
 import BookingHistoryScreen from '../screens/customer/BookingHistoryScreen';
@@ -14,9 +15,13 @@ import DriverEarningsScreen from '../screens/driver/DriverEarningsScreen';
 import ScheduledBookingsScreen from '../screens/driver/ScheduledBookingsScreen';
 import BookingDetailsScreen from '../screens/common/BookingDetailsScreen';
 import TrackingScreen from '../screens/common/TrackingScreen';
+import DriverBookingRequestDetailsScreen from '../screens/driver/DriverBookingRequestDetailsScreen';
 import LocationSearchScreen from '../screens/customer/LocationSearchScreen';
 import RideConfirmScreen from '../screens/customer/RideConfirmScreen';
 import PromoCodesScreen from '../screens/customer/PromoCodesScreen';
+import RewardsScreen from '../screens/customer/RewardsScreen';
+import ReferralScreen from '../screens/common/ReferralScreen';
+import DriverWalletScreen from '../screens/driver/DriverWalletScreen';
 
 import SupportChatScreen from '../screens/common/SupportChatScreen';
 
@@ -27,6 +32,23 @@ import SafetyScreen from '../screens/common/SafetyScreen';
 import HelpSupportScreen from '../screens/common/HelpSupportScreen';
 import TermsScreen from '../screens/common/TermsScreen';
 import PrivacyPolicyScreen from '../screens/common/PrivacyPolicyScreen';
+import EmergencyContactsScreen from '../screens/common/EmergencyContactsScreen';
+import RideReceiptScreen from '../screens/common/RideReceiptScreen';
+import FavoriteDriversScreen from '../screens/customer/FavoriteDriversScreen';
+import StreakBonusScreen from '../screens/customer/StreakBonusScreen';
+import PayoutSettingsScreen from '../screens/driver/PayoutSettingsScreen';
+import AirportTransferScreen from '../screens/customer/AirportTransferScreen';
+import DailyBookingScreen from '../screens/customer/DailyBookingScreen';
+import InAppChatScreen from '../screens/common/InAppChatScreen';
+import ChatScreen from '../screens/common/ChatScreen';
+import DriverTiersScreen from '../screens/driver/DriverTiersScreen';
+import HeatMapScreen from '../screens/driver/HeatMapScreen';
+
+import CustomerWalletScreen from '../screens/customer/CustomerWalletScreen';
+import WalletTopupScreen from '../screens/customer/WalletTopupScreen';
+import WalletTransactionsScreen from '../screens/customer/WalletTransactionsScreen';
+import MembershipScreen from '../screens/customer/MembershipScreen';
+import TipDriverScreen from '../screens/customer/TipDriverScreen';
 
 import DriverDocumentsSubmitScreen from '../screens/driver/DriverDocumentsSubmitScreen';
 import DriverVerificationPendingScreen from '../screens/driver/DriverVerificationPendingScreen';
@@ -45,45 +67,48 @@ const CustomerTabs = () => {
       initialRouteName="Home"
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#2563eb',
-        tabBarInactiveTintColor: '#6b7280',
+        tabBarActiveTintColor: tabBarTheme.activeTintColor,
+        tabBarInactiveTintColor: tabBarTheme.inactiveTintColor,
         tabBarStyle: {
+          backgroundColor: colors.surface,
+          borderTopColor: colors.borderLight,
+          borderTopWidth: 1,
           paddingBottom: bottom,
           paddingTop: 8,
           height,
         },
       }}
     >
-    <Tab.Screen
-      name="Home"
-      component={HomeScreen}
-      options={{
-        tabBarLabel: 'Home',
-        tabBarIcon: ({ color, size }) => (
-          <Icon name="home" size={size} color={color} />
-        ),
-      }}
-    />
-    <Tab.Screen
-      name="Bookings"
-      component={BookingHistoryScreen}
-      options={{
-        tabBarLabel: 'My Rides',
-        tabBarIcon: ({ color, size }) => (
-          <Icon name="car-multiple" size={size} color={color} />
-        ),
-      }}
-    />
-    <Tab.Screen
-      name="Profile"
-      component={ProfileScreen}
-      options={{
-        tabBarLabel: 'Profile',
-        tabBarIcon: ({ color, size }) => (
-          <Icon name="account" size={size} color={color} />
-        ),
-      }}
-    />
+      <Tab.Screen
+        name="Home"
+        component={HomeScreen}
+        options={{
+          tabBarLabel: 'Home',
+          tabBarIcon: ({ color, size }) => (
+            <Icon name="home" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Bookings"
+        component={BookingHistoryScreen}
+        options={{
+          tabBarLabel: 'My Rides',
+          tabBarIcon: ({ color, size }) => (
+            <Icon name="car-multiple" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{
+          tabBarLabel: 'Profile',
+          tabBarIcon: ({ color, size }) => (
+            <Icon name="account" size={size} color={color} />
+          ),
+        }}
+      />
     </Tab.Navigator>
   );
 };
@@ -98,66 +123,79 @@ const DriverTabs = () => {
       initialRouteName="Accept"
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#2563eb',
-        tabBarInactiveTintColor: '#6b7280',
+        tabBarActiveTintColor: tabBarTheme.activeTintColor,
+        tabBarInactiveTintColor: tabBarTheme.inactiveTintColor,
         tabBarStyle: {
+          backgroundColor: colors.surface,
+          borderTopColor: colors.borderLight,
+          borderTopWidth: 1,
           paddingBottom: bottom,
           paddingTop: 8,
           height,
         },
       }}
     >
-    <Tab.Screen
-      name="Accept"
-      component={DriverOnlineScreen}
-      options={{
-        tabBarLabel: 'Accept',
-        tabBarIcon: ({ color, size }) => (
-          <Icon name="radar" size={size} color={color} />
-        ),
-      }}
-    />
-    <Tab.Screen
-      name="Earnings"
-      component={DriverEarningsScreen}
-      options={{
-        tabBarLabel: 'Earnings',
-        tabBarIcon: ({ color, size }) => (
-          <Icon name="cash-multiple" size={size} color={color} />
-        ),
-      }}
-    />
-    <Tab.Screen
-      name="Bookings"
-      component={BookingHistoryScreen}
-      options={{
-        tabBarLabel: 'My Rides',
-        tabBarIcon: ({ color, size }) => (
-          <Icon name="car-multiple" size={size} color={color} />
-        ),
-      }}
-    />
-    <Tab.Screen
-      name="Schedule"
-      component={ScheduledBookingsScreen}
-      options={{
-        tabBarLabel: 'Schedule',
-        tabBarIcon: ({ color, size }) => (
-          <Icon name="calendar" size={size} color={color} />
-        ),
-      }}
-    />
-    <Tab.Screen
-      name="Profile"
-      component={ProfileScreen}
-      options={{
-        tabBarLabel: 'Profile',
-        tabBarIcon: ({ color, size }) => (
-          <Icon name="account" size={size} color={color} />
-        ),
-      }}
-    />
-  </Tab.Navigator>
+      <Tab.Screen
+        name="Accept"
+        component={DriverOnlineScreen}
+        options={{
+          tabBarLabel: 'Accept',
+          tabBarIcon: ({ color, size }) => (
+            <Icon name="radar" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Earnings"
+        component={DriverEarningsScreen}
+        options={{
+          tabBarLabel: 'Earnings',
+          tabBarIcon: ({ color, size }) => (
+            <Icon name="cash-multiple" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Wallet"
+        component={DriverWalletScreen}
+        options={{
+          tabBarLabel: 'Wallet',
+          tabBarIcon: ({ color, size }) => (
+            <Icon name="wallet" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Bookings"
+        component={BookingHistoryScreen}
+        options={{
+          tabBarLabel: 'My Rides',
+          tabBarIcon: ({ color, size }) => (
+            <Icon name="car-multiple" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Schedule"
+        component={ScheduledBookingsScreen}
+        options={{
+          tabBarLabel: 'Schedule',
+          tabBarIcon: ({ color, size }) => (
+            <Icon name="calendar" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{
+          tabBarLabel: 'Profile',
+          tabBarIcon: ({ color, size }) => (
+            <Icon name="account" size={size} color={color} />
+          ),
+        }}
+      />
+    </Tab.Navigator>
   );
 };
 
@@ -194,7 +232,7 @@ const MainNavigator = () => {
   })();
 
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
       <Stack.Screen
         name="Tabs"
         component={tabsComponent}
@@ -203,6 +241,7 @@ const MainNavigator = () => {
       <Stack.Screen name="DriverDocumentsSubmit" component={DriverDocumentsSubmitScreen} />
       <Stack.Screen name="DriverVerificationPending" component={DriverVerificationPendingScreen} />
       <Stack.Screen name="DriverVerificationRejected" component={DriverVerificationRejectedScreen} />
+      <Stack.Screen name="DriverBookingRequestDetails" component={DriverBookingRequestDetailsScreen} />
       <Stack.Screen name="LocationSearch" component={LocationSearchScreen} />
       <Stack.Screen name="RideConfirm" component={RideConfirmScreen} />
       <Stack.Screen name="BookingDetails" component={BookingDetailsScreen} />
@@ -218,6 +257,25 @@ const MainNavigator = () => {
       <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
       <Stack.Screen name="Terms" component={TermsScreen} />
       <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
+      <Stack.Screen name="Rewards" component={RewardsScreen} />
+      <Stack.Screen name="Referral" component={ReferralScreen} />
+      <Stack.Screen name="EmergencyContacts" component={EmergencyContactsScreen} />
+      <Stack.Screen name="RideReceipt" component={RideReceiptScreen} />
+      <Stack.Screen name="FavoriteDrivers" component={FavoriteDriversScreen} />
+      <Stack.Screen name="StreakBonus" component={StreakBonusScreen} />
+      <Stack.Screen name="PayoutSettings" component={PayoutSettingsScreen} />
+      <Stack.Screen name="AirportTransfer" component={AirportTransferScreen} />
+      <Stack.Screen name="DailyBooking" component={DailyBookingScreen} />
+      <Stack.Screen name="InAppChat" component={InAppChatScreen} />
+      <Stack.Screen name="DriverTiers" component={DriverTiersScreen} />
+      <Stack.Screen name="HeatMap" component={HeatMapScreen} />
+      <Stack.Screen name="CustomerWallet" component={CustomerWalletScreen} />
+      <Stack.Screen name="WalletTopup" component={WalletTopupScreen} />
+      <Stack.Screen name="WalletTransactions" component={WalletTransactionsScreen} />
+      <Stack.Screen name="Membership" component={MembershipScreen} />
+      <Stack.Screen name="TipDriver" component={TipDriverScreen} />
+      <Stack.Screen name="Chat" component={ChatScreen} />
+      <Stack.Screen name="DriverWallet" component={DriverWalletScreen} />
     </Stack.Navigator>
   );
 };

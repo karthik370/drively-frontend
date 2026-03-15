@@ -53,7 +53,7 @@ const DriverVerificationRejectedScreen = ({ navigation }: any) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#ffffff' },
+  container: { flex: 1, backgroundColor: '#0A0A0A' },
   content: { flex: 1, padding: 20, alignItems: 'center', justifyContent: 'center' },
   iconWrap: {
     width: 84,
@@ -61,11 +61,11 @@ const styles = StyleSheet.create({
     borderRadius: 42,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fef2f2',
+    backgroundColor: '#1A1010',
     marginBottom: 18,
   },
-  title: { fontSize: 22, fontWeight: '900', color: '#111827', marginBottom: 10 },
-  subtitle: { textAlign: 'center', color: '#4b5563', fontWeight: '600', marginBottom: 16, lineHeight: 20 },
+  title: { fontSize: 22, fontWeight: '900', color: '#FFFFFF', marginBottom: 10 },
+  subtitle: { textAlign: 'center', color: '#CCCCCC', fontWeight: '600', marginBottom: 16, lineHeight: 20 },
   reasonBox: {
     width: '100%',
     maxWidth: 360,
@@ -75,14 +75,14 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     marginBottom: 16,
-    backgroundColor: '#fef2f2',
+    backgroundColor: '#1A1010',
   },
   reasonTitle: { color: '#991b1b', fontWeight: '900' },
   reasonText: { marginTop: 6, color: '#7f1d1d', fontWeight: '700' },
   primaryButton: {
     width: '100%',
     maxWidth: 360,
-    backgroundColor: '#2563eb',
+    backgroundColor: '#C9A84C',
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',

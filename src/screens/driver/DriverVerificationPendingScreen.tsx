@@ -13,7 +13,7 @@ const DriverVerificationPendingScreen = () => {
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         <View style={styles.iconWrap}>
-          <Icon name="shield-clock" size={44} color="#2563eb" />
+          <Icon name="shield-clock" size={44} color="#C9A84C" />
         </View>
 
         <Text style={styles.title}>Verification Pending</Text>
@@ -54,7 +54,7 @@ const DriverVerificationPendingScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#ffffff' },
+  container: { flex: 1, backgroundColor: '#0A0A0A' },
   content: { flex: 1, padding: 20, alignItems: 'center', justifyContent: 'center' },
   iconWrap: {
     width: 84,
@@ -62,27 +62,27 @@ const styles = StyleSheet.create({
     borderRadius: 42,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#eff6ff',
+    backgroundColor: '#141414',
     marginBottom: 18,
   },
-  title: { fontSize: 22, fontWeight: '900', color: '#111827', marginBottom: 10 },
-  subtitle: { textAlign: 'center', color: '#4b5563', fontWeight: '600', marginBottom: 18, lineHeight: 20 },
+  title: { fontSize: 22, fontWeight: '900', color: '#FFFFFF', marginBottom: 10 },
+  subtitle: { textAlign: 'center', color: '#CCCCCC', fontWeight: '600', marginBottom: 18, lineHeight: 20 },
   statusRow: {
     width: '100%',
     maxWidth: 360,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
     borderRadius: 14,
     paddingVertical: 12,
     paddingHorizontal: 14,
     marginBottom: 16,
   },
-  statusLabel: { color: '#6b7280', fontWeight: '700' },
-  statusValue: { marginTop: 6, color: '#111827', fontWeight: '900' },
+  statusLabel: { color: '#8A8A8A', fontWeight: '700' },
+  statusValue: { marginTop: 6, color: '#FFFFFF', fontWeight: '900' },
   primaryButton: {
     width: '100%',
     maxWidth: 360,
-    backgroundColor: '#2563eb',
+    backgroundColor: '#C9A84C',
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',

@@ -8,7 +8,7 @@ const SupportScreen = () => {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
-          <Icon name="headset" size={22} color="#111827" />
+          <Icon name="headset" size={22} color="#C9A84C" />
           <Text style={styles.title}>Support</Text>
         </View>
 
@@ -23,7 +23,7 @@ const SupportScreen = () => {
                 Linking.openURL(`mailto:${APP_CONFIG.supportEmail}`).catch(() => undefined);
               }}
             >
-              <Icon name="email" size={18} color="#2563eb" />
+              <Icon name="email" size={18} color="#C9A84C" />
               <Text style={styles.actionText}>{APP_CONFIG.supportEmail}</Text>
             </TouchableOpacity>
 
@@ -33,7 +33,7 @@ const SupportScreen = () => {
                 Linking.openURL(`tel:${APP_CONFIG.supportPhone}`).catch(() => undefined);
               }}
             >
-              <Icon name="phone" size={18} color="#2563eb" />
+              <Icon name="phone" size={18} color="#C9A84C" />
               <Text style={styles.actionText}>{APP_CONFIG.supportPhone}</Text>
             </TouchableOpacity>
           </View>
@@ -46,7 +46,7 @@ const SupportScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9fafb',
+    backgroundColor: '#111111',
   },
   content: {
     padding: 16,
@@ -60,24 +60,24 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   card: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
     padding: 16,
   },
   cardTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   cardSub: {
     marginTop: 6,
     fontSize: 13,
-    color: '#6b7280',
+    color: '#8A8A8A',
     lineHeight: 18,
   },
   actions: {
@@ -91,7 +91,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 12,
-    backgroundColor: '#eff6ff',
+    backgroundColor: '#141414',
     borderWidth: 1,
     borderColor: '#dbeafe',
   },

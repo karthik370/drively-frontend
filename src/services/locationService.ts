@@ -82,6 +82,10 @@ if (TaskManager?.defineTask) {
 class LocationService {
   private isTracking: boolean = false;
 
+  private hasTaskManager(): boolean {
+    return Boolean(TaskManager?.defineTask && TaskManager?.isTaskDefinedAsync);
+  }
+
   async requestPermissions(): Promise<boolean> {
     try {
       const { status: foregroundStatus } = await Location.requestForegroundPermissionsAsync();
@@ -197,9 +201,17 @@ class LocationService {
         return false;
       }
 
-      if (!TaskManager?.isTaskDefinedAsync || !TaskManager?.defineTask) {
+      if (!this.hasTaskManager()) {
         if (__DEV__) {
           console.error('expo-task-manager is not available; background tracking disabled');
+        }
+        return false;
+      }
+
+      const isTaskDefined = await TaskManager.isTaskDefinedAsync(LOCATION_TASK_NAME);
+      if (!isTaskDefined) {
+        if (__DEV__) {
+          console.error('Background location task is not defined; background tracking disabled');
         }
         return false;
       }
@@ -208,11 +220,6 @@ class LocationService {
       if (hasStarted) {
         this.isTracking = true;
         return true;
-      }
-
-      const isTaskDefined = await TaskManager.isTaskDefinedAsync(LOCATION_TASK_NAME);
-      if (!isTaskDefined) {
-        return false;
       }
 
       await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
@@ -241,6 +248,17 @@ class LocationService {
 
   async stopBackgroundTracking(): Promise<void> {
     try {
+      if (!this.hasTaskManager()) {
+        this.isTracking = false;
+        return;
+      }
+
+      const isTaskDefined = await TaskManager.isTaskDefinedAsync(LOCATION_TASK_NAME);
+      if (!isTaskDefined) {
+        this.isTracking = false;
+        return;
+      }
+
       const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
       if (hasStarted) {
         await Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME);

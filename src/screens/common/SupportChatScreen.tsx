@@ -188,7 +188,7 @@ const SupportChatScreen = ({ navigation, route }: any) => {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
-          <Icon name="arrow-left" size={22} color="#111827" />
+          <Icon name="arrow-left" size={22} color="#C9A84C" />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>
           Need Help
@@ -225,7 +225,7 @@ const SupportChatScreen = ({ navigation, route }: any) => {
             value={text}
             onChangeText={setText}
             placeholder="Type a message"
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor="#444444"
             style={styles.input}
             multiline
           />
@@ -241,16 +241,16 @@ const SupportChatScreen = ({ navigation, route }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9fafb',
+    backgroundColor: '#111111',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 12,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: 'rgba(255,255,255,0.3)',
   },
   headerBtn: {
     width: 40,
@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 16,
     fontWeight: '800',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   body: {
     flex: 1,
@@ -284,7 +284,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   emptyText: {
-    color: '#6b7280',
+    color: '#8A8A8A',
     fontWeight: '700',
   },
   bubbleRow: {
@@ -297,13 +297,13 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   bubbleMine: {
-    backgroundColor: '#2563eb',
+    backgroundColor: '#C9A84C',
     borderTopRightRadius: 6,
   },
   bubbleOther: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
     borderTopLeftRadius: 6,
   },
   bubbleText: {
@@ -314,7 +314,7 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   bubbleTextOther: {
-    color: '#111827',
+    color: '#FFFFFF',
   },
   timeText: {
     marginTop: 6,
@@ -328,9 +328,9 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
+    borderTopColor: 'rgba(255,255,255,0.3)',
   },
   input: {
     flex: 1,
@@ -339,15 +339,15 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: '#f3f4f6',
-    color: '#111827',
+    backgroundColor: '#141414',
+    color: '#FFFFFF',
     fontWeight: '700',
   },
   sendBtn: {
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: '#2563eb',
+    backgroundColor: '#C9A84C',
     alignItems: 'center',
     justifyContent: 'center',
   },

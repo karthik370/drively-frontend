@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DrawerActions } from '@react-navigation/native';
-import { View, Text, StyleSheet, SafeAreaView, FlatList, TouchableOpacity, Alert, Switch } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Switch } from 'react-native';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppDispatch, useAppSelector } from '../../redux/store';
 import { setDriverOnline } from '../../redux/slices/driverSlice';
 import { addBookingRequest, clearBookingRequests, removeBookingRequest, setCurrentBooking } from '../../redux/slices/bookingSlice';
@@ -12,23 +13,54 @@ import BookingRequestCard, { type BookingRequest } from '../../components/driver
 import useBookingRequest from '../../hooks/useBookingRequest';
 import useRealTimeLocation from '../../hooks/useRealTimeLocation';
 import { BookingStatus, PaymentMethod, VehicleType } from '../../types';
+import SubscriptionGate from '../../components/driver/SubscriptionGate';
+import { getDriverSubscriptionStatus } from '../../services/api';
 
 const DriverOnlineScreen = ({ navigation }: any) => {
   const dispatch = useAppDispatch();
+  const insets = useSafeAreaInsets();
   const isOnline = useAppSelector((s) => s.driver.isOnline);
   const bookingRequests = useAppSelector((s) => s.booking.bookingRequests) as BookingRequest[];
   const currentBooking = useAppSelector((s) => s.booking.currentBooking);
   const driverLocation = useAppSelector((s) => s.location.currentLocation);
   const onlineToggleInFlightRef = useRef<boolean>(false);
   const [activeBookingId, setActiveBookingId] = useState<string | null>(null);
+  const [tripFilter, setTripFilter] = useState<'ALL' | 'ONE_WAY' | 'ROUND_TRIP' | 'OUTSTATION'>('ALL');
   const onlineSentRef = useRef<boolean>(false);
   const acceptingRef = useRef<string | null>(null);
   const pollInFlightRef = useRef<boolean>(false);
   const bookingRequestsRef = useRef<BookingRequest[]>([]);
 
+  const [hasSubscription, setHasSubscription] = useState<boolean>(true); // assume true until checked
+  const [subLoading, setSubLoading] = useState<boolean>(true);
+
   const { error: trackingError } = useRealTimeLocation(isOnline, 'foreground', activeBookingId || undefined);
 
   useBookingRequest();
+
+  const fetchSubscription = useCallback(async () => {
+    try {
+      setSubLoading(true);
+      const res = await getDriverSubscriptionStatus();
+      if (res && res.status === 'ACTIVE' && !res.isExpired) {
+        setHasSubscription(true);
+      } else {
+        setHasSubscription(false);
+        // Force offline if subscription is inactive
+        if (isOnline) {
+          dispatch(setDriverOnline(false));
+        }
+      }
+    } catch {
+      setHasSubscription(false);
+    } finally {
+      setSubLoading(false);
+    }
+  }, [isOnline, dispatch]);
+
+  useEffect(() => {
+    void fetchSubscription();
+  }, [fetchSubscription]);
 
   const setOnlineState = useCallback(
     async (nextOnline: boolean) => {
@@ -42,7 +74,12 @@ const DriverOnlineScreen = ({ navigation }: any) => {
         }
         dispatch(setDriverOnline(nextOnline));
       } catch (e: any) {
-        Alert.alert('Status', e?.message || 'Failed to update online status');
+        if (e?.message?.includes('Active subscription required') || e?.response?.status === 403) {
+          setHasSubscription(false);
+          Alert.alert('Subscription Required', 'You need an active subscription to go online.');
+        } else {
+          Alert.alert('Status', e?.message || 'Failed to update online status');
+        }
       } finally {
         onlineToggleInFlightRef.current = false;
       }
@@ -180,7 +217,24 @@ const DriverOnlineScreen = ({ navigation }: any) => {
     };
   }, [dispatch, isOnline]);
 
-  const hasRequests = isOnline && bookingRequests.length > 0;
+  const filteredRequests = useMemo(() => {
+    const selected = String(tripFilter || 'ONE_WAY').toUpperCase();
+    if (selected === 'ALL') {
+      return Array.isArray(bookingRequests) ? bookingRequests : [];
+    }
+    return (Array.isArray(bookingRequests) ? bookingRequests : []).filter((r) => {
+      const t = String((r as any)?.tripType || '').toUpperCase();
+      if (selected === 'OUTSTATION') {
+        return t === 'OUTSTATION';
+      }
+      if (selected === 'ROUND_TRIP') {
+        return t === 'ROUND_TRIP';
+      }
+      return !t || t === 'ONE_WAY';
+    });
+  }, [bookingRequests, tripFilter]);
+
+  const hasRequests = isOnline && filteredRequests.length > 0;
 
   const scheduledLockInfo = useMemo(() => {
     const status = String((currentBooking as any)?.status ?? '');
@@ -217,16 +271,16 @@ const DriverOnlineScreen = ({ navigation }: any) => {
 
   const hasActiveTrip = Boolean(
     currentBooking?.id &&
-      currentBooking?.status &&
-      [
-        BookingStatus.REQUESTED,
-        BookingStatus.SEARCHING,
-        BookingStatus.ACCEPTED,
-        BookingStatus.DRIVER_ARRIVING,
-        BookingStatus.ARRIVED,
-        BookingStatus.STARTED,
-        BookingStatus.IN_PROGRESS,
-      ].includes(currentBooking.status as any)
+    currentBooking?.status &&
+    [
+      BookingStatus.REQUESTED,
+      BookingStatus.SEARCHING,
+      BookingStatus.ACCEPTED,
+      BookingStatus.DRIVER_ARRIVING,
+      BookingStatus.ARRIVED,
+      BookingStatus.STARTED,
+      BookingStatus.IN_PROGRESS,
+    ].includes(currentBooking.status as any)
   );
 
   useEffect(() => {
@@ -306,9 +360,9 @@ const DriverOnlineScreen = ({ navigation }: any) => {
   }, [dispatch, driverLocation, hasActiveTrip, isOnline]);
 
   const header = useMemo(() => {
-    const requestCount = isOnline ? bookingRequests.length : 0;
+    const requestCount = isOnline ? filteredRequests.length : 0;
     return (
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(10, insets.top + 6) }]}>
         <View style={styles.headerTopRow}>
           <TouchableOpacity
             style={styles.menuButton}
@@ -316,7 +370,7 @@ const DriverOnlineScreen = ({ navigation }: any) => {
               navigation.dispatch(DrawerActions.openDrawer());
             }}
           >
-            <Icon name="menu" size={22} color="#111827" />
+            <Icon name="menu" size={22} color="#C9A84C" />
           </TouchableOpacity>
 
           <View style={styles.headerTitleWrap}>
@@ -347,9 +401,40 @@ const DriverOnlineScreen = ({ navigation }: any) => {
             ) : null}
           </View>
         </View>
+
+        <View style={styles.filterRow}>
+          <TouchableOpacity
+            style={[styles.filterPill, tripFilter === 'ALL' ? styles.filterPillActive : null]}
+            onPress={() => setTripFilter('ALL')}
+          >
+            <Text style={[styles.filterPillText, tripFilter === 'ALL' ? styles.filterPillTextActive : null]}>All</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterPill, tripFilter === 'ONE_WAY' ? styles.filterPillActive : null]}
+            onPress={() => setTripFilter('ONE_WAY')}
+          >
+            <Text style={[styles.filterPillText, tripFilter === 'ONE_WAY' ? styles.filterPillTextActive : null]}>One Way</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterPill, tripFilter === 'ROUND_TRIP' ? styles.filterPillActive : null]}
+            onPress={() => setTripFilter('ROUND_TRIP')}
+          >
+            <Text style={[styles.filterPillText, tripFilter === 'ROUND_TRIP' ? styles.filterPillTextActive : null]}>
+              Round Trip
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterPill, tripFilter === 'OUTSTATION' ? styles.filterPillActive : null]}
+            onPress={() => setTripFilter('OUTSTATION')}
+          >
+            <Text style={[styles.filterPillText, tripFilter === 'OUTSTATION' ? styles.filterPillTextActive : null]}>
+              Outstation
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
-  }, [dispatch, isOnline, navigation, bookingRequests.length]);
+  }, [filteredRequests.length, insets.top, isOnline, navigation, tripFilter]);
 
   const handleAccept = async (id: string) => {
     try {
@@ -461,11 +546,18 @@ const DriverOnlineScreen = ({ navigation }: any) => {
       driverLocation={driverLocation ? { latitude: driverLocation.latitude, longitude: driverLocation.longitude } : null}
       onAccept={(bookingId) => handleAccept(bookingId)}
       onReject={(bookingId) => handleReject(bookingId)}
+      showActions={false}
+      onPress={(bookingId) => {
+        try {
+          navigation.navigate('DriverBookingRequestDetails', { bookingId });
+        } catch {
+        }
+      }}
     />
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['left', 'right']}>
       {header}
 
       {scheduledLockInfo ? (
@@ -515,7 +607,9 @@ const DriverOnlineScreen = ({ navigation }: any) => {
         </View>
       ) : null}
 
-      {!isOnline ? (
+      {!hasSubscription && !isOnline ? (
+        <SubscriptionGate onSuccess={() => void fetchSubscription()} />
+      ) : !isOnline ? (
         <View style={styles.empty}>
           <Icon name="power-off" size={64} color="#d1d5db" />
           <Text style={styles.emptyTitle}>You’re Offline</Text>
@@ -537,7 +631,7 @@ const DriverOnlineScreen = ({ navigation }: any) => {
         </View>
       ) : hasRequests ? (
         <FlatList<BookingRequest>
-          data={bookingRequests}
+          data={filteredRequests}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
@@ -556,12 +650,41 @@ const DriverOnlineScreen = ({ navigation }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9fafb',
+    backgroundColor: '#111111',
+  },
+  filterRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 6,
+  },
+  filterPill: {
+    flex: 1,
+    backgroundColor: '#0A0A0A',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+    paddingVertical: 10,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  filterPillActive: {
+    backgroundColor: '#1E1E1E',
+    borderColor: '#FFFFFF',
+  },
+  filterPillText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  filterPillTextActive: {
+    color: '#ffffff',
   },
   scheduledBanner: {
     marginHorizontal: 16,
     marginBottom: 10,
-    backgroundColor: '#fef3c7',
+    backgroundColor: '#141414',
     borderRadius: 16,
     padding: 14,
     borderWidth: 1,
@@ -570,7 +693,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   scheduledBannerTitle: {
-    color: '#111827',
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '900',
   },
@@ -582,7 +705,7 @@ const styles = StyleSheet.create({
   },
   scheduledBannerBtn: {
     marginLeft: 12,
-    backgroundColor: '#111827',
+    backgroundColor: '#1E1E1E',
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 12,
@@ -594,7 +717,7 @@ const styles = StyleSheet.create({
   activeTripCard: {
     marginHorizontal: 16,
     marginBottom: 10,
-    backgroundColor: '#111827',
+    backgroundColor: '#1E1E1E',
     borderRadius: 16,
     padding: 14,
     flexDirection: 'row',
@@ -613,7 +736,7 @@ const styles = StyleSheet.create({
   },
   activeTripBtn: {
     marginLeft: 12,
-    backgroundColor: '#2563eb',
+    backgroundColor: '#C9A84C',
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 12,
@@ -626,9 +749,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 10,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: 'rgba(255,255,255,0.3)',
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -667,24 +790,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   menuButton: {
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#141414',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   statusPill: {
     paddingHorizontal: 10,
@@ -693,30 +816,30 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   statusPillOnline: {
-    backgroundColor: '#ecfdf5',
+    backgroundColor: '#141414',
     borderColor: '#a7f3d0',
   },
   statusPillOffline: {
-    backgroundColor: '#f3f4f6',
-    borderColor: '#e5e7eb',
+    backgroundColor: '#141414',
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   statusPillOfflineDanger: {
-    backgroundColor: '#fef2f2',
+    backgroundColor: '#1A1010',
     borderColor: '#fecaca',
   },
   onlineLabel: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#6b7280',
+    color: '#8A8A8A',
   },
   onlineLabelOn: {
     color: '#047857',
   },
   onlineLabelOff: {
-    color: '#6b7280',
+    color: '#8A8A8A',
   },
   onlineLabelOffDanger: {
-    color: '#b91c1c',
+    color: '#FF4444',
   },
   badge: {
     minWidth: 28,
@@ -745,12 +868,12 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 18,
     fontWeight: '700',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   emptySub: {
     marginTop: 8,
     fontSize: 14,
-    color: '#6b7280',
+    color: '#8A8A8A',
     textAlign: 'center',
   },
 });

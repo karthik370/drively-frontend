@@ -11,18 +11,23 @@ import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { UserType } from '../../types';
 
 const UserTypeSelectionScreen = ({ route, navigation }: any) => {
-  const { phoneNumber, msg91AccessToken } = route.params;
+  const { phoneNumber, msg91AccessToken, otpSignupToken } = route.params;
   const [selectedType, setSelectedType] = useState<UserType | null>(null);
 
   const handleContinue = () => {
     if (selectedType) {
-      navigation.navigate('Signup', { phoneNumber, userType: selectedType, msg91AccessToken });
+      navigation.navigate('Signup', {
+        phoneNumber,
+        userType: selectedType,
+        msg91AccessToken,
+        otpSignupToken,
+      });
     }
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
 
       <View style={styles.content}>
         <View style={styles.titleContainer}>
@@ -92,7 +97,7 @@ const UserTypeSelectionScreen = ({ route, navigation }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
   },
   content: {
     flex: 1,
@@ -105,12 +110,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#111827',
+    color: '#FFFFFF',
     marginBottom: 12,
   },
   subtitle: {
     fontSize: 16,
-    color: '#6b7280',
+    color: '#8A8A8A',
     lineHeight: 24,
   },
   optionsContainer: {
@@ -118,21 +123,21 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   optionCard: {
-    backgroundColor: '#f9fafb',
+    backgroundColor: '#111111',
     padding: 24,
     borderRadius: 16,
     borderWidth: 2,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
     position: 'relative',
   },
   selectedCard: {
-    borderColor: '#2563eb',
-    backgroundColor: '#eff6ff',
+    borderColor: '#C9A84C',
+    backgroundColor: '#141414',
   },
   iconContainer: {
     width: 60,
     height: 60,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
@@ -144,12 +149,12 @@ const styles = StyleSheet.create({
   optionTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#111827',
+    color: '#FFFFFF',
     marginBottom: 8,
   },
   optionDescription: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#8A8A8A',
     lineHeight: 20,
   },
   checkmark: {
@@ -158,7 +163,7 @@ const styles = StyleSheet.create({
     right: 16,
   },
   continueButton: {
-    backgroundColor: '#2563eb',
+    backgroundColor: '#C9A84C',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
@@ -168,7 +173,7 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   continueButtonText: {
-    color: '#ffffff',
+    color: '#0A0A0A',
     fontSize: 16,
     fontWeight: '600',
   },

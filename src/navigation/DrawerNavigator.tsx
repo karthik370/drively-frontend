@@ -8,6 +8,18 @@ import {
 } from '@react-navigation/drawer';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 
+// Safe fallback: LinearGradient needs a dev build with expo-linear-gradient native module
+let LinearGradient: any;
+try {
+  LinearGradient = require('expo-linear-gradient').LinearGradient;
+} catch {
+  // Fallback: use a plain View with gold background
+  LinearGradient = ({ style, children, ...rest }: any) => {
+    const { View } = require('react-native');
+    return <View style={[style, { backgroundColor: '#C9A84C' }]}>{children}</View>;
+  };
+}
+
 import { useAppDispatch, useAppSelector } from '../redux/store';
 import { logout } from '../redux/slices/authSlice';
 import MainNavigator from './MainNavigator';
@@ -16,8 +28,8 @@ import AdminNavigator from './AdminNavigator';
 import NotificationsScreen from '../screens/common/NotificationsScreen';
 import SupportScreen from '../screens/common/SupportScreen';
 import ReferralScreen from '../screens/common/ReferralScreen';
-import SettingsScreen from '../screens/common/SettingsScreen';
-import LanguageSelectionScreen from '../screens/common/LanguageSelectionScreen';
+
+import { colors, drawerTheme, goldGradient } from '../theme';
 
 const Drawer = createDrawerNavigator();
 
@@ -30,9 +42,17 @@ const CustomDrawerContent = (props: any) => {
   return (
     <DrawerContentScrollView {...props} contentContainerStyle={styles.drawerScroll}>
       <View style={styles.drawerHeader}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{initials || 'U'}</Text>
-        </View>
+        {/* Gold ring avatar */}
+        <LinearGradient
+          colors={goldGradient as any}
+          style={styles.avatarRing}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{initials || 'U'}</Text>
+          </View>
+        </LinearGradient>
         <View style={styles.userInfo}>
           <Text style={styles.userName} numberOfLines={1}>
             {user?.firstName} {user?.lastName}
@@ -50,7 +70,8 @@ const CustomDrawerContent = (props: any) => {
       <View style={styles.drawerFooter}>
         <DrawerItem
           label="Logout"
-          icon={({ color, size }) => <Icon name="logout" color={color} size={size} />}
+          labelStyle={{ color: colors.error }}
+          icon={({ size }) => <Icon name="logout" color={colors.error} size={size} />}
           onPress={() => {
             dispatch(logout());
           }}
@@ -62,7 +83,7 @@ const CustomDrawerContent = (props: any) => {
             props.navigation.closeDrawer();
           }}
         >
-          <Icon name="chevron-left" size={22} color="#6b7280" />
+          <Icon name="chevron-left" size={22} color={colors.textSecondary} />
           <Text style={styles.closeText}>Close</Text>
         </TouchableOpacity>
       </View>
@@ -85,7 +106,11 @@ const DrawerNavigator = () => {
       key={`drawer-${user?.userType ?? 'NONE'}-${roleOverride ?? 'NO_OVERRIDE'}`}
       screenOptions={{
         headerShown: false,
-        drawerActiveTintColor: '#2563eb',
+        drawerActiveTintColor: drawerTheme.activeTint,
+        drawerInactiveTintColor: drawerTheme.inactiveTint,
+        drawerActiveBackgroundColor: drawerTheme.activeBackground,
+        drawerStyle: { backgroundColor: drawerTheme.background },
+        drawerLabelStyle: { fontWeight: '700' },
       }}
       drawerContent={(props) => <CustomDrawerContent {...props} />}
     >
@@ -152,22 +177,6 @@ const DrawerNavigator = () => {
           drawerIcon: ({ color, size }) => <Icon name="ticket-percent" color={color} size={size} />,
         }}
       />
-      <Drawer.Screen
-        name="Settings"
-        component={SettingsScreen}
-        options={{
-          drawerLabel: 'Settings',
-          drawerIcon: ({ color, size }) => <Icon name="cog" color={color} size={size} />,
-        }}
-      />
-      <Drawer.Screen
-        name="Language"
-        component={LanguageSelectionScreen}
-        options={{
-          drawerLabel: 'Language',
-          drawerIcon: ({ color, size }) => <Icon name="translate" color={color} size={size} />,
-        }}
-      />
     </Drawer.Navigator>
   );
 };
@@ -175,26 +184,34 @@ const DrawerNavigator = () => {
 const styles = StyleSheet.create({
   drawerScroll: {
     flex: 1,
+    backgroundColor: drawerTheme.background,
   },
   drawerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 12,
+    paddingBottom: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: drawerTheme.separator,
+  },
+  avatarRing: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   avatar: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#2563eb',
+    backgroundColor: colors.elevated,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    color: '#ffffff',
+    color: colors.gold,
     fontSize: 18,
     fontWeight: '800',
   },
@@ -206,17 +223,12 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.textPrimary,
   },
   userPhone: {
     marginTop: 2,
     fontSize: 13,
-    color: '#6b7280',
-  },
-  modeToggleRow: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 8,
+    color: colors.textSecondary,
   },
   drawerList: {
     flex: 1,
@@ -224,7 +236,7 @@ const styles = StyleSheet.create({
   },
   drawerFooter: {
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
+    borderTopColor: drawerTheme.separator,
     paddingBottom: 8,
   },
   closeButton: {
@@ -235,7 +247,7 @@ const styles = StyleSheet.create({
   },
   closeText: {
     marginLeft: 6,
-    color: '#6b7280',
+    color: colors.textSecondary,
     fontWeight: '600',
   },
 });

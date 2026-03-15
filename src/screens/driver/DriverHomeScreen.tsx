@@ -44,21 +44,21 @@ const DriverHomeScreen = () => {
           </View>
 
           <View style={styles.searchingCard}>
-            <Icon name="radar" size={48} color="#2563eb" />
+            <Icon name="radar" size={48} color="#C9A84C" />
             <Text style={styles.searchingTitle}>Searching for rides...</Text>
             <Text style={styles.searchingSubtitle}>We'll notify you when a ride is available</Text>
           </View>
 
           <View style={styles.statsGrid}>
             <StatCard icon="cash" label="Today's Earnings" value="₹0" color="#10b981" />
-            <StatCard icon="car" label="Trips Today" value="0" color="#2563eb" />
+            <StatCard icon="car" label="Trips Today" value="0" color="#C9A84C" />
           </View>
         </View>
       ) : (
         <View style={styles.offlineContainer}>
           <View style={styles.toggleCardCenter}>
             <View style={styles.statusInfo}>
-              <Icon name="circle-outline" size={20} color="#6b7280" />
+              <Icon name="circle-outline" size={20} color="#8A8A8A" />
               <Text style={styles.statusText}>Offline</Text>
             </View>
             <Switch
@@ -100,11 +100,11 @@ const StatCard = ({ icon, label, value, color }: any) => (
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9fafb',
+    backgroundColor: '#111111',
   },
   header: {
     padding: 24,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
   },
   headerTopRow: {
     flexDirection: 'row',
@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
   greeting: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   statusInfo: {
     flexDirection: 'row',
@@ -126,17 +126,17 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   toggleCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
     marginBottom: 16,
   },
   toggleCardCenter: {
@@ -144,10 +144,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
     width: '100%',
     maxWidth: 360,
   },
@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   searchingCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderRadius: 16,
     padding: 32,
     alignItems: 'center',
@@ -165,13 +165,13 @@ const styles = StyleSheet.create({
   searchingTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#111827',
+    color: '#FFFFFF',
     marginTop: 16,
     marginBottom: 8,
   },
   searchingSubtitle: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#8A8A8A',
     textAlign: 'center',
   },
   statsGrid: {
@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderRadius: 12,
     padding: 16,
     elevation: 1,
@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: 12,
-    color: '#6b7280',
+    color: '#8A8A8A',
     marginTop: 8,
   },
   statValue: {
@@ -208,13 +208,13 @@ const styles = StyleSheet.create({
   offlineTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
+    color: '#FFFFFF',
     marginTop: 16,
     marginBottom: 8,
   },
   offlineSubtitle: {
     fontSize: 16,
-    color: '#6b7280',
+    color: '#8A8A8A',
     textAlign: 'center',
   },
 });

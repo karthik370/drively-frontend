@@ -1,0 +1,79 @@
+diff --git a/node_modules/@msg91comm/sendotp-react-native/API/api.service.ts b/node_modules/@msg91comm/sendotp-react-native/API/api.service.ts
+index 5c44ca8..b567b15 100644
+--- a/node_modules/@msg91comm/sendotp-react-native/API/api.service.ts
++++ b/node_modules/@msg91comm/sendotp-react-native/API/api.service.ts
+@@ -1,3 +1,4 @@
++// @ts-nocheck
+ import { apiUrls } from './api.url';
+ 
+ /**
+@@ -10,16 +11,16 @@ function postAPI(url, body) {
+   return fetch(url, {
+     method: "POST",
+     body: JSON.stringify(body),
+-    headers:{
+-      "Content-Type" : 'application/json'
++    headers: {
++      "Content-Type": 'application/json'
+     }
+   }).then(response => response.json());
+ }
+ function getAPI(url) {
+   return fetch(url, {
+     method: "GET",
+-    headers:{
+-      "Content-Type" : 'application/json'
++    headers: {
++      "Content-Type": 'application/json'
+     }
+   }).then(response => response.json());
+ }
+@@ -55,7 +56,7 @@ export class ApiService {
+    * @param tokenAuth
+    * @returns {Promise<any>}
+    */
+-  static async getWidgetProcess(widgetId: string,tokenAuth: string) {
+-    return getAPI(apiUrls.getWidgetProcess.replace(':widgetId',widgetId).replace(':tokenAuth',tokenAuth));
++  static async getWidgetProcess(widgetId: string, tokenAuth: string) {
++    return getAPI(apiUrls.getWidgetProcess.replace(':widgetId', widgetId).replace(':tokenAuth', tokenAuth));
+   }
+ }
+\ No newline at end of file
+diff --git a/node_modules/@msg91comm/sendotp-react-native/API/api.url.ts b/node_modules/@msg91comm/sendotp-react-native/API/api.url.ts
+index d60303a..59702b8 100644
+--- a/node_modules/@msg91comm/sendotp-react-native/API/api.url.ts
++++ b/node_modules/@msg91comm/sendotp-react-native/API/api.url.ts
+@@ -1,11 +1,12 @@
++// @ts-nocheck
+ const createEndpoint = (endpoint) => {
+-    const url = 'https://control.msg91.com/api/v5/widget'
+-    return `${url}${endpoint}`;
+-  };
+-  export const apiUrls = {
+-    sendOTP: createEndpoint('/sendOtpMobile'),
+-    verifyOTP: createEndpoint('/verifyOtp'),
+-    retryOTP: createEndpoint('/retryOtp'),
+-    getWidgetProcess: createEndpoint('/getWidgetProcess?widgetId=:widgetId&tokenAuth=:tokenAuth'),
+-    isOneTapAuthenticated: createEndpoint('/isOneTapAuthenticated'),
+-  };
+\ No newline at end of file
++  const url = 'https://control.msg91.com/api/v5/widget'
++  return `${url}${endpoint}`;
++};
++export const apiUrls = {
++  sendOTP: createEndpoint('/sendOtpMobile'),
++  verifyOTP: createEndpoint('/verifyOtp'),
++  retryOTP: createEndpoint('/retryOtp'),
++  getWidgetProcess: createEndpoint('/getWidgetProcess?widgetId=:widgetId&tokenAuth=:tokenAuth'),
++  isOneTapAuthenticated: createEndpoint('/isOneTapAuthenticated'),
++};
+\ No newline at end of file
+diff --git a/node_modules/@msg91comm/sendotp-react-native/DefaultWidget/components/buttons/PrimaryButton.tsx b/node_modules/@msg91comm/sendotp-react-native/DefaultWidget/components/buttons/PrimaryButton.tsx
+index b387545..b0acab9 100644
+--- a/node_modules/@msg91comm/sendotp-react-native/DefaultWidget/components/buttons/PrimaryButton.tsx
++++ b/node_modules/@msg91comm/sendotp-react-native/DefaultWidget/components/buttons/PrimaryButton.tsx
+@@ -1,3 +1,4 @@
++// @ts-nocheck
+ import React, { memo } from 'react';
+ import {
+   TouchableOpacity,

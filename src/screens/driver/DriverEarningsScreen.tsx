@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, SafeAreaView, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { getDriverEarnings, getEarningsBreakdown } from '../../services/api';
+import EarningsGoalCard from '../../components/driver/EarningsGoalCard';
 
 const DriverEarningsScreen = () => {
   const [todayEarnings, setTodayEarnings] = useState<number | null>(null);
@@ -67,7 +68,7 @@ const DriverEarningsScreen = () => {
           <Text style={styles.title}>Earnings</Text>
         </View>
         <View style={styles.loadingCenter}>
-          <ActivityIndicator size="large" color="#2563eb" />
+          <ActivityIndicator size="large" color="#C9A84C" />
         </View>
       </SafeAreaView>
     );
@@ -94,6 +95,8 @@ const DriverEarningsScreen = () => {
           <Text style={styles.todayAmount}>₹{todayEarnings?.toFixed(0) || '0'}</Text>
         </View>
 
+        <EarningsGoalCard todayEarnings={todayEarnings ?? 0} dailyGoal={2000} />
+
         {previousEarnings.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Previous Earnings</Text>
@@ -113,18 +116,18 @@ const DriverEarningsScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9fafb',
+    backgroundColor: '#111111',
   },
   header: {
     padding: 24,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: 'rgba(255,255,255,0.3)',
   },
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   content: {
     flex: 1,
@@ -137,7 +140,7 @@ const styles = StyleSheet.create({
   totalCard: {
     margin: 16,
     padding: 32,
-    backgroundColor: '#2563eb',
+    backgroundColor: '#C9A84C',
     borderRadius: 16,
     alignItems: 'center',
   },
@@ -160,7 +163,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 16,
     padding: 20,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderRadius: 12,
     elevation: 1,
     shadowColor: '#000',
@@ -177,7 +180,7 @@ const styles = StyleSheet.create({
   todayLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#374151',
+    color: '#CCCCCC',
   },
   todayAmount: {
     fontSize: 32,
@@ -186,7 +189,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   section: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     padding: 20,
     marginTop: 12,
     marginHorizontal: 16,
@@ -200,7 +203,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: '#FFFFFF',
     marginBottom: 16,
   },
   previousItem: {
@@ -208,16 +211,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
+    borderBottomColor: 'rgba(255,255,255,0.3)',
   },
   previousLabel: {
     fontSize: 14,
-    color: '#374151',
+    color: '#CCCCCC',
   },
   previousAmount: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: '#FFFFFF',
   },
 });
 

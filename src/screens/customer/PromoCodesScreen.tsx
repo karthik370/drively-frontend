@@ -38,7 +38,7 @@ const PromoCodesScreen = ({ navigation, route }: any) => {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Icon name="arrow-left" size={22} color="#111827" />
+          <Icon name="arrow-left" size={22} color="#C9A84C" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{title}</Text>
         <View style={{ width: 40 }} />
@@ -47,7 +47,7 @@ const PromoCodesScreen = ({ navigation, route }: any) => {
       <ScrollView contentContainerStyle={styles.content}>
         {loading ? (
           <View style={styles.center}>
-            <ActivityIndicator size="small" color="#2563eb" />
+            <ActivityIndicator size="small" color="#C9A84C" />
             <Text style={styles.centerText}>Loading promo codes…</Text>
           </View>
         ) : null}
@@ -73,7 +73,7 @@ const PromoCodesScreen = ({ navigation, route }: any) => {
           >
             <View style={styles.cardRow}>
               <View style={styles.badge}>
-                <Icon name="ticket-percent" size={18} color="#2563eb" />
+                <Icon name="ticket-percent" size={18} color="#C9A84C" />
                 <Text style={styles.code}>{p.code}</Text>
               </View>
               {typeof onSelect === 'function' ? <Icon name="chevron-right" size={22} color="#9ca3af" /> : null}
@@ -91,39 +91,39 @@ const PromoCodesScreen = ({ navigation, route }: any) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9fafb' },
+  container: { flex: 1, backgroundColor: '#111111' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: 'rgba(255,255,255,0.3)',
   },
   backBtn: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#141414',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
   },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: '#111827' },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
   content: { padding: 16, paddingBottom: 24 },
   center: { alignItems: 'center', paddingVertical: 30 },
-  centerText: { marginTop: 10, color: '#111827', fontWeight: '600' },
-  emptyTitle: { marginTop: 12, fontSize: 18, fontWeight: '800', color: '#111827' },
-  emptySubtitle: { marginTop: 6, fontSize: 13, color: '#6b7280' },
+  centerText: { marginTop: 10, color: '#FFFFFF', fontWeight: '600' },
+  emptyTitle: { marginTop: 12, fontSize: 18, fontWeight: '800', color: '#FFFFFF' },
+  emptySubtitle: { marginTop: 6, fontSize: 13, color: '#8A8A8A' },
   card: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderRadius: 16,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
     marginBottom: 12,
   },
   cardRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -131,15 +131,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#eff6ff',
+    backgroundColor: '#141414',
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 999,
   },
   code: { color: '#1d4ed8', fontWeight: '900' },
-  desc: { marginTop: 10, color: '#111827', fontWeight: '600' },
+  desc: { marginTop: 10, color: '#FFFFFF', fontWeight: '600' },
   metaRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
-  metaText: { color: '#6b7280', fontWeight: '600', fontSize: 12 },
+  metaText: { color: '#8A8A8A', fontWeight: '600', fontSize: 12 },
 });
 
 export default PromoCodesScreen;

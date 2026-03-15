@@ -1,6 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
+import * as Notifications from 'expo-notifications';
 import { API_URL, SOCKET_URL } from '../constants/config';
 import { store } from '../redux/store';
 import {
@@ -16,6 +17,7 @@ import {
 } from '../redux/slices/locationSlice';
 import {
   addBookingRequest,
+  addChatMessage,
   clearCurrentBooking,
   removeBookingRequest,
   setCurrentBooking,
@@ -27,6 +29,7 @@ import { updateUser } from '../redux/slices/authSlice';
 import { setDriverVerification } from '../redux/slices/driverSlice';
 import { addNotification } from '../redux/slices/notificationSlice';
 import { getBookingDetails } from './api';
+import { incrementStreakRide } from '../screens/customer/StreakBonusScreen';
 import { BookingStatus, PaymentMethod, VehicleType } from '../types';
 
 class SocketService {
@@ -93,6 +96,21 @@ class SocketService {
           bookingId: String(data?.bookingId ?? data?.id ?? ''),
         })
       );
+
+      try {
+        const userType = String((store.getState().auth.user as any)?.userType ?? '');
+        if (userType === 'DRIVER' || userType === 'BOTH') {
+          void Notifications.scheduleNotificationAsync({
+            content: {
+              title: 'New booking request',
+              body: data?.pickup?.address ? `Pickup: ${String(data.pickup.address)}` : 'Open the app to view details',
+              sound: 'default',
+            },
+            trigger: null,
+          });
+        }
+      } catch {
+      }
     });
 
     this.socket.on('booking:error', (data: any) => {
@@ -112,6 +130,21 @@ class SocketService {
       const status = typeof data?.status === 'string' ? data.status : null;
       if (!bookingId || !status) return;
       store.dispatch(updateBookingStatus({ id: bookingId, status }));
+
+      try {
+        const userType = String((store.getState().auth.user as any)?.userType ?? '');
+        if ((userType === 'CUSTOMER' || userType === 'BOTH') && (status === 'DRIVER_ARRIVING' || status === 'ARRIVED')) {
+          void Notifications.scheduleNotificationAsync({
+            content: {
+              title: status === 'ARRIVED' ? 'Driver arrived' : 'Driver is on the way',
+              body: status === 'ARRIVED' ? 'Your driver has reached the pickup point.' : 'Your driver is heading to your pickup location.',
+              sound: 'default',
+            },
+            trigger: null,
+          });
+        }
+      } catch {
+      }
 
       if (status === 'SEARCHING' || status === 'REQUESTED') {
         const current = store.getState().booking.currentBooking;
@@ -134,6 +167,16 @@ class SocketService {
         store.dispatch(clearCurrentBooking());
         store.dispatch(clearLocations());
         store.dispatch(clearRoute());
+      }
+
+      // Increment streak when ride completes (for customers)
+      if (status === 'COMPLETED') {
+        try {
+          const userType = String((store.getState().auth.user as any)?.userType ?? '');
+          if (userType === 'CUSTOMER' || userType === 'BOTH') {
+            void incrementStreakRide();
+          }
+        } catch {}
       }
     });
 
@@ -162,10 +205,73 @@ class SocketService {
       store.dispatch(updateBookingOtp({ id: bookingId, otp: null }));
     });
 
+    // ── Global chat message handler — always active ──
+    this.socket.on('chat:message', (payload: any) => {
+      const bookingId = String(payload?.bookingId ?? '');
+      if (!bookingId) return;
+      const senderId = typeof payload?.senderId === 'string' ? payload.senderId : null;
+      const clientMessageId = typeof payload?.clientMessageId === 'string' ? payload.clientMessageId : null;
+      const msgText = String(payload?.message ?? '');
+      if (!msgText) return;
+
+      const ts = payload?.timestamp instanceof Date
+        ? payload.timestamp.toISOString()
+        : typeof payload?.timestamp === 'string'
+          ? payload.timestamp
+          : new Date().toISOString();
+      const stableId = clientMessageId
+        ? clientMessageId
+        : `${senderId || 'unknown'}-${ts}-${msgText.slice(0, 12)}`;
+
+      // Persist to Redux
+      store.dispatch(addChatMessage({
+        bookingId,
+        id: stableId,
+        senderId,
+        message: msgText,
+        timestamp: ts,
+      }));
+
+      // Show local notification if message is from other party
+      try {
+        const myId = String(store.getState().auth.user?.id ?? '');
+        if (senderId && myId && senderId !== myId) {
+          void Notifications.scheduleNotificationAsync({
+            content: {
+              title: 'New message',
+              body: msgText.length > 100 ? msgText.slice(0, 100) + '…' : msgText,
+              sound: 'default',
+            },
+            trigger: null,
+          });
+        }
+      } catch {}
+    });
+
     this.socket.on('booking:accepted', (data: any) => {
       const bookingId = String(data?.bookingId ?? '');
       if (!bookingId) return;
       store.dispatch(updateBookingStatus({ id: bookingId, status: 'ACCEPTED' }));
+
+      // Immediately update OTP from socket event (for customer)
+      if (data?.otp) {
+        store.dispatch(updateBookingOtp({ id: bookingId, otp: String(data.otp) }));
+      }
+
+      try {
+        const userType = String((store.getState().auth.user as any)?.userType ?? '');
+        if (userType === 'CUSTOMER' || userType === 'BOTH') {
+          void Notifications.scheduleNotificationAsync({
+            content: {
+              title: 'Driver accepted',
+              body: 'A driver has accepted your booking. Open Tracking to see live updates.',
+              sound: 'default',
+            },
+            trigger: null,
+          });
+        }
+      } catch {
+      }
 
       try {
         this.joinBooking(bookingId);
@@ -272,6 +378,8 @@ class SocketService {
       const threadUserId = String(data?.threadUserId ?? '');
       const message = String(data?.message ?? '').trim();
       const senderId = typeof data?.senderId === 'string' ? String(data.senderId) : '';
+      const senderName = typeof data?.senderName === 'string' ? String(data.senderName).trim() : '';
+      const senderRole = typeof data?.senderRole === 'string' ? String(data.senderRole).trim() : '';
       if (!bookingId || !threadUserId || !message) return;
 
       const currentUserId = String((store.getState().auth.user as any)?.id ?? '');
@@ -282,7 +390,7 @@ class SocketService {
       store.dispatch(
         addNotification({
           type: 'support_chat',
-          message: `Need Help: ${message}`,
+          message: `${senderName ? `${senderName}${senderRole ? ` (${senderRole})` : ''}: ` : 'Need Help: '}${message}`,
           bookingId,
           supportThreadUserId: threadUserId,
         })

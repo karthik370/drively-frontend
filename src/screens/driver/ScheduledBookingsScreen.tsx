@@ -88,7 +88,7 @@ const ScheduledBookingsScreen = () => {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Schedule</Text>
-        <Icon name="calendar" size={26} color="#111827" />
+        <Icon name="calendar" size={26} color="#C9A84C" />
       </View>
 
       <FlatList
@@ -106,7 +106,7 @@ const ScheduledBookingsScreen = () => {
         renderItem={({ item }) => (
           <View style={styles.card}>
             <View style={styles.cardRow}>
-              <Icon name="clock-outline" size={18} color="#6b7280" />
+              <Icon name="clock-outline" size={18} color="#8A8A8A" />
               <Text style={styles.dateText}>{item.dateLabel}</Text>
             </View>
             <View style={styles.locationRow}>
@@ -132,7 +132,7 @@ const ScheduledBookingsScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9fafb',
+    backgroundColor: '#111111',
   },
   header: {
     paddingHorizontal: 16,
@@ -145,18 +145,18 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   list: {
     padding: 16,
     gap: 12,
   },
   card: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   cardRow: {
     flexDirection: 'row',
@@ -167,7 +167,7 @@ const styles = StyleSheet.create({
   dateText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   locationRow: {
     flexDirection: 'row',
@@ -177,13 +177,13 @@ const styles = StyleSheet.create({
   locationText: {
     flex: 1,
     fontSize: 13,
-    color: '#374151',
+    color: '#CCCCCC',
     fontWeight: '500',
   },
   connector: {
     width: 2,
     height: 14,
-    backgroundColor: '#e5e7eb',
+    backgroundColor: '#1E1E1E',
     marginLeft: 4,
     marginVertical: 6,
   },
@@ -197,12 +197,12 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 18,
     fontWeight: '700',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   emptySub: {
     marginTop: 8,
     fontSize: 14,
-    color: '#6b7280',
+    color: '#8A8A8A',
     textAlign: 'center',
   },
 });

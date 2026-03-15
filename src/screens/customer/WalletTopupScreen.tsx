@@ -3,7 +3,7 @@ import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, Touchable
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 
 import { createWalletTopupOrder, getWalletBalance, verifyWalletTopup } from '../../services/api';
-import { openRazorpayCheckout } from '../../services/razorpayService';
+import { openCashfreeCheckout } from '../../services/cashfreeService';
 import { useAppSelector } from '../../redux/store';
 
 const WalletTopupScreen = ({ navigation }: any) => {
@@ -28,20 +28,12 @@ const WalletTopupScreen = ({ navigation }: any) => {
     setIsPaying(true);
     try {
       const order = await createWalletTopupOrder(amount, 'UPI');
-      const success = await openRazorpayCheckout({
+      const success = await openCashfreeCheckout({
         orderId: String(order.orderId),
-        amountPaise: Number(order.amount),
-        currency: String(order.currency || 'INR'),
-        name: 'DriveMate',
-        description: 'Wallet Topup',
-        prefill: {
-          contact: user?.phoneNumber,
-          email: user?.email,
-          name: `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || undefined,
-        },
+        paymentSessionId: String(order.paymentSessionId),
       });
 
-      await verifyWalletTopup(success);
+      await verifyWalletTopup({ cf_order_id: success.orderId });
       const bal = await getWalletBalance();
       Alert.alert('Wallet', `Top-up successful. New balance: ₹${bal.balance.toFixed(2)}`);
       navigation.goBack();
@@ -56,7 +48,7 @@ const WalletTopupScreen = ({ navigation }: any) => {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Icon name="arrow-left" size={22} color="#111827" />
+          <Icon name="arrow-left" size={22} color="#C9A84C" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Add Money</Text>
         <View style={{ width: 40 }} />
@@ -71,7 +63,7 @@ const WalletTopupScreen = ({ navigation }: any) => {
             value={amountText}
             onChangeText={setAmountText}
             placeholder="Enter amount"
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor="#444444"
           />
 
           <View style={styles.quickRow}>
@@ -83,10 +75,10 @@ const WalletTopupScreen = ({ navigation }: any) => {
           </View>
 
           <TouchableOpacity style={[styles.cta, isPaying ? styles.ctaDisabled : null]} disabled={isPaying} onPress={submit}>
-            <Text style={styles.ctaText}>{isPaying ? 'Processing…' : 'Pay with Razorpay'}</Text>
+            <Text style={styles.ctaText}>{isPaying ? 'Processing…' : 'Pay Now'}</Text>
           </TouchableOpacity>
 
-          <Text style={styles.hint}>Razorpay checkout will open to complete the payment.</Text>
+          <Text style={styles.hint}>Cashfree checkout will open to complete the payment.</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -94,45 +86,45 @@ const WalletTopupScreen = ({ navigation }: any) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9fafb' },
+  container: { flex: 1, backgroundColor: '#111111' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: 'rgba(255,255,255,0.3)',
   },
   backBtn: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#141414',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
   },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: '#111827' },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
   content: { padding: 16 },
   card: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
   },
-  label: { color: '#6b7280', fontWeight: '700' },
+  label: { color: '#8A8A8A', fontWeight: '700' },
   input: {
     marginTop: 10,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 12,
-    color: '#111827',
+    color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 18,
   },
@@ -142,20 +134,20 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
-    backgroundColor: '#f9fafb',
+    borderColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: '#111111',
   },
-  quickText: { color: '#111827', fontWeight: '800' },
+  quickText: { color: '#FFFFFF', fontWeight: '800' },
   cta: {
     marginTop: 16,
-    backgroundColor: '#2563eb',
+    backgroundColor: '#C9A84C',
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
   },
   ctaDisabled: { opacity: 0.6 },
   ctaText: { color: '#ffffff', fontWeight: '900' },
-  hint: { marginTop: 12, color: '#6b7280', fontWeight: '600', fontSize: 12 },
+  hint: { marginTop: 12, color: '#8A8A8A', fontWeight: '600', fontSize: 12 },
 });
 
 export default WalletTopupScreen;

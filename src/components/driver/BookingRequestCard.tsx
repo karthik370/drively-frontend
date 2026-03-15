@@ -28,6 +28,8 @@ export type BookingRequestCardProps = {
   timeoutSeconds?: number;
   onAccept: (bookingId: string) => Promise<void> | void;
   onReject: (bookingId: string, reason?: string) => Promise<void> | void;
+  onPress?: (bookingId: string) => void;
+  showActions?: boolean;
   onTimeout?: (bookingId: string) => void;
 };
 
@@ -54,6 +56,8 @@ const BookingRequestCard = ({
   timeoutSeconds,
   onAccept,
   onReject,
+  onPress,
+  showActions = true,
   onTimeout,
 }: BookingRequestCardProps) => {
   const theme = useTheme();
@@ -165,7 +169,17 @@ const BookingRequestCard = ({
   };
 
   return (
-    <Card style={styles.card} accessibilityLabel="Booking request">
+    <Card
+      style={styles.card}
+      accessibilityLabel="Booking request"
+      onPress={
+        onPress
+          ? () => {
+              onPress(request.id);
+            }
+          : undefined
+      }
+    >
       <Card.Content>
         <View style={styles.rowBetween}>
           <Text variant="titleMedium">New request</Text>
@@ -231,26 +245,28 @@ const BookingRequestCard = ({
           </View>
         </View>
 
-        <View style={styles.buttonsRow}>
-          <Button
-            mode="contained"
-            onPress={accept}
-            accessibilityLabel="Accept booking"
-            buttonColor="#34C759"
-            style={styles.button}
-          >
-            Accept
-          </Button>
-          <Button
-            mode="outlined"
-            onPress={reject}
-            accessibilityLabel="Reject booking"
-            textColor={theme.colors.error}
-            style={styles.button}
-          >
-            Reject
-          </Button>
-        </View>
+        {showActions ? (
+          <View style={styles.buttonsRow}>
+            <Button
+              mode="contained"
+              onPress={accept}
+              accessibilityLabel="Accept booking"
+              buttonColor="#34C759"
+              style={styles.button}
+            >
+              Accept
+            </Button>
+            <Button
+              mode="outlined"
+              onPress={reject}
+              accessibilityLabel="Reject booking"
+              textColor={theme.colors.error}
+              style={styles.button}
+            >
+              Reject
+            </Button>
+          </View>
+        ) : null}
       </Card.Content>
     </Card>
   );

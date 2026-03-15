@@ -62,7 +62,7 @@ const BookingDetailsScreen = ({ navigation, route }: any) => {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Icon name="arrow-left" size={24} color="#111827" />
+          <Icon name="arrow-left" size={24} color="#C9A84C" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Booking Details</Text>
         <View style={{ width: 24 }} />
@@ -71,8 +71,8 @@ const BookingDetailsScreen = ({ navigation, route }: any) => {
       <ScrollView style={styles.content}>
         {loading ? (
           <View style={{ padding: 24, alignItems: 'center' }}>
-            <ActivityIndicator size="small" color="#2563eb" />
-            <Text style={{ marginTop: 10, color: '#111827', fontWeight: '600' }}>Loading…</Text>
+            <ActivityIndicator size="small" color="#C9A84C" />
+            <Text style={{ marginTop: 10, color: '#FFFFFF', fontWeight: '600' }}>Loading…</Text>
           </View>
         ) : null}
 
@@ -180,7 +180,7 @@ const BookingDetailsScreen = ({ navigation, route }: any) => {
                       }
                     }}
                   >
-                    <Icon name="phone" size={16} color="#2563eb" />
+                    <Icon name="phone" size={16} color="#C9A84C" />
                     <Text style={styles.contactText}>{String(booking.customer.phoneNumber).trim()}</Text>
                   </TouchableOpacity>
                 ) : null
@@ -195,7 +195,7 @@ const BookingDetailsScreen = ({ navigation, route }: any) => {
                     }
                   }}
                 >
-                  <Icon name="phone" size={16} color="#2563eb" />
+                  <Icon name="phone" size={16} color="#C9A84C" />
                   <Text style={styles.contactText}>{String(booking.driver.phoneNumber).trim()}</Text>
                 </TouchableOpacity>
               ) : null}
@@ -221,6 +221,26 @@ const BookingDetailsScreen = ({ navigation, route }: any) => {
               Pay driver in cash
             </Text>
           </View>
+          {booking?.status === 'COMPLETED' ? (
+            <TouchableOpacity
+              style={{
+                marginTop: 16,
+                paddingVertical: 12,
+                backgroundColor: '#1E1E1E',
+                borderRadius: 8,
+                alignItems: 'center',
+                flexDirection: 'row',
+                justifyContent: 'center',
+                gap: 8,
+              }}
+              onPress={() => {
+                navigation.navigate('RideReceipt', { booking });
+              }}
+            >
+              <Icon name="receipt" size={18} color="#FFFFFF" />
+              <Text style={{ color: '#FFFFFF', fontWeight: '600' }}>View Receipt</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         <TouchableOpacity
@@ -233,7 +253,7 @@ const BookingDetailsScreen = ({ navigation, route }: any) => {
             }
           }}
         >
-          <Icon name="headphones" size={20} color="#2563eb" />
+          <Icon name="headphones" size={20} color="#C9A84C" />
           <Text style={styles.supportText}>Need Help?</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -244,31 +264,31 @@ const BookingDetailsScreen = ({ navigation, route }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9fafb',
+    backgroundColor: '#111111',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: 'rgba(255,255,255,0.3)',
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   content: {
     flex: 1,
   },
   statusCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     padding: 24,
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: 'rgba(255,255,255,0.3)',
   },
   statusBadge: {
     backgroundColor: '#d1fae5',
@@ -285,22 +305,22 @@ const styles = StyleSheet.create({
   bookingNumber: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
+    color: '#FFFFFF',
     marginBottom: 4,
   },
   bookingDate: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#8A8A8A',
   },
   section: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     padding: 20,
     marginTop: 12,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: '#FFFFFF',
     marginBottom: 16,
   },
   locationContainer: {
@@ -316,22 +336,22 @@ const styles = StyleSheet.create({
   locationLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#6b7280',
+    color: '#8A8A8A',
     marginBottom: 4,
   },
   locationAddress: {
     fontSize: 14,
-    color: '#111827',
+    color: '#FFFFFF',
     marginBottom: 2,
   },
   locationTime: {
     fontSize: 12,
-    color: '#9ca3af',
+    color: '#666666',
   },
   connector: {
     width: 2,
     height: 24,
-    backgroundColor: '#d1d5db',
+    backgroundColor: '#1E1E1E',
     marginLeft: 5,
     marginVertical: 8,
   },
@@ -345,19 +365,19 @@ const styles = StyleSheet.create({
     width: '50%',
     padding: 12,
     borderRadius: 8,
-    backgroundColor: '#f9fafb',
+    backgroundColor: '#111111',
     marginHorizontal: 4,
     marginBottom: 8,
   },
   metaLabel: {
     fontSize: 12,
-    color: '#6b7280',
+    color: '#8A8A8A',
     marginBottom: 4,
   },
   metaValue: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   contactRow: {
     flexDirection: 'row',
@@ -367,7 +387,7 @@ const styles = StyleSheet.create({
   },
   contactText: {
     fontSize: 14,
-    color: '#2563eb',
+    color: '#C9A84C',
     fontWeight: '500',
   },
   driverCard: {
@@ -379,7 +399,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#2563eb',
+    backgroundColor: '#C9A84C',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -394,7 +414,7 @@ const styles = StyleSheet.create({
   driverName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: '#FFFFFF',
     marginBottom: 4,
   },
   ratingRow: {
@@ -404,7 +424,7 @@ const styles = StyleSheet.create({
   },
   ratingText: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#8A8A8A',
   },
   fareRow: {
     flexDirection: 'row',
@@ -413,27 +433,27 @@ const styles = StyleSheet.create({
   },
   fareLabel: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#8A8A8A',
   },
   fareValue: {
     fontSize: 14,
-    color: '#111827',
+    color: '#FFFFFF',
   },
   totalRow: {
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
+    borderTopColor: 'rgba(255,255,255,0.3)',
     marginTop: 8,
     paddingTop: 16,
   },
   totalLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   totalValue: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   paymentMethod: {
     flexDirection: 'row',
@@ -441,12 +461,12 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 12,
     padding: 12,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#141414',
     borderRadius: 8,
   },
   paymentMethodText: {
     fontSize: 14,
-    color: '#374151',
+    color: '#CCCCCC',
   },
   supportButton: {
     flexDirection: 'row',
@@ -455,15 +475,15 @@ const styles = StyleSheet.create({
     gap: 8,
     margin: 16,
     padding: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#2563eb',
+    borderColor: '#C9A84C',
   },
   supportText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#2563eb',
+    color: '#C9A84C',
   },
 });
 

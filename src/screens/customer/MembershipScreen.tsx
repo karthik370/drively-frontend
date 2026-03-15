@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, SafeAreaView, ScrollView, StyleSheet, Text, T
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 
 import { createMembershipOrder, getCurrentMembership, listMembershipPlans, MembershipPlan, verifyMembershipPurchase } from '../../services/api';
-import { openRazorpayCheckout } from '../../services/razorpayService';
+import { openCashfreeCheckout } from '../../services/cashfreeService';
 import { useAppSelector } from '../../redux/store';
 
 const MembershipScreen = ({ navigation }: any) => {
@@ -42,20 +42,12 @@ const MembershipScreen = ({ navigation }: any) => {
     setIsPaying(plan.type);
     try {
       const order = await createMembershipOrder(plan.type, 'UPI');
-      const success = await openRazorpayCheckout({
+      const success = await openCashfreeCheckout({
         orderId: String(order.orderId),
-        amountPaise: Number(order.amount),
-        currency: String(order.currency || 'INR'),
-        name: 'DriveMate',
-        description: `Membership: ${plan.title}`,
-        prefill: {
-          contact: user?.phoneNumber,
-          email: user?.email,
-          name: `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || undefined,
-        },
+        paymentSessionId: String(order.paymentSessionId),
       });
 
-      await verifyMembershipPurchase({ purchaseId: String(order.purchaseId), ...success });
+      await verifyMembershipPurchase({ purchaseId: String(order.purchaseId), cf_order_id: success.orderId });
       Alert.alert('Membership', 'Membership activated successfully');
       await load();
     } catch (e: any) {
@@ -69,7 +61,7 @@ const MembershipScreen = ({ navigation }: any) => {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Icon name="arrow-left" size={22} color="#111827" />
+          <Icon name="arrow-left" size={22} color="#C9A84C" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Membership</Text>
         <View style={{ width: 40 }} />
@@ -83,7 +75,7 @@ const MembershipScreen = ({ navigation }: any) => {
 
         {loading ? (
           <View style={styles.center}>
-            <ActivityIndicator size="small" color="#2563eb" />
+            <ActivityIndicator size="small" color="#C9A84C" />
             <Text style={styles.centerText}>Loading plans…</Text>
           </View>
         ) : null}
@@ -101,7 +93,7 @@ const MembershipScreen = ({ navigation }: any) => {
               disabled={Boolean(isPaying)}
               onPress={() => buy(p)}
             >
-              <Text style={styles.ctaText}>{isPaying === p.type ? 'Processing…' : 'Buy with Razorpay'}</Text>
+              <Text style={styles.ctaText}>{isPaying === p.type ? 'Processing…' : 'Buy Now'}</Text>
             </TouchableOpacity>
           </View>
         ))}
@@ -111,57 +103,57 @@ const MembershipScreen = ({ navigation }: any) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9fafb' },
+  container: { flex: 1, backgroundColor: '#111111' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: 'rgba(255,255,255,0.3)',
   },
   backBtn: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#141414',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
   },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: '#111827' },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
   content: { padding: 16, paddingBottom: 24 },
   currentCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
     marginBottom: 12,
   },
-  currentLabel: { color: '#6b7280', fontWeight: '700' },
-  currentValue: { marginTop: 6, color: '#111827', fontWeight: '900', fontSize: 16 },
+  currentLabel: { color: '#8A8A8A', fontWeight: '700' },
+  currentValue: { marginTop: 6, color: '#FFFFFF', fontWeight: '900', fontSize: 16 },
   center: { alignItems: 'center', paddingVertical: 20 },
-  centerText: { marginTop: 10, color: '#111827', fontWeight: '600' },
+  centerText: { marginTop: 10, color: '#FFFFFF', fontWeight: '600' },
   planCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
     marginBottom: 12,
   },
   planHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  planTitle: { color: '#111827', fontWeight: '900', fontSize: 16 },
-  planPrice: { color: '#2563eb', fontWeight: '900', fontSize: 16 },
-  planDesc: { marginTop: 10, color: '#111827', fontWeight: '600' },
-  planMeta: { marginTop: 10, color: '#6b7280', fontWeight: '700', fontSize: 12 },
+  planTitle: { color: '#FFFFFF', fontWeight: '900', fontSize: 16 },
+  planPrice: { color: '#C9A84C', fontWeight: '900', fontSize: 16 },
+  planDesc: { marginTop: 10, color: '#FFFFFF', fontWeight: '600' },
+  planMeta: { marginTop: 10, color: '#8A8A8A', fontWeight: '700', fontSize: 12 },
   cta: {
     marginTop: 14,
-    backgroundColor: '#2563eb',
+    backgroundColor: '#C9A84C',
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',

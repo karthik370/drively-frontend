@@ -40,7 +40,7 @@ const AdminNeedHelpInboxScreen = ({ navigation }: any) => {
     <SafeAreaView style={styles.container}>
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
-          <Icon name="headset" size={22} color="#111827" />
+          <Icon name="headset" size={22} color="#C9A84C" />
           <Text style={styles.title}>Need Help</Text>
         </View>
         {headerRight}
@@ -48,7 +48,7 @@ const AdminNeedHelpInboxScreen = ({ navigation }: any) => {
 
       {loading ? (
         <View style={styles.loadingRow}>
-          <ActivityIndicator size="small" color="#2563eb" />
+          <ActivityIndicator size="small" color="#C9A84C" />
           <Text style={styles.loadingText}>Loading…</Text>
         </View>
       ) : null}
@@ -69,9 +69,14 @@ const AdminNeedHelpInboxScreen = ({ navigation }: any) => {
           const b = item.booking;
           const bookingNumber = b?.bookingNumber ? `#${String(b.bookingNumber).slice(0, 12)}` : item.bookingId.slice(0, 8);
           const status = b?.status ? String(b.status) : '';
-          const customer = b?.customer?.name ? b.customer.name : 'Customer';
-          const driver = b?.driver?.name ? b.driver.name : 'Driver';
-          const subtitle = `${customer}${b?.driver ? ` • ${driver}` : ''}`;
+          const customerName = b?.customer?.name ? b.customer.name : 'Customer';
+          const driverName = b?.driver?.name ? b.driver.name : 'Driver';
+          const threadUserId = String(item.threadUserId || '');
+          const customerId = b?.customer?.id ? String(b.customer.id) : '';
+          const driverId = b?.driver?.id ? String(b.driver.id) : '';
+          const senderRole = threadUserId && customerId && threadUserId === customerId ? 'Customer' : threadUserId && driverId && threadUserId === driverId ? 'Driver' : 'User';
+          const senderName = senderRole === 'Customer' ? customerName : senderRole === 'Driver' ? driverName : 'User';
+          const subtitle = `${senderName} • ${senderRole}`;
 
           return (
             <TouchableOpacity
@@ -132,7 +137,7 @@ const AdminNeedHelpInboxScreen = ({ navigation }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9fafb',
+    backgroundColor: '#111111',
   },
   headerRow: {
     padding: 16,
@@ -149,13 +154,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   refreshBtn: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 12,
-    backgroundColor: '#111827',
+    backgroundColor: '#1E1E1E',
   },
   loadingRow: {
     flexDirection: 'row',
@@ -165,7 +170,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   loadingText: {
-    color: '#111827',
+    color: '#FFFFFF',
     fontWeight: '800',
   },
   list: {
@@ -178,28 +183,28 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   emptyCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
     padding: 16,
   },
   emptyTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   emptySub: {
     marginTop: 6,
     fontSize: 13,
-    color: '#6b7280',
+    color: '#8A8A8A',
     lineHeight: 18,
   },
   item: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
     padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
@@ -209,7 +214,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#eff6ff',
+    backgroundColor: '#141414',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -230,37 +235,37 @@ const styles = StyleSheet.create({
     minWidth: 0,
     fontSize: 13,
     fontWeight: '900',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   statusPill: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#141414',
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   statusText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   itemSub: {
     marginTop: 4,
     fontSize: 12,
     fontWeight: '700',
-    color: '#6b7280',
+    color: '#8A8A8A',
   },
   itemMsg: {
     marginTop: 6,
     fontSize: 13,
     fontWeight: '800',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   itemMeta: {
     marginTop: 6,
     fontSize: 12,
-    color: '#6b7280',
+    color: '#8A8A8A',
   },
 });
 

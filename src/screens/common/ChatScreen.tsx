@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -12,7 +12,8 @@ import {
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { Text } from 'react-native-paper';
 import socketService from '../../services/socketService';
-import { useAppSelector } from '../../redux/store';
+import { useAppDispatch, useAppSelector } from '../../redux/store';
+import { addChatMessage } from '../../redux/slices/bookingSlice';
 
 type ChatMessage = {
   id: string;
@@ -20,10 +21,6 @@ type ChatMessage = {
   senderId: string | null;
   message: string;
   timestamp: string;
-};
-
-const buildId = (m: Pick<ChatMessage, 'senderId' | 'timestamp' | 'message'>) => {
-  return `${m.senderId ?? 'unknown'}-${m.timestamp}-${m.message.slice(0, 12)}`;
 };
 
 const toIso = (v: unknown) => {
@@ -42,62 +39,58 @@ const toIso = (v: unknown) => {
 const ChatScreen = ({ navigation, route }: any) => {
   const bookingId = String(route?.params?.bookingId ?? '');
   const userId = useAppSelector((s) => s.auth.user?.id ?? null);
+  const dispatch = useAppDispatch();
 
-  const [text, setText] = useState<string>('');
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // Read messages from Redux — persists across screen navigations
+  const EMPTY: ChatMessage[] = useMemo(() => [], []);
+  const stored = useAppSelector((s) => s.booking.chatMessages[bookingId]);
+  const messages = (stored ?? EMPTY) as ChatMessage[];
+
+  const [text, setText] = React.useState<string>('');
   const listRef = useRef<FlatList<ChatMessage> | null>(null);
 
   const canSend = useMemo(() => {
     return Boolean(bookingId) && text.trim().length > 0;
   }, [bookingId, text]);
 
+  // Connect socket, join booking room, and listen for messages
   useEffect(() => {
+    if (!bookingId) return;
     let active = true;
 
     const onMessage = (payload: any) => {
       if (!active) return;
-      const incomingBookingId = String(payload?.bookingId ?? bookingId ?? '');
-      if (!incomingBookingId || incomingBookingId !== bookingId) return;
+      const incomingBookingId = String(payload?.bookingId ?? '');
+      if (incomingBookingId !== bookingId) return;
 
       const incomingSenderId = typeof payload?.senderId === 'string' ? payload.senderId : null;
       const incomingClientId = typeof payload?.clientMessageId === 'string' ? payload.clientMessageId : null;
-      if (userId && incomingSenderId && String(incomingSenderId) === String(userId) && !incomingClientId) {
-        return;
-      }
+      const msgText = String(payload?.message ?? '');
+      if (!msgText) return;
 
+      const ts = toIso(payload?.timestamp);
       const stableId = incomingClientId
         ? incomingClientId
-        : buildId({
-            senderId: incomingSenderId,
-            timestamp: toIso(payload?.timestamp),
-            message: String(payload?.message ?? ''),
-          });
+        : `${incomingSenderId ?? 'unknown'}-${ts}-${msgText.slice(0, 12)}`;
 
-      const msg: ChatMessage = {
-        id: stableId,
-        bookingId: incomingBookingId,
-        senderId: incomingSenderId,
-        message: String(payload?.message ?? ''),
-        timestamp: toIso(payload?.timestamp),
-      };
-
-      if (!msg.message) return;
-
-      setMessages((prev) => {
-        if (prev.some((p) => p.id === msg.id)) return prev;
-        return [...prev, msg].slice(-200);
-      });
+      dispatch(
+        addChatMessage({
+          bookingId,
+          id: stableId,
+          senderId: incomingSenderId,
+          message: msgText,
+          timestamp: ts,
+        })
+      );
     };
 
     const start = async () => {
-      if (!bookingId) return;
       try {
         await socketService.connect();
         if (!active) return;
         socketService.joinBooking(bookingId);
         socketService.on('chat:message', onMessage);
-      } catch {
-      }
+      } catch {}
     };
 
     start();
@@ -106,11 +99,10 @@ const ChatScreen = ({ navigation, route }: any) => {
       active = false;
       try {
         socketService.off('chat:message', onMessage);
-        if (bookingId) socketService.leaveBooking(bookingId);
-      } catch {
-      }
+        // NOTE: Do NOT call leaveBooking here — TrackingScreen still needs the room
+      } catch {}
     };
-  }, [bookingId]);
+  }, [bookingId, dispatch]);
 
   const send = useCallback(async () => {
     const msg = text.trim();
@@ -118,15 +110,16 @@ const ChatScreen = ({ navigation, route }: any) => {
 
     const clientMessageId = `${String(userId ?? 'unknown')}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-    const optimistic: ChatMessage = {
-      id: clientMessageId,
-      bookingId,
-      senderId: userId,
-      message: msg,
-      timestamp: new Date().toISOString(),
-    };
-
-    setMessages((prev) => [...prev, optimistic].slice(-200));
+    // Add optimistic message to Redux
+    dispatch(
+      addChatMessage({
+        bookingId,
+        id: clientMessageId,
+        senderId: userId,
+        message: msg,
+        timestamp: new Date().toISOString(),
+      })
+    );
     setText('');
 
     try {
@@ -134,7 +127,7 @@ const ChatScreen = ({ navigation, route }: any) => {
       socketService.sendMessage(bookingId, msg, clientMessageId);
     } catch {
     }
-  }, [bookingId, text, userId]);
+  }, [bookingId, text, userId, dispatch]);
 
   const renderItem = useCallback(
     ({ item }: { item: ChatMessage }) => {
@@ -157,7 +150,7 @@ const ChatScreen = ({ navigation, route }: any) => {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
-          <Icon name="arrow-left" size={22} color="#111827" />
+          <Icon name="arrow-left" size={22} color="#C9A84C" />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>
           Chat
@@ -194,7 +187,7 @@ const ChatScreen = ({ navigation, route }: any) => {
             value={text}
             onChangeText={setText}
             placeholder="Type a message"
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor="#444444"
             style={styles.input}
             multiline
           />
@@ -214,7 +207,7 @@ const ChatScreen = ({ navigation, route }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9fafb',
+    backgroundColor: '#111111',
   },
   header: {
     flexDirection: 'row',
@@ -222,9 +215,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 12,
     paddingVertical: 12,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: 'rgba(255,255,255,0.3)',
   },
   headerBtn: {
     width: 40,
@@ -236,7 +229,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   body: {
     flex: 1,
@@ -255,7 +248,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     marginTop: 12,
-    color: '#6b7280',
+    color: '#8A8A8A',
     textAlign: 'center',
   },
   bubbleRow: {
@@ -268,12 +261,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   bubbleMine: {
-    backgroundColor: '#2563eb',
+    backgroundColor: '#C9A84C',
   },
   bubbleOther: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   bubbleText: {
     fontSize: 14,
@@ -284,7 +277,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   bubbleTextOther: {
-    color: '#111827',
+    color: '#FFFFFF',
     fontWeight: '600',
   },
   timeText: {
@@ -297,26 +290,26 @@ const styles = StyleSheet.create({
     gap: 10,
     padding: 12,
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    backgroundColor: '#ffffff',
+    borderTopColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: '#0A0A0A',
   },
   input: {
     flex: 1,
     minHeight: 44,
     maxHeight: 120,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
-    color: '#111827',
+    color: '#FFFFFF',
   },
   sendBtn: {
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: '#2563eb',
+    backgroundColor: '#C9A84C',
     alignItems: 'center',
     justifyContent: 'center',
   },

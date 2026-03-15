@@ -100,7 +100,7 @@ const MapPickScreen = ({ navigation, route }: any) => {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Icon name="arrow-left" size={22} color="#111827" />
+          <Icon name="arrow-left" size={22} color="#C9A84C" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Pick location</Text>
         <View style={{ width: 40 }} />
@@ -152,7 +152,7 @@ const MapPickScreen = ({ navigation, route }: any) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#ffffff' },
+  container: { flex: 1, backgroundColor: '#0A0A0A' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -160,19 +160,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: 'rgba(255,255,255,0.3)',
   },
   backBtn: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#141414',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
   },
-  headerTitle: { fontSize: 16, fontWeight: '800', color: '#111827' },
+  headerTitle: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
   mapWrap: { flex: 1 },
   pinWrap: {
     position: 'absolute',
@@ -185,25 +185,25 @@ const styles = StyleSheet.create({
   sheet: {
     padding: 14,
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    backgroundColor: '#ffffff',
+    borderTopColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: '#0A0A0A',
   },
-  label: { color: '#6b7280', fontWeight: '800' },
-  value: { marginTop: 6, color: '#111827', fontWeight: '800' },
+  label: { color: '#8A8A8A', fontWeight: '800' },
+  value: { marginTop: 6, color: '#FFFFFF', fontWeight: '800' },
   input: {
     marginTop: 6,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#111827',
-    backgroundColor: '#f9fafb',
+    color: '#FFFFFF',
+    backgroundColor: '#111111',
   },
   saveBtn: {
     marginTop: 12,
-    backgroundColor: '#2563eb',
+    backgroundColor: '#C9A84C',
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',

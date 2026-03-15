@@ -47,13 +47,13 @@ const AdminDriverVerificationsScreen = ({ navigation }: any) => {
       <View style={styles.header}>
         <Text style={styles.title}>Driver Verifications</Text>
         <TouchableOpacity style={styles.refreshBtn} onPress={() => void onRefresh()}>
-          <Icon name="refresh" size={20} color="#2563eb" />
+          <Icon name="refresh" size={20} color="#C9A84C" />
         </TouchableOpacity>
       </View>
 
       {isLoading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#2563eb" />
+          <ActivityIndicator size="large" color="#C9A84C" />
         </View>
       ) : (
         <FlatList
@@ -97,7 +97,7 @@ const AdminDriverVerificationsScreen = ({ navigation }: any) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#ffffff' },
+  container: { flex: 1, backgroundColor: '#0A0A0A' },
   header: {
     paddingHorizontal: 16,
     paddingTop: 14,
@@ -106,15 +106,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: 'rgba(255,255,255,0.3)',
   },
-  title: { fontSize: 18, fontWeight: '900', color: '#111827' },
+  title: { fontSize: 18, fontWeight: '900', color: '#FFFFFF' },
   refreshBtn: { padding: 10 },
   list: { padding: 14 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
   row: {
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
     borderRadius: 14,
     paddingVertical: 12,
     paddingHorizontal: 12,
@@ -128,16 +128,16 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#2563eb',
+    backgroundColor: '#C9A84C',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: { color: '#ffffff', fontWeight: '900', fontSize: 18 },
   meta: { marginLeft: 12, flex: 1, minWidth: 0 },
-  name: { fontWeight: '900', color: '#111827', fontSize: 15 },
-  phone: { marginTop: 2, color: '#6b7280', fontWeight: '700' },
-  emptyTitle: { marginTop: 10, fontSize: 16, fontWeight: '900', color: '#111827' },
-  emptySub: { marginTop: 6, textAlign: 'center', color: '#6b7280', fontWeight: '600' },
+  name: { fontWeight: '900', color: '#FFFFFF', fontSize: 15 },
+  phone: { marginTop: 2, color: '#8A8A8A', fontWeight: '700' },
+  emptyTitle: { marginTop: 10, fontSize: 16, fontWeight: '900', color: '#FFFFFF' },
+  emptySub: { marginTop: 6, textAlign: 'center', color: '#8A8A8A', fontWeight: '600' },
 });
 
 export default AdminDriverVerificationsScreen;

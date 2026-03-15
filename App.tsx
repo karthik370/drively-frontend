@@ -14,6 +14,7 @@ import { theme } from './src/constants/theme';
 import NotificationToast from './src/components/NotificationToast';
 import { MSG91_TOKEN_AUTH, MSG91_WIDGET_ID } from './src/constants/config';
 import { OTPWidget } from '@msg91comm/sendotp-react-native';
+import * as Notifications from 'expo-notifications';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -45,6 +46,33 @@ export default function App() {
         console.warn(e);
       }
     }
+  }, []);
+
+  useEffect(() => {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+      }),
+    });
+
+    void (async () => {
+      try {
+        const perm = await Notifications.getPermissionsAsync();
+        if (!perm.granted && perm.ios?.status !== Notifications.IosAuthorizationStatus.PROVISIONAL) {
+          await Notifications.requestPermissionsAsync();
+        }
+
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'Default',
+          importance: Notifications.AndroidImportance.MAX,
+          sound: 'default',
+        });
+      } catch {
+      }
+    })();
   }, []);
 
   useEffect(() => {

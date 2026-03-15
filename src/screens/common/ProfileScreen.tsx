@@ -6,6 +6,7 @@ import { clearRoleOverride, logout, setRoleOverride } from '../../redux/slices/a
 import { getActiveBooking, goOffline } from '../../services/api';
 import { BookingStatus, UserType } from '../../types';
 import { setDriverOnline } from '../../redux/slices/driverSlice';
+import { ScaleIn, SlideUp, PressableScale } from '../../components/premium/AnimatedComponents';
 
 const ProfileScreen = ({ navigation }: any) => {
   const dispatch = useAppDispatch();
@@ -41,16 +42,16 @@ const ProfileScreen = ({ navigation }: any) => {
 
   const hasActiveTrip = Boolean(
     currentBooking?.id &&
-      currentBooking?.status &&
-      [
-        BookingStatus.REQUESTED,
-        BookingStatus.SEARCHING,
-        BookingStatus.ACCEPTED,
-        BookingStatus.DRIVER_ARRIVING,
-        BookingStatus.ARRIVED,
-        BookingStatus.STARTED,
-        BookingStatus.IN_PROGRESS,
-      ].includes(currentBooking.status as any)
+    currentBooking?.status &&
+    [
+      BookingStatus.REQUESTED,
+      BookingStatus.SEARCHING,
+      BookingStatus.ACCEPTED,
+      BookingStatus.DRIVER_ARRIVING,
+      BookingStatus.ARRIVED,
+      BookingStatus.STARTED,
+      BookingStatus.IN_PROGRESS,
+    ].includes(currentBooking.status as any)
   );
 
   const isCustomerMode = isDriver && roleOverride === UserType.CUSTOMER;
@@ -142,28 +143,30 @@ const ProfileScreen = ({ navigation }: any) => {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView>
-        <View style={styles.header}>
-          <View style={styles.avatarContainer}>
-            {user?.profileImage ? (
-              <Image source={{ uri: String(user.profileImage) }} style={styles.avatarImage} />
-            ) : (
-              <Text style={styles.avatarText}>
-                {user?.firstName?.charAt(0)}
-                {user?.lastName?.charAt(0)}
-              </Text>
-            )}
-          </View>
-          <Text style={styles.name}>{user?.firstName} {user?.lastName}</Text>
-          <Text style={styles.phone}>{user?.phoneNumber}</Text>
-          {user?.email && <Text style={styles.email}>{user.email}</Text>}
-          {isDriver ? (
-            <View style={styles.ratingContainer}>
-              <Icon name="star" size={16} color="#f59e0b" />
-              <Text style={styles.rating}>{ratingNumber !== null ? ratingNumber.toFixed(1) : '0.0'}</Text>
-              <Text style={styles.ratingCount}>({totalRatingsNumber} ratings)</Text>
+        <ScaleIn delay={100}>
+          <View style={styles.header}>
+            <View style={styles.avatarContainer}>
+              {user?.profileImage ? (
+                <Image source={{ uri: String(user.profileImage) }} style={styles.avatarImage} />
+              ) : (
+                <Text style={styles.avatarText}>
+                  {user?.firstName?.charAt(0)}
+                  {user?.lastName?.charAt(0)}
+                </Text>
+              )}
             </View>
-          ) : null}
-        </View>
+            <Text style={styles.name}>{user?.firstName} {user?.lastName}</Text>
+            <Text style={styles.phone}>{user?.phoneNumber}</Text>
+            {user?.email && <Text style={styles.email}>{user.email}</Text>}
+            {isDriver ? (
+              <View style={styles.ratingContainer}>
+                <Icon name="star" size={16} color="#f59e0b" />
+                <Text style={styles.rating}>{ratingNumber !== null ? ratingNumber.toFixed(1) : '0.0'}</Text>
+                <Text style={styles.ratingCount}>({totalRatingsNumber} ratings)</Text>
+              </View>
+            ) : null}
+          </View>
+        </ScaleIn>
 
         {isDriver ? (
           <View style={styles.section}>
@@ -212,7 +215,7 @@ const ProfileScreen = ({ navigation }: any) => {
                 onValueChange={(v) => {
                   void toggleCustomerMode(Boolean(v));
                 }}
-                trackColor={{ false: '#d1d5db', true: '#2563eb' }}
+                trackColor={{ false: '#333333', true: '#C9A84C' }}
                 thumbColor="#ffffff"
               />
             </TouchableOpacity>
@@ -221,12 +224,28 @@ const ProfileScreen = ({ navigation }: any) => {
 
         <View style={styles.section}>
           <MenuItem icon="account-edit" title="Edit Profile" onPress={() => navigation.navigate('EditProfile')} />
-          <MenuItem icon="map-marker" title="Saved Addresses" onPress={() => navigation.navigate('SavedAddresses')} />
-          <MenuItem icon="ticket-percent" title="Promo Codes" onPress={() => navigation.navigate('PromoCodes')} />
+          {(!isDriver || isCustomerMode) && (
+            <>
+              <MenuItem icon="wallet" title="Wallet" onPress={() => navigation.navigate('CustomerWallet')} />
+              <MenuItem icon="crown" title="Membership" onPress={() => navigation.navigate('Membership')} />
+              <MenuItem icon="fire" title="Streak Bonuses" onPress={() => navigation.navigate('StreakBonus')} />
+              <MenuItem icon="map-marker" title="Saved Addresses" onPress={() => navigation.navigate('SavedAddresses')} />
+              <MenuItem icon="ticket-percent" title="Promo Codes" onPress={() => navigation.navigate('PromoCodes')} />
+              <MenuItem icon="heart" title="Favorite Drivers" onPress={() => navigation.navigate('FavoriteDrivers')} />
+            </>
+          )}
+          {(isDriver && !isCustomerMode) && (
+            <>
+              <MenuItem icon="wallet" title="Wallet" onPress={() => navigation.navigate('DriverWallet')} />
+            </>
+          )}
+          <MenuItem icon="star-circle" title="Rewards" onPress={() => navigation.navigate('Rewards')} />
+          <MenuItem icon="gift" title="Refer & Earn" onPress={() => navigation.navigate('Referral')} />
         </View>
 
         <View style={styles.section}>
           <MenuItem icon="shield-check" title="Safety" onPress={() => navigation.navigate('Safety')} />
+          <MenuItem icon="phone-alert" title="Emergency Contacts" onPress={() => navigation.navigate('EmergencyContacts')} />
           <MenuItem
             icon="headphones"
             title="Help & Support"
@@ -256,140 +275,160 @@ const MenuItem = ({
   title: string;
   onPress?: () => void;
 }) => (
-  <TouchableOpacity style={styles.menuItem} onPress={onPress}>
+  <PressableScale onPress={onPress} style={styles.menuItem} scaleTo={0.98}>
     <View style={styles.menuItemLeft}>
-      <Icon name={icon} size={24} color="#6b7280" />
+      <Icon name={icon} size={24} color="#C9A84C" />
       <Text style={styles.menuItemText}>{title}</Text>
     </View>
-    <Icon name="chevron-right" size={24} color="#d1d5db" />
-  </TouchableOpacity>
+    <Icon name="chevron-right" size={24} color="#555555" />
+  </PressableScale>
 );
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9fafb',
+    backgroundColor: '#0F0F0F',
   },
   header: {
-    backgroundColor: '#ffffff',
-    padding: 24,
+    backgroundColor: '#0A0A0A',
+    paddingVertical: 28,
+    paddingHorizontal: 20,
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    marginHorizontal: 16,
+    marginTop: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(201,168,76,0.15)',
   },
   avatarContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#2563eb',
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: '#C9A84C',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
     overflow: 'hidden',
+    borderWidth: 3,
+    borderColor: 'rgba(201,168,76,0.3)',
   },
   avatarImage: {
-    width: 80,
-    height: 80,
+    width: 84,
+    height: 84,
   },
   avatarText: {
     color: '#ffffff',
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: '800',
   },
   name: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
-    color: '#111827',
+    color: '#FFFFFF',
     marginBottom: 4,
   },
   phone: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#8A8A8A',
     marginBottom: 2,
   },
   email: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#8A8A8A',
   },
   ratingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 12,
     gap: 4,
+    backgroundColor: 'rgba(245,158,11,0.08)',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
   rating: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   ratingCount: {
-    fontSize: 14,
-    color: '#6b7280',
+    fontSize: 13,
+    color: '#8A8A8A',
   },
   section: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     marginTop: 12,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: '#e5e7eb',
+    marginHorizontal: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    overflow: 'hidden',
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
+    paddingVertical: 15,
+    paddingHorizontal: 18,
     borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
+    borderBottomColor: 'rgba(255,255,255,0.05)',
   },
   menuItemLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
+    flex: 1,
   },
   menuItemText: {
-    fontSize: 16,
-    color: '#111827',
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#FFFFFF',
   },
   modeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
     borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
+    borderBottomColor: 'rgba(255,255,255,0.05)',
     gap: 12,
   },
   modeRowDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   modeHint: {
-    marginTop: 2,
+    marginTop: 3,
     fontSize: 12,
-    color: '#6b7280',
-    fontWeight: '600',
+    color: '#8A8A8A',
+    fontWeight: '500',
+    lineHeight: 16,
   },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    margin: 24,
-    padding: 16,
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
+    marginHorizontal: 16,
+    marginTop: 20,
+    marginBottom: 4,
+    paddingVertical: 15,
+    backgroundColor: 'rgba(239,68,68,0.06)',
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#fee2e2',
+    borderColor: 'rgba(239,68,68,0.15)',
   },
   logoutText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     color: '#ef4444',
   },
   version: {
     textAlign: 'center',
     fontSize: 12,
-    color: '#9ca3af',
-    marginBottom: 24,
+    color: '#555555',
+    marginTop: 12,
+    marginBottom: 28,
   },
 });
 

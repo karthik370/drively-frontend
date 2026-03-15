@@ -22,6 +22,7 @@ interface BookingState {
   }>;
   isLoading: boolean;
   error: string | null;
+  chatMessages: Record<string, Array<{ id: string; bookingId: string; senderId: string | null; message: string; timestamp: string }>>;
 }
 
 const initialState: BookingState = {
@@ -30,6 +31,7 @@ const initialState: BookingState = {
   bookingRequests: [],
   isLoading: false,
   error: null,
+  chatMessages: {},
 };
 
 const bookingSlice = createSlice({
@@ -116,20 +118,41 @@ const bookingSlice = createSlice({
     setError: (state, action: PayloadAction<string | null>) => {
       state.error = action.payload;
     },
+    addChatMessage: (
+      state,
+      action: PayloadAction<{ bookingId: string; id: string; senderId: string | null; message: string; timestamp: string }>
+    ) => {
+      const { bookingId, ...msg } = action.payload;
+      if (!state.chatMessages[bookingId]) {
+        state.chatMessages[bookingId] = [];
+      }
+      const msgs = state.chatMessages[bookingId];
+      if (msgs.some((m) => m.id === msg.id)) return;
+      msgs.push({ bookingId, ...msg });
+      if (msgs.length > 200) {
+        state.chatMessages[bookingId] = msgs.slice(-200);
+      }
+    },
+    clearChatMessages: (state, action: PayloadAction<string>) => {
+      delete state.chatMessages[action.payload];
+    },
   },
   extraReducers: (builder) => {
     builder
       .addCase(logout.pending, (state) => {
         state.currentBooking = null;
         state.bookingRequests = [];
+        state.chatMessages = {};
       })
       .addCase(logout.fulfilled, (state) => {
         state.currentBooking = null;
         state.bookingRequests = [];
+        state.chatMessages = {};
       })
       .addCase(logout.rejected, (state) => {
         state.currentBooking = null;
         state.bookingRequests = [];
+        state.chatMessages = {};
       })
       .addCase(loadUser.rejected, (state) => {
         state.currentBooking = null;
@@ -152,6 +175,8 @@ export const {
   setBookingHistory,
   setLoading,
   setError,
+  addChatMessage,
+  clearChatMessages,
 } = bookingSlice.actions;
 
 export default bookingSlice.reducer;

@@ -72,7 +72,7 @@ const SavedAddressesScreen = ({ navigation }: any) => {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Icon name="arrow-left" size={22} color="#111827" />
+          <Icon name="arrow-left" size={22} color="#C9A84C" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Saved Addresses</Text>
         <TouchableOpacity
@@ -86,7 +86,7 @@ const SavedAddressesScreen = ({ navigation }: any) => {
 
       {isLoading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#2563eb" />
+          <ActivityIndicator size="large" color="#C9A84C" />
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -125,7 +125,7 @@ const SavedAddressesScreen = ({ navigation }: any) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#ffffff' },
+  container: { flex: 1, backgroundColor: '#0A0A0A' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -133,49 +133,49 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: 'rgba(255,255,255,0.3)',
   },
   backBtn: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#141414',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
   },
-  headerTitle: { fontSize: 16, fontWeight: '800', color: '#111827' },
+  headerTitle: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
   addBtn: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#2563eb',
+    backgroundColor: '#C9A84C',
     alignItems: 'center',
     justifyContent: 'center',
   },
   content: { padding: 16, paddingBottom: 24 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   empty: { padding: 24, alignItems: 'center' },
-  emptyTitle: { fontWeight: '900', color: '#111827', fontSize: 16 },
-  emptyText: { marginTop: 6, color: '#6b7280', fontWeight: '700' },
+  emptyTitle: { fontWeight: '900', color: '#FFFFFF', fontSize: 16 },
+  emptyText: { marginTop: 6, color: '#8A8A8A', fontWeight: '700' },
   card: {
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
     borderRadius: 14,
     padding: 14,
     marginBottom: 12,
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  label: { fontWeight: '900', color: '#111827' },
-  address: { marginTop: 6, color: '#374151', fontWeight: '700' },
+  label: { fontWeight: '900', color: '#FFFFFF' },
+  address: { marginTop: 6, color: '#CCCCCC', fontWeight: '700' },
   delBtn: {
     width: 42,
     height: 42,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#fee2e2',
-    backgroundColor: '#fff1f2',
+    backgroundColor: 'rgba(255,68,68,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },

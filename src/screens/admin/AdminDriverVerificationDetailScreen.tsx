@@ -10,6 +10,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Switch,
 } from 'react-native';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import {
@@ -24,6 +25,7 @@ const AdminDriverVerificationDetailScreen = ({ route, navigation }: any) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [details, setDetails] = useState<DriverVerificationDetails | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [isExperienced, setIsExperienced] = useState(false);
 
   const load = useCallback(async () => {
     const data = await getDriverVerificationDetails(driverId);
@@ -55,7 +57,7 @@ const AdminDriverVerificationDetailScreen = ({ route, navigation }: any) => {
               const r = rejectReason.trim();
               setIsSubmitting(true);
               try {
-                await verifyDriverDocuments(driverId, false, r || undefined);
+                await verifyDriverDocuments(driverId, false, r || undefined, isExperienced);
                 await load();
                 navigation.goBack();
               } catch (e: any) {
@@ -72,7 +74,7 @@ const AdminDriverVerificationDetailScreen = ({ route, navigation }: any) => {
 
     setIsSubmitting(true);
     try {
-      await verifyDriverDocuments(driverId, true);
+      await verifyDriverDocuments(driverId, true, undefined, isExperienced);
       await load();
       navigation.goBack();
     } catch (e: any) {
@@ -86,7 +88,7 @@ const AdminDriverVerificationDetailScreen = ({ route, navigation }: any) => {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#2563eb" />
+          <ActivityIndicator size="large" color="#C9A84C" />
         </View>
       </SafeAreaView>
     );
@@ -106,7 +108,7 @@ const AdminDriverVerificationDetailScreen = ({ route, navigation }: any) => {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Icon name="arrow-left" size={22} color="#111827" />
+          <Icon name="arrow-left" size={22} color="#C9A84C" />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>
           {details.user.firstName} {details.user.lastName}
@@ -150,6 +152,14 @@ const AdminDriverVerificationDetailScreen = ({ route, navigation }: any) => {
           <Image source={{ uri: details.panImageUrl }} style={styles.preview} />
         </View>
 
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Driver Experience</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text style={styles.kvTitle}>Mark as Experienced Driver</Text>
+            <Switch value={isExperienced} onValueChange={setIsExperienced} disabled={isSubmitting} />
+          </View>
+        </View>
+
         <View style={styles.actions}>
           <TouchableOpacity
             style={[styles.approveBtn, isSubmitting && styles.disabled]}
@@ -187,7 +197,7 @@ const AdminDriverVerificationDetailScreen = ({ route, navigation }: any) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#ffffff' },
+  container: { flex: 1, backgroundColor: '#0A0A0A' },
   header: {
     paddingHorizontal: 12,
     paddingTop: 10,
@@ -195,41 +205,41 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: 'rgba(255,255,255,0.3)',
   },
   backBtn: { padding: 10 },
-  headerTitle: { flex: 1, textAlign: 'center', fontWeight: '900', color: '#111827' },
+  headerTitle: { flex: 1, textAlign: 'center', fontWeight: '900', color: '#FFFFFF' },
   content: { padding: 14, paddingBottom: 24 },
   card: {
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
     borderRadius: 14,
     padding: 14,
     marginBottom: 14,
   },
-  title: { fontSize: 16, fontWeight: '900', color: '#111827' },
+  title: { fontSize: 16, fontWeight: '900', color: '#FFFFFF' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
-  sectionTitle: { fontSize: 16, fontWeight: '900', color: '#111827', marginBottom: 10 },
-  kvTitle: { color: '#6b7280', fontWeight: '800' },
-  kvValue: { marginTop: 4, color: '#111827', fontWeight: '900' },
-  preview: { width: '100%', height: 220, borderRadius: 12, backgroundColor: '#f3f4f6', marginTop: 12 },
+  sectionTitle: { fontSize: 16, fontWeight: '900', color: '#FFFFFF', marginBottom: 10 },
+  kvTitle: { color: '#8A8A8A', fontWeight: '800' },
+  kvValue: { marginTop: 4, color: '#FFFFFF', fontWeight: '900' },
+  preview: { width: '100%', height: 220, borderRadius: 12, backgroundColor: '#141414', marginTop: 12 },
   actions: { flexDirection: 'row', marginTop: 4 },
   reasonWrap: {
     marginTop: 14,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
     borderRadius: 14,
     padding: 12,
   },
-  reasonLabel: { color: '#6b7280', fontWeight: '800', marginBottom: 8 },
+  reasonLabel: { color: '#8A8A8A', fontWeight: '800', marginBottom: 8 },
   reasonInput: {
     minHeight: 44,
     borderWidth: 1,
-    borderColor: '#d1d5db',
+    borderColor: 'rgba(255,255,255,0.3)',
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: '#111827',
+    color: '#FFFFFF',
     fontWeight: '700',
   },
   approveBtn: {

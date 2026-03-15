@@ -211,23 +211,23 @@ const LocationSearchScreen = ({ navigation, route }: Props) => {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Icon name="arrow-left" size={22} color="#111827" />
+          <Icon name="arrow-left" size={22} color="#C9A84C" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{target === 'pickup' ? 'Pickup location' : 'Drop location'}</Text>
         <View style={{ width: 40 }} />
       </View>
 
       <View style={styles.searchBox}>
-        <Icon name="magnify" size={20} color="#6b7280" />
+        <Icon name="magnify" size={20} color="#8A8A8A" />
         <TextInput
           value={query}
           onChangeText={setQuery}
           placeholder={target === 'pickup' ? 'Search pickup location' : 'Search drop location'}
-          placeholderTextColor="#9ca3af"
+          placeholderTextColor="#444444"
           style={styles.input}
           autoFocus
         />
-        {isLoading ? <ActivityIndicator size="small" color="#2563eb" /> : null}
+        {isLoading ? <ActivityIndicator size="small" color="#C9A84C" /> : null}
       </View>
 
       <FlatList
@@ -269,7 +269,7 @@ const LocationSearchScreen = ({ navigation, route }: Props) => {
                 pickPlace(place.place_id);
               }}
             >
-              <Icon name="map-marker" size={18} color="#2563eb" />
+              <Icon name="map-marker" size={18} color="#C9A84C" />
               <Text style={styles.rowText} numberOfLines={2}>
                 {place.description}
               </Text>
@@ -291,7 +291,7 @@ const LocationSearchScreen = ({ navigation, route }: Props) => {
 
       {isSelecting ? (
         <View style={styles.selectingOverlay}>
-          <ActivityIndicator size="large" color="#2563eb" />
+          <ActivityIndicator size="large" color="#C9A84C" />
           <Text style={styles.selectingText}>Selecting location...</Text>
         </View>
       ) : null}
@@ -300,7 +300,7 @@ const LocationSearchScreen = ({ navigation, route }: Props) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#ffffff' },
+  container: { flex: 1, backgroundColor: '#0A0A0A' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -308,19 +308,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: 'rgba(255,255,255,0.3)',
   },
   backBtn: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#141414',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
   },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: '#111827' },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -330,10 +330,10 @@ const styles = StyleSheet.create({
     margin: 16,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
-    backgroundColor: '#f9fafb',
+    borderColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: '#111111',
   },
-  input: { flex: 1, fontSize: 16, color: '#111827' },
+  input: { flex: 1, fontSize: 16, color: '#FFFFFF' },
   listContent: { paddingHorizontal: 16, paddingBottom: 16 },
   row: {
     flexDirection: 'row',
@@ -341,20 +341,20 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
+    borderBottomColor: 'rgba(255,255,255,0.3)',
   },
-  savedTitle: { fontSize: 13, fontWeight: '800', color: '#111827' },
-  rowText: { flex: 1, fontSize: 14, color: '#111827' },
+  savedTitle: { fontSize: 13, fontWeight: '800', color: '#FFFFFF' },
+  rowText: { flex: 1, fontSize: 14, color: '#FFFFFF' },
   emptyState: { paddingVertical: 24, alignItems: 'center' },
-  emptyText: { color: '#6b7280', fontSize: 14 },
+  emptyText: { color: '#8A8A8A', fontSize: 14 },
   selectingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255,255,255,0.85)',
+    backgroundColor: 'rgba(10,10,10,0.85)',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
   },
-  selectingText: { color: '#111827', fontWeight: '600' },
+  selectingText: { color: '#FFFFFF', fontWeight: '600' },
 });
 
 export default LocationSearchScreen;

@@ -42,6 +42,7 @@ const DriverMarker = ({
 
   const lastCoordRef = useRef<{ latitude: number; longitude: number }>({ latitude, longitude });
   const [isMoving, setIsMoving] = useState<boolean>(false);
+  const [tracksViewChanges, setTracksViewChanges] = useState<boolean>(true);
 
   const color = useMemo(() => {
     if (status === 'offline') return '#8E8E93';
@@ -70,6 +71,12 @@ const DriverMarker = ({
 
     lastCoordRef.current = next;
   }, [coordinate, latitude, longitude]);
+
+  useEffect(() => {
+    setTracksViewChanges(true);
+    const t = setTimeout(() => setTracksViewChanges(false), 700);
+    return () => clearTimeout(t);
+  }, [driverPhoto, status]);
 
   useEffect(() => {
     if (typeof heading !== 'number' || !Number.isFinite(heading)) return;
@@ -127,27 +134,15 @@ const DriverMarker = ({
   return (
     <Marker.Animated
       coordinate={coordinate as any}
-      tracksViewChanges={false}
-      anchor={{ x: 0.5, y: 0.7 }}
+      tracksViewChanges={tracksViewChanges}
+      anchor={{ x: 0.5, y: 0.5 }}
       accessibilityLabel="Driver location"
     >
       <TouchableOpacity activeOpacity={0.9} onPress={onPress} disabled={!onPress}>
         <View style={styles.container}>
-          {driverPhoto ? (
-            <View style={styles.photoWrap}>
-              <Image source={{ uri: driverPhoto }} style={styles.photo} accessibilityLabel="Driver photo" />
-            </View>
-          ) : null}
-
-          {isMoving && status !== 'offline' ? (
-            <Animated.View style={[styles.pulse, { backgroundColor: color }, pulseStyle]} />
-          ) : null}
-
           <Animated.View style={[styles.carWrap, { transform: [{ rotate: rotation }] }]}>
-            <MaterialCommunityIcons name="car" size={32} color={color} />
+            <MaterialCommunityIcons name="car" size={24} color={color} />
           </Animated.View>
-
-          <View style={[styles.dot, { backgroundColor: color }]} />
         </View>
       </TouchableOpacity>
     </Marker.Animated>
@@ -156,43 +151,16 @@ const DriverMarker = ({
 
 const styles = StyleSheet.create({
   container: {
-    width: 60,
-    height: 70,
+    width: 30,
+    height: 30,
     alignItems: 'center',
     justifyContent: 'flex-end',
   },
-  photoWrap: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    marginBottom: 6,
-    backgroundColor: '#F2F2F7',
-  },
-  photo: {
-    width: 30,
-    height: 30,
-  },
-  pulse: {
-    position: 'absolute',
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    bottom: 8,
-  },
   carWrap: {
-    width: 38,
-    height: 38,
+    width: 30,
+    height: 30,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  dot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    marginBottom: 4,
   },
 });
 

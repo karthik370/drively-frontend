@@ -16,14 +16,13 @@ import { useAppDispatch } from '../../redux/store';
 import { signup } from '../../redux/slices/authSlice';
 
 const SignupScreen = ({ route, navigation }: any) => {
-  const { phoneNumber, userType, msg91AccessToken } = route.params;
+  const { phoneNumber, userType, msg91AccessToken, otpSignupToken } = route.params;
   const dispatch = useAppDispatch();
   
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
     email: '',
-    upiId: '',
   });
   const [isLoading, setIsLoading] = useState(false);
 
@@ -33,10 +32,7 @@ const SignupScreen = ({ route, navigation }: any) => {
       return;
     }
 
-    if (String(userType) === 'DRIVER' && !formData.upiId.trim()) {
-      Alert.alert('Error', 'UPI ID is required for drivers');
-      return;
-    }
+
 
     setIsLoading(true);
     try {
@@ -45,12 +41,11 @@ const SignupScreen = ({ route, navigation }: any) => {
         userType,
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
+        otpSignupToken,
         msg91AccessToken,
       };
 
-      if (String(userType) === 'DRIVER') {
-        payload.upiId = formData.upiId.trim();
-      }
+
 
       const email = formData.email.trim();
       if (email) {
@@ -67,11 +62,11 @@ const SignupScreen = ({ route, navigation }: any) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
       
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Icon name="arrow-left" size={24} color="#111827" />
+          <Icon name="arrow-left" size={24} color="#C9A84C" />
         </TouchableOpacity>
       </View>
 
@@ -94,19 +89,6 @@ const SignupScreen = ({ route, navigation }: any) => {
               autoCapitalize="words"
             />
           </View>
-
-          {String(userType) === 'DRIVER' ? (
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>UPI ID *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your UPI ID"
-                value={formData.upiId}
-                onChangeText={(text) => setFormData({ ...formData, upiId: text })}
-                autoCapitalize="none"
-              />
-            </View>
-          ) : null}
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Last Name *</Text>
@@ -139,6 +121,8 @@ const SignupScreen = ({ route, navigation }: any) => {
               editable={false}
             />
           </View>
+
+
         </View>
 
         <TouchableOpacity
@@ -160,7 +144,7 @@ const SignupScreen = ({ route, navigation }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
   },
   header: {
     paddingHorizontal: 16,
@@ -181,12 +165,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#111827',
+    color: '#FFFFFF',
     marginBottom: 12,
   },
   subtitle: {
     fontSize: 16,
-    color: '#6b7280',
+    color: '#8A8A8A',
   },
   formContainer: {
     marginBottom: 32,
@@ -197,24 +181,24 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#374151',
+    color: '#CCCCCC',
     marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#d1d5db',
+    borderColor: 'rgba(255,255,255,0.3)',
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
-    color: '#111827',
+    color: '#FFFFFF',
   },
   disabledInput: {
-    backgroundColor: '#f3f4f6',
-    color: '#6b7280',
+    backgroundColor: '#141414',
+    color: '#8A8A8A',
   },
   signupButton: {
-    backgroundColor: '#2563eb',
+    backgroundColor: '#C9A84C',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',

@@ -164,7 +164,7 @@ export const useRealTimeLocation = (
           }
 
           try {
-            if (isOnline) {
+            if (isOnline || Boolean(bookingId)) {
               await ensureSocket();
               const now = Date.now();
               const prevEmit = lastSocketEmitCoordRef.current;

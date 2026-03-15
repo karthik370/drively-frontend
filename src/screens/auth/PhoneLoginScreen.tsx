@@ -13,11 +13,83 @@ import { StatusBar } from 'expo-status-bar';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useAppSelector } from '../../redux/store';
 import { OTPWidget } from '@msg91comm/sendotp-react-native';
+import { MSG91_TOKEN_AUTH, MSG91_WIDGET_ID } from '../../constants/config';
 
 const PhoneLoginScreen = ({ navigation }: any) => {
   const { isLoading, error } = useAppSelector((state) => state.auth);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [sending, setSending] = useState(false);
+
+  const getErrorMessage = (err: any): string => {
+    if (!err) return 'Something went wrong';
+    if (typeof err === 'string') return err;
+    if (typeof err?.message === 'string' && err.message.trim()) return err.message;
+    if (typeof err?.error === 'string' && err.error.trim()) return err.error;
+    if (typeof err?.reason === 'string' && err.reason.trim()) return err.reason;
+    try {
+      const asJson = JSON.stringify(err);
+      return asJson && asJson !== '{}' ? asJson : String(err);
+    } catch {
+      return String(err);
+    }
+  };
+
+  const initMsg91 = (widgetId: string, tokenAuth: string) => {
+    try {
+      OTPWidget.initializeWidget(widgetId, tokenAuth);
+    } catch {
+    }
+  };
+
+  const initMsg91Fallback = (widgetId: string, tokenAuth: string) => {
+    try {
+      OTPWidget.initializeWidget(widgetId, { authToken: tokenAuth } as any);
+    } catch {
+    }
+  };
+
+  const extractReqId = (raw: any): string => {
+    let response = raw;
+    if (typeof response === 'string') {
+      try {
+        response = JSON.parse(response);
+      } catch {
+      }
+    }
+
+    const successMessage =
+      response &&
+        typeof response === 'object' &&
+        String((response as any)?.type || '').toLowerCase() === 'success' &&
+        typeof (response as any)?.message === 'string'
+        ? String((response as any).message)
+        : '';
+
+    const candidates = [
+      (response as any)?.reqId,
+      (response as any)?.reqid,
+      (response as any)?.req_id,
+      (response as any)?.requestId,
+      (response as any)?.request_id,
+      successMessage,
+      (response as any)?.data?.reqId,
+      (response as any)?.data?.reqid,
+      (response as any)?.data?.req_id,
+      (response as any)?.data?.requestId,
+      (response as any)?.data?.request_id,
+      (response as any)?.data?.message,
+    ];
+
+    for (const c of candidates) {
+      if (typeof c === 'string') {
+        const v = c.trim();
+        if (!v) continue;
+        if (v === 'AuthenticationFailure') continue;
+        return v;
+      }
+    }
+    return '';
+  };
 
   const handleSendOtp = async () => {
     if (!phoneNumber || phoneNumber.length < 10) {
@@ -32,25 +104,46 @@ const PhoneLoginScreen = ({ navigation }: any) => {
 
     try {
       setSending(true);
-      const response = await OTPWidget.sendOTP({ identifier: msg91Identifier } as any);
-      const reqId =
-        (response as any)?.reqId ||
-        (response as any)?.data?.reqId ||
-        (response as any)?.data?.requestId ||
-        (response as any)?.requestId ||
-        null;
 
-      if (!reqId) {
-        throw new Error('Failed to request OTP. reqId missing.');
+      const widgetId = String(MSG91_WIDGET_ID || '').trim();
+      const tokenAuth = String(MSG91_TOKEN_AUTH || '').trim();
+      if (!widgetId || !tokenAuth) {
+        throw new Error('MSG91 is not configured. Please set EXPO_PUBLIC_MSG91_WIDGET_ID and EXPO_PUBLIC_MSG91_TOKEN_AUTH in mobile .env');
       }
 
-      navigation.push('OtpVerification', {
+      console.log('MSG91 init', {
+        widgetId: widgetId,
+        tokenAuthLen: tokenAuth.length,
+        tokenAuthPrefix: tokenAuth.slice(0, 6),
+      });
+
+      initMsg91(widgetId, tokenAuth);
+
+      let response: any = await OTPWidget.sendOTP({ identifier: msg91Identifier } as any);
+
+      if (
+        response &&
+        typeof response === 'object' &&
+        String((response as any)?.code || '') === '401' &&
+        String((response as any)?.message || '') === 'AuthenticationFailure'
+      ) {
+        initMsg91Fallback(widgetId, tokenAuth);
+        response = await OTPWidget.sendOTP({ identifier: msg91Identifier } as any);
+      }
+
+      const reqId = extractReqId(response);
+      if (!reqId) {
+        console.log('MSG91 sendOTP response:', response);
+        throw new Error('Failed to request OTP. reqId missing. Check MSG91 config/tokenAuth and console logs.');
+      }
+
+      navigation.replace('OtpVerification', {
         phoneNumber: formattedPhone,
         reqId,
         msg91Identifier,
       });
     } catch (err: any) {
-      Alert.alert('Error', err || 'Failed to send OTP');
+      Alert.alert('Error', getErrorMessage(err) || 'Failed to send OTP');
     } finally {
       setSending(false);
     }
@@ -58,11 +151,11 @@ const PhoneLoginScreen = ({ navigation }: any) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" />
-      
+      <StatusBar style="light" />
+
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Icon name="arrow-left" size={24} color="#111827" />
+          <Icon name="arrow-left" size={24} color="#C9A84C" />
         </TouchableOpacity>
       </View>
 
@@ -116,7 +209,7 @@ const PhoneLoginScreen = ({ navigation }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
   },
   header: {
     paddingHorizontal: 16,
@@ -138,12 +231,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#111827',
+    color: '#FFFFFF',
     marginBottom: 12,
   },
   subtitle: {
     fontSize: 16,
-    color: '#6b7280',
+    color: '#8A8A8A',
     lineHeight: 24,
   },
   inputContainer: {
@@ -153,20 +246,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#d1d5db',
+    borderColor: 'rgba(255,255,255,0.3)',
     borderRadius: 12,
     overflow: 'hidden',
+    backgroundColor: '#141414',
   },
   countryCode: {
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#1E1E1E',
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderRightWidth: 1,
-    borderRightColor: '#d1d5db',
+    borderRightColor: 'rgba(255,255,255,0.3)',
   },
   countryCodeText: {
     fontSize: 16,
-    color: '#111827',
+    color: '#C9A84C',
     fontWeight: '600',
   },
   phoneInput: {
@@ -174,31 +268,37 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     fontSize: 16,
-    color: '#111827',
+    color: '#FFFFFF',
   },
   continueButton: {
-    backgroundColor: '#2563eb',
+    backgroundColor: '#C9A84C',
     paddingVertical: 16,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: 'center',
     marginBottom: 24,
+    shadowColor: '#C9A84C',
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
   },
   disabledButton: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   continueButtonText: {
-    color: '#ffffff',
+    color: '#0A0A0A',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   termsText: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#666666',
     textAlign: 'center',
     lineHeight: 20,
   },
   linkText: {
-    color: '#2563eb',
+    color: '#C9A84C',
     fontWeight: '600',
   },
 });

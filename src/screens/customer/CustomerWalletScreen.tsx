@@ -28,7 +28,7 @@ const CustomerWalletScreen = ({ navigation }: any) => {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <Text style={styles.title}>Wallet</Text>
-          <Icon name="wallet" size={28} color="#111827" />
+          <Icon name="wallet" size={28} color="#C9A84C" />
         </View>
 
         <View style={styles.balanceCard}>
@@ -39,11 +39,11 @@ const CustomerWalletScreen = ({ navigation }: any) => {
 
         <View style={styles.actionsRow}>
           <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('WalletTopup')}>
-            <Icon name="plus-circle" size={22} color="#2563eb" />
+            <Icon name="plus-circle" size={22} color="#C9A84C" />
             <Text style={styles.actionText}>Add Money</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('WalletTransactions')}>
-            <Icon name="history" size={22} color="#2563eb" />
+            <Icon name="history" size={22} color="#C9A84C" />
             <Text style={styles.actionText}>Transactions</Text>
           </TouchableOpacity>
         </View>
@@ -52,15 +52,15 @@ const CustomerWalletScreen = ({ navigation }: any) => {
           <Text style={styles.sectionTitle}>Payment Methods</Text>
           <View style={styles.card}>
             <View style={styles.row}>
-              <Icon name="cash" size={22} color="#6b7280" />
+              <Icon name="cash" size={22} color="#8A8A8A" />
               <Text style={styles.rowText}>Cash</Text>
             </View>
             <View style={styles.row}>
-              <Icon name="credit-card" size={22} color="#6b7280" />
+              <Icon name="credit-card" size={22} color="#8A8A8A" />
               <Text style={styles.rowText}>Card</Text>
             </View>
             <View style={styles.row}>
-              <Icon name="qrcode" size={22} color="#6b7280" />
+              <Icon name="qrcode" size={22} color="#8A8A8A" />
               <Text style={styles.rowText}>UPI</Text>
             </View>
           </View>
@@ -73,7 +73,7 @@ const CustomerWalletScreen = ({ navigation }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9fafb',
+    backgroundColor: '#111111',
   },
   content: {
     padding: 16,
@@ -87,29 +87,29 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   balanceCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderRadius: 16,
     padding: 20,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   balanceLabel: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#8A8A8A',
   },
   balanceValue: {
     fontSize: 40,
     fontWeight: '800',
-    color: '#111827',
+    color: '#FFFFFF',
     marginTop: 8,
   },
   balanceHint: {
     fontSize: 12,
-    color: '#6b7280',
+    color: '#8A8A8A',
     marginTop: 8,
   },
   actionsRow: {
@@ -123,16 +123,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderRadius: 12,
     paddingVertical: 14,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   actionText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   section: {
     marginTop: 8,
@@ -140,15 +140,15 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#111827',
+    color: '#FFFFFF',
     marginBottom: 10,
   },
   card: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   row: {
     flexDirection: 'row',
@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
   },
   rowText: {
     fontSize: 14,
-    color: '#111827',
+    color: '#FFFFFF',
     fontWeight: '500',
   },
 });

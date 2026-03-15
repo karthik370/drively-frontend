@@ -1,7 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AppState, AppStateStatus, ActivityIndicator, View, StyleSheet } from 'react-native';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
+import { navigationTheme } from '../theme';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
+import * as Device from 'expo-device';
+import * as SecureStore from 'expo-secure-store';
 import { useAppSelector, useAppDispatch } from '../redux/store';
 import { loadUser } from '../redux/slices/authSlice';
 import { loadDriverVerificationStatus } from '../redux/slices/driverSlice';
@@ -16,13 +21,15 @@ import {
   setPickupAddress,
   setPickupLocation,
 } from '../redux/slices/locationSlice';
-import { getActiveBooking } from '../services/api';
+import { getActiveBooking, registerExpoPushToken } from '../services/api';
 import { BookingStatus } from '../types';
 import socketService from '../services/socketService';
 
 const Stack = createNativeStackNavigator();
 
 const navigationRef = createNavigationContainerRef<any>();
+
+const EXPO_PUSH_TOKEN_KEY = 'expoPushToken';
 
 const AppNavigator = () => {
   const dispatch = useAppDispatch();
@@ -32,6 +39,51 @@ const AppNavigator = () => {
   const hydrateRef = useRef(false);
   const hydrateInFlightRef = useRef(false);
   const verificationHydratedRef = useRef(false);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (!user?.id) return;
+
+    let active = true;
+    void (async () => {
+      try {
+        if (!Device.isDevice) {
+          return;
+        }
+
+        const perm = await Notifications.getPermissionsAsync();
+        if (!perm.granted && perm.ios?.status !== Notifications.IosAuthorizationStatus.PROVISIONAL) {
+          const next = await Notifications.requestPermissionsAsync();
+          if (!next.granted && next.ios?.status !== Notifications.IosAuthorizationStatus.PROVISIONAL) {
+            return;
+          }
+        }
+
+        const projectId =
+          (Constants as any)?.expoConfig?.extra?.eas?.projectId ||
+          (Constants as any)?.easConfig?.projectId ||
+          undefined;
+
+        const tokenRes = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined);
+        const token = String(tokenRes?.data || '').trim();
+        if (!token) return;
+
+        const prev = (await SecureStore.getItemAsync(EXPO_PUSH_TOKEN_KEY)) || '';
+        if (prev === token) {
+          return;
+        }
+
+        if (!active) return;
+        await registerExpoPushToken({ token, platform: Device.osName ? String(Device.osName).toLowerCase() : undefined });
+        await SecureStore.setItemAsync(EXPO_PUSH_TOKEN_KEY, token);
+      } catch {
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, user?.id]);
 
   const isActiveTripStatus = (status: any) => {
     return [
@@ -195,8 +247,8 @@ const AppNavigator = () => {
   }
 
   return (
-    <NavigationContainer ref={navigationRef}>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <NavigationContainer ref={navigationRef} theme={navigationTheme as any}>
+      <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#0A0A0A' } }}>
         {isAuthenticated ? (
           <Stack.Screen name="Main" component={DrawerNavigator} />
         ) : (
@@ -212,7 +264,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0A0A0A',
   },
 });
 

@@ -2,287 +2,353 @@ import axios, { AxiosInstance, AxiosError } from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { API_URL } from '../constants/config';
 
- export type ApiResponse<T> = {
-   success: boolean;
-   message?: string;
-   data?: T;
-   error?: string;
- };
+export type ApiResponse<T> = {
+  success: boolean;
+  message?: string;
+  data?: T;
+  error?: string;
+};
 
- export class ApiRequestError extends Error {
-   status?: number;
-   code?: string;
-   payload?: unknown;
+export class ApiRequestError extends Error {
+  status?: number;
+  code?: string;
+  payload?: unknown;
+  response?: { status?: number; data?: unknown };
 
-   constructor(message: string, params?: { status?: number; code?: string; payload?: unknown }) {
-     super(message);
-     this.name = 'ApiRequestError';
-     this.status = params?.status;
-     this.code = params?.code;
-     this.payload = params?.payload;
-   }
- }
+  constructor(message: string, params?: { status?: number; code?: string; payload?: unknown }) {
+    super(message);
+    this.name = 'ApiRequestError';
+    this.status = params?.status;
+    this.code = params?.code;
+    this.payload = params?.payload;
+    if (params?.status) {
+      this.response = { status: params.status, data: params.payload };
+    }
+  }
+}
 
- const getErrorMessage = (error: unknown): string => {
-   if (error instanceof Error && error.message) return error.message;
-   if (typeof error === 'string') return error;
-   return 'Request failed';
- };
+const getErrorMessage = (error: unknown): string => {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === 'string') return error;
+  return 'Request failed';
+};
 
- const unwrap = <T,>(response: { data: ApiResponse<T> }): T => {
-   if (!response?.data) {
-     throw new ApiRequestError('Empty response from server');
-   }
+const unwrap = <T,>(response: { data: ApiResponse<T> }): T => {
+  if (!response?.data) {
+    throw new ApiRequestError('Empty response from server');
+  }
 
-   if (!response.data.success) {
-     throw new ApiRequestError(response.data.message || 'Request failed', {
-       payload: response.data,
-     });
-   }
+  if (!response.data.success) {
+    throw new ApiRequestError(response.data.message || 'Request failed', {
+      payload: response.data,
+    });
+  }
 
-   if (response.data.data === undefined) {
-     throw new ApiRequestError('Malformed response from server', {
-       payload: response.data,
-     });
-   }
+  if (response.data.data === undefined) {
+    throw new ApiRequestError('Malformed response from server', {
+      payload: response.data,
+    });
+  }
 
-   return response.data.data;
- };
+  return response.data.data;
+};
 
- const handleAxiosError = (error: unknown): never => {
-   if (axios.isAxiosError(error)) {
-     const status = error.response?.status;
-     const payload = error.response?.data;
-     const messageFromPayload =
-       payload && typeof payload === 'object' && 'message' in (payload as any)
-         ? String((payload as any).message)
-         : undefined;
+const handleAxiosError = (error: unknown): never => {
+  if (axios.isAxiosError(error)) {
+    const status = error.response?.status;
+    const payload = error.response?.data;
+    const messageFromPayload =
+      payload && typeof payload === 'object' && 'message' in (payload as any)
+        ? String((payload as any).message)
+        : undefined;
 
-     throw new ApiRequestError(messageFromPayload || error.message || 'Request failed', {
-       status,
-       payload,
-     });
-   }
+    throw new ApiRequestError(messageFromPayload || error.message || 'Request failed', {
+      status,
+      payload,
+    });
+  }
 
-   throw new ApiRequestError(getErrorMessage(error));
- };
+  throw new ApiRequestError(getErrorMessage(error));
+};
 
- export type LatLng = { latitude: number; longitude: number };
- export type BookingType = 'CITY' | 'OUTSTATION';
- export type TripType = 'ONE_WAY' | 'ROUND_TRIP' | 'OUTSTATION';
- export type PaymentMethod = 'CASH' | 'CARD' | 'UPI' | 'WALLET' | 'NET_BANKING';
- export type CancelledBy = 'CUSTOMER' | 'DRIVER';
- export type PayoutMethod = 'BANK_TRANSFER' | 'UPI';
+type RefreshTokenResponse = { accessToken: string; refreshToken: string };
 
- export type UpdateMyProfileRequest = {
-   firstName: string;
-   lastName: string;
-   profileImage?: string;
- };
+let refreshInFlight: Promise<RefreshTokenResponse> | null = null;
 
- export type UpdateMyProfileResponse = {
-   id: string;
-   phoneNumber: string;
-   email?: string | null;
-   firstName: string;
-   lastName: string;
-   profileImage?: string | null;
-   userType: string;
-   rating: number;
-   totalRatings: number;
-   isVerified: boolean;
- };
+const refreshTokensSingleFlight = async (): Promise<RefreshTokenResponse> => {
+  if (refreshInFlight) return refreshInFlight;
 
- export const updateMyProfile = async (payload: UpdateMyProfileRequest): Promise<UpdateMyProfileResponse> => {
-   try {
-     const res = await api.patch<ApiResponse<UpdateMyProfileResponse>>('/users/profile', payload);
-     return unwrap(res);
-   } catch (error) {
-     return handleAxiosError(error);
-   }
- };
+  refreshInFlight = (async () => {
+    const refreshToken = await SecureStore.getItemAsync('refreshToken');
+    if (!refreshToken) {
+      throw new ApiRequestError('No refresh token');
+    }
 
- export type SavedAddress = {
-   id: string;
-   label?: string;
-   address: string;
-   location: LatLng;
-   createdAt: string;
- };
+    const res = await axios.post<ApiResponse<RefreshTokenResponse>>(
+      `${API_URL}/auth/refresh-token`,
+      { refreshToken },
+      {
+        timeout: 30000,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
 
- export const getSavedAddresses = async (): Promise<SavedAddress[]> => {
-   try {
-     const res = await api.get<ApiResponse<SavedAddress[]>>('/users/saved-addresses');
-     return unwrap(res);
-   } catch (error) {
-     return handleAxiosError(error);
-   }
- };
+    const data = res?.data?.data as any;
+    const accessToken = typeof data?.accessToken === 'string' ? data.accessToken : '';
+    const nextRefreshToken = typeof data?.refreshToken === 'string' ? data.refreshToken : '';
+    if (!accessToken || !nextRefreshToken) {
+      throw new ApiRequestError('Token refresh failed');
+    }
 
- export const addSavedAddress = async (payload: {
-   label?: string;
-   address: string;
-   latitude: number;
-   longitude: number;
- }): Promise<SavedAddress[]> => {
-   try {
-     const res = await api.post<ApiResponse<SavedAddress[]>>('/users/saved-addresses', payload);
-     return unwrap(res);
-   } catch (error) {
-     return handleAxiosError(error);
-   }
- };
+    await SecureStore.setItemAsync('accessToken', accessToken);
+    await SecureStore.setItemAsync('refreshToken', nextRefreshToken);
 
- export const deleteSavedAddress = async (addressId: string): Promise<SavedAddress[]> => {
-   try {
-     const res = await api.delete<ApiResponse<SavedAddress[]>>(`/users/saved-addresses/${addressId}`);
-     return unwrap(res);
-   } catch (error) {
-     return handleAxiosError(error);
-   }
- };
+    return { accessToken, refreshToken: nextRefreshToken };
+  })();
 
- export type SupportThread = {
-   bookingId: string;
-   threadUserId: string;
-   lastMessage: string;
-   lastAt: string;
-   booking: {
-     id: string;
-     bookingNumber: string;
-     status: string;
-     pickupAddress: string | null;
-     dropAddress: string | null;
-     createdAt: string;
-     customer: { id: string; name: string; phoneNumber: string } | null;
-     driver: { id: string; name: string; phoneNumber: string } | null;
-   } | null;
- };
+  try {
+    return await refreshInFlight;
+  } finally {
+    refreshInFlight = null;
+  }
+};
 
- export type SupportMessage = {
-   id: string;
-   bookingId: string;
-   threadUserId: string;
-   senderId: string | null;
-   message: string;
-   timestamp: string;
- };
+export type LatLng = { latitude: number; longitude: number };
+export type BookingType = 'CITY' | 'OUTSTATION';
+export type TripType = 'ONE_WAY' | 'ROUND_TRIP' | 'OUTSTATION';
+export type PaymentMethod = 'CASH' | 'CARD' | 'UPI' | 'WALLET' | 'NET_BANKING';
+export type CancelledBy = 'CUSTOMER' | 'DRIVER';
+export type PayoutMethod = 'BANK_TRANSFER' | 'UPI';
 
- export const listSupportThreads = async (): Promise<SupportThread[]> => {
-   try {
-     const res = await api.get<ApiResponse<SupportThread[]>>('/support/threads');
-     return unwrap(res);
-   } catch (error) {
-     return handleAxiosError(error);
-   }
- };
+export type UpdateMyProfileRequest = {
+  firstName: string;
+  lastName: string;
+  profileImage?: string;
+};
 
- export const listSupportMessages = async (bookingId: string, threadUserId?: string): Promise<SupportMessage[]> => {
-   try {
-     const res = await api.get<ApiResponse<SupportMessage[]>>(`/support/threads/${bookingId}/messages`, {
-       params: threadUserId ? { threadUserId } : undefined,
-     });
-     return unwrap(res);
-   } catch (error) {
-     return handleAxiosError(error);
-   }
- };
+export type UpdateMyProfileResponse = {
+  id: string;
+  phoneNumber: string;
+  email?: string | null;
+  firstName: string;
+  lastName: string;
+  profileImage?: string | null;
+  userType: string;
+  rating: number;
+  totalRatings: number;
+  isVerified: boolean;
+};
 
- export type PendingRefundItem = {
-   refundId: string;
-   bookingId: string;
-   bookingNumber: string;
-   bookingStatus: string;
-   driverId: string;
-   driverName: string;
-   driverPhoneNumber: string;
-   upiId: string;
-   amount: number;
-   createdAt: string;
- };
+export const updateMyProfile = async (payload: UpdateMyProfileRequest): Promise<UpdateMyProfileResponse> => {
+  try {
+    const res = await api.patch<ApiResponse<UpdateMyProfileResponse>>('/users/profile', payload);
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
 
- export const getPendingRefunds = async (): Promise<PendingRefundItem[]> => {
-   try {
-     const res = await api.get<ApiResponse<PendingRefundItem[]>>('/admin/refunds/pending');
-     return unwrap(res);
-   } catch (error) {
-     return handleAxiosError(error);
-   }
- };
+export type SavedAddress = {
+  id: string;
+  label?: string;
+  address: string;
+  location: LatLng;
+  createdAt: string;
+};
 
- export const markRefundPaid = async (refundId: string): Promise<any> => {
-   try {
-     const res = await api.post<ApiResponse<any>>(`/admin/refunds/${refundId}/mark-paid`, {});
-     return unwrap(res);
-   } catch (error) {
-     return handleAxiosError(error);
-   }
- };
+export const getSavedAddresses = async (): Promise<SavedAddress[]> => {
+  try {
+    const res = await api.get<ApiResponse<SavedAddress[]>>('/users/saved-addresses');
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
 
- export type DriverDocumentsStatus = {
-   driverId: string;
-   documentsVerified: boolean;
-   backgroundCheckStatus: 'PENDING' | 'VERIFIED' | 'REJECTED' | 'EXPIRED';
-   submitted: boolean;
-   updatedAt: string;
- };
+export const addSavedAddress = async (payload: {
+  label?: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+}): Promise<SavedAddress[]> => {
+  try {
+    const res = await api.post<ApiResponse<SavedAddress[]>>('/users/saved-addresses', payload);
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
 
- export type PendingDriverVerificationItem = {
-   driverId: string;
-   name: string;
-   phoneNumber: string;
-   submittedAt: string;
-   status: 'PENDING' | 'VERIFIED' | 'REJECTED' | 'EXPIRED';
- };
+export const deleteSavedAddress = async (addressId: string): Promise<SavedAddress[]> => {
+  try {
+    const res = await api.delete<ApiResponse<SavedAddress[]>>(`/users/saved-addresses/${addressId}`);
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
 
- export const getPendingDriverVerifications = async (): Promise<PendingDriverVerificationItem[]> => {
-   try {
-     const res = await api.get<ApiResponse<PendingDriverVerificationItem[]>>('/admin/driver-verifications/pending');
-     return unwrap(res);
-   } catch (error) {
-     return handleAxiosError(error);
-   }
- };
+export const registerExpoPushToken = async (params: { token: string; platform?: string }): Promise<{ ok: boolean }> => {
+  try {
+    const res = await api.post<ApiResponse<{ ok: boolean }>>('/users/push-token/expo', params);
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
 
- export type DriverVerificationDetails = {
-   driverId: string;
-   user: { id: string; firstName: string; lastName: string; phoneNumber: string; profileImage?: string | null; createdAt: string };
-   documentsVerified: boolean;
-   backgroundCheckStatus: 'PENDING' | 'VERIFIED' | 'REJECTED' | 'EXPIRED';
-   submitted: boolean;
-   licenseNumber: string;
-   licenseExpiryDate: string;
-   licenseImageUrl: string;
-   aadhaarNumber: string;
-   aadhaarImageUrl: string;
-   panNumber: string;
-   panImageUrl: string;
-   updatedAt: string;
- };
+export type SupportThread = {
+  bookingId: string;
+  threadUserId: string;
+  lastMessage: string;
+  lastAt: string;
+  booking: {
+    id: string;
+    bookingNumber: string;
+    status: string;
+    pickupAddress: string | null;
+    dropAddress: string | null;
+    createdAt: string;
+    customer: { id: string; name: string; phoneNumber: string } | null;
+    driver: { id: string; name: string; phoneNumber: string } | null;
+  } | null;
+};
 
- export const getDriverVerificationDetails = async (driverId: string): Promise<DriverVerificationDetails> => {
-   try {
-     const res = await api.get<ApiResponse<DriverVerificationDetails>>(`/admin/driver-verifications/${driverId}`);
-     return unwrap(res);
-   } catch (error) {
-     return handleAxiosError(error);
-   }
- };
+export type SupportMessage = {
+  id: string;
+  bookingId: string;
+  threadUserId: string;
+  senderId: string | null;
+  message: string;
+  timestamp: string;
+};
 
- const api: AxiosInstance = axios.create({
-   baseURL: API_URL,
-   timeout: 30000,
-   headers: {
-     'Content-Type': 'application/json',
-   },
- });
+export const listSupportThreads = async (): Promise<SupportThread[]> => {
+  try {
+    const res = await api.get<ApiResponse<SupportThread[]>>('/support/threads');
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const listSupportMessages = async (bookingId: string, threadUserId?: string): Promise<SupportMessage[]> => {
+  try {
+    const res = await api.get<ApiResponse<SupportMessage[]>>(`/support/threads/${bookingId}/messages`, {
+      params: threadUserId ? { threadUserId } : undefined,
+    });
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export type PendingRefundItem = {
+  refundId: string;
+  bookingId: string;
+  bookingNumber: string;
+  bookingStatus: string;
+  driverId: string;
+  driverName: string;
+  driverPhoneNumber: string;
+  upiId: string;
+  amount: number;
+  createdAt: string;
+};
+
+export const getPendingRefunds = async (): Promise<PendingRefundItem[]> => {
+  try {
+    const res = await api.get<ApiResponse<PendingRefundItem[]>>('/admin/refunds/pending');
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const markRefundPaid = async (refundId: string): Promise<any> => {
+  try {
+    const res = await api.post<ApiResponse<any>>(`/admin/refunds/${refundId}/mark-paid`, {});
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export type DriverDocumentsStatus = {
+  driverId: string;
+  documentsVerified: boolean;
+  backgroundCheckStatus: 'PENDING' | 'VERIFIED' | 'REJECTED' | 'EXPIRED';
+  submitted: boolean;
+  updatedAt: string;
+};
+
+export type PendingDriverVerificationItem = {
+  driverId: string;
+  name: string;
+  phoneNumber: string;
+  submittedAt: string;
+  status: 'PENDING' | 'VERIFIED' | 'REJECTED' | 'EXPIRED';
+};
+
+export const getPendingDriverVerifications = async (): Promise<PendingDriverVerificationItem[]> => {
+  try {
+    const res = await api.get<ApiResponse<PendingDriverVerificationItem[]>>('/admin/driver-verifications/pending');
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export type DriverVerificationDetails = {
+  driverId: string;
+  user: { id: string; firstName: string; lastName: string; phoneNumber: string; profileImage?: string | null; createdAt: string };
+  documentsVerified: boolean;
+  backgroundCheckStatus: 'PENDING' | 'VERIFIED' | 'REJECTED' | 'EXPIRED';
+  submitted: boolean;
+  licenseNumber: string;
+  licenseExpiryDate: string;
+  licenseImageUrl: string;
+  aadhaarNumber: string;
+  aadhaarImageUrl: string;
+  panNumber: string;
+  panImageUrl: string;
+  updatedAt: string;
+};
+
+export const getDriverVerificationDetails = async (driverId: string): Promise<DriverVerificationDetails> => {
+  try {
+    const res = await api.get<ApiResponse<DriverVerificationDetails>>(`/admin/driver-verifications/${driverId}`);
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+const api: AxiosInstance = axios.create({
+  baseURL: API_URL,
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
 
 
 api.interceptors.request.use(
   async (config) => {
-    const token = await SecureStore.getItemAsync('accessToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    const url = String(config?.url || '');
+    const skipAuthHeaderFor = [
+      '/auth/login',
+      '/auth/signup',
+      '/auth/refresh-token',
+      '/auth/msg91/verify-access-token',
+      '/auth/social-login',
+    ];
+
+    if (!skipAuthHeaderFor.some((p) => url.startsWith(p))) {
+      const token = await SecureStore.getItemAsync('accessToken');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
     }
     return config;
   },
@@ -299,25 +365,32 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
+      const url = String(originalRequest?.url || '');
+      const skipRefreshFor = [
+        '/auth/login',
+        '/auth/signup',
+        '/auth/refresh-token',
+        '/auth/msg91/verify-access-token',
+        '/auth/social-login',
+      ];
+
+      if (skipRefreshFor.some((p) => url.startsWith(p))) {
+        return Promise.reject(error);
+      }
+
       try {
-        const refreshToken = await SecureStore.getItemAsync('refreshToken');
-        
-        if (!refreshToken) {
-          throw new Error('No refresh token');
-        }
-
-        const response = await axios.post(`${API_URL}/auth/refresh-token`, {
-          refreshToken,
-        });
-
-        const { accessToken, refreshToken: newRefreshToken } = response.data.data;
-
-        await SecureStore.setItemAsync('accessToken', accessToken);
-        await SecureStore.setItemAsync('refreshToken', newRefreshToken);
-
+        const { accessToken } = await refreshTokensSingleFlight();
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         return api(originalRequest);
       } catch (refreshError) {
+        // Important: don't blindly delete tokens here.
+        // Another concurrent request may have successfully refreshed tokens.
+        const maybeNewAccess = await SecureStore.getItemAsync('accessToken');
+        if (maybeNewAccess) {
+          originalRequest.headers.Authorization = `Bearer ${maybeNewAccess}`;
+          return api(originalRequest);
+        }
+
         await SecureStore.deleteItemAsync('accessToken');
         await SecureStore.deleteItemAsync('refreshToken');
         return Promise.reject(refreshError);
@@ -407,12 +480,12 @@ export const getDriverDocumentsStatus = async (): Promise<DriverDocumentsStatus>
 };
 
 export type SubmitDriverDocumentsRequest = {
-  licenseNumber: string;
+  licenseNumber?: string;
   licenseExpiryDate: string;
   licenseImageUrl: string;
-  aadhaarNumber: string;
+  aadhaarNumber?: string;
   aadhaarImageUrl: string;
-  panNumber: string;
+  panNumber?: string;
   panImageUrl: string;
   profileImage: string;
 };
@@ -426,33 +499,76 @@ export const submitDriverDocuments = async (payload: SubmitDriverDocumentsReques
   }
 };
 
-export type PresignUploadRequest = {
+export type UploadImageRequest = {
+  uri: string;
+  mimeType: string;
   fileName: string;
-  contentType: string;
-  fileSize?: number;
-  kind?: string;
+  kind: string;
+  onProgress?: (progress: number) => void;
 };
 
-export type PresignUploadResponse = {
+export type UploadImageResponse = {
   key: string;
-  uploadUrl: string;
   fileUrl: string;
 };
 
-export const presignDriverUpload = async (payload: PresignUploadRequest): Promise<PresignUploadResponse> => {
-  try {
-    const res = await api.post<ApiResponse<PresignUploadResponse>>('/drivers/uploads/presign', payload);
-    return unwrap(res);
-  } catch (error) {
-    return handleAxiosError(error);
-  }
-};
+export const uploadDriverImage = async (payload: UploadImageRequest): Promise<UploadImageResponse> => {
+  const FileSystem = require('expo-file-system/legacy');
+  const base64 = await FileSystem.readAsStringAsync(payload.uri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+  console.log('[Upload] base64 size:', Math.round(base64.length * 0.75 / 1024), 'KB');
 
-export const verifyDriverDocuments = async (driverId: string, approved: boolean, reason?: string): Promise<any> => {
+  const url = `${API_URL}/drivers/uploads/image`;
+  const token = await SecureStore.getItemAsync('accessToken');
+
+  return new Promise<UploadImageResponse>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.timeout = 180000;
+
+    if (xhr.upload && payload.onProgress) {
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable && payload.onProgress) {
+          payload.onProgress(event.loaded / event.total);
+        }
+      };
+    }
+
+    xhr.onload = () => {
+      console.log('[Upload] XHR status:', xhr.status);
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const data = JSON.parse(xhr.responseText);
+          if (!data.success) {
+            reject(new Error(data.message || 'Server returned failure'));
+          } else {
+            console.log('[Upload] Success! URL:', data.data?.fileUrl);
+            resolve(data.data);
+          }
+        } catch (e) {
+          reject(new Error('Invalid JSON response'));
+        }
+      } else {
+        console.log('[Upload] Server error:', xhr.status, xhr.responseText?.slice(0, 200));
+        reject(new Error(`Upload failed: ${xhr.status}`));
+      }
+    };
+
+    xhr.onerror = () => { console.log('[Upload] XHR error'); reject(new Error('Network error')); };
+    xhr.ontimeout = () => { console.log('[Upload] XHR timeout'); reject(new Error('Upload timed out')); };
+
+    xhr.send(JSON.stringify({ base64, kind: payload.kind, mimeType: payload.mimeType }));
+  });
+};
+export const verifyDriverDocuments = async (driverId: string, approved: boolean, reason?: string, isExperienced: boolean = false): Promise<any> => {
   try {
     const res = await api.post<ApiResponse<any>>(`/admin/driver-verifications/${driverId}`, {
       approved,
       reason,
+      isExperienced,
     });
     return unwrap(res);
   } catch (error) {
@@ -546,6 +662,7 @@ export type CreateBookingRequest = {
   paymentMethod: PaymentMethod;
   specialRequests?: string;
   promoCode?: string;
+  requireExperienced?: boolean;
 };
 
 export const createBooking = async (bookingData: CreateBookingRequest): Promise<any> => {
@@ -562,13 +679,13 @@ export const createBooking = async (bookingData: CreateBookingRequest): Promise<
       },
       drop:
         bookingData.dropLatitude !== undefined &&
-        bookingData.dropLongitude !== undefined &&
-        bookingData.dropAddress
+          bookingData.dropLongitude !== undefined &&
+          bookingData.dropAddress
           ? {
-              latitude: bookingData.dropLatitude,
-              longitude: bookingData.dropLongitude,
-              address: bookingData.dropAddress,
-            }
+            latitude: bookingData.dropLatitude,
+            longitude: bookingData.dropLongitude,
+            address: bookingData.dropAddress,
+          }
           : undefined,
       vehicleType: bookingData.vehicleType,
       transmissionType: bookingData.transmissionType,
@@ -579,6 +696,7 @@ export const createBooking = async (bookingData: CreateBookingRequest): Promise<
       scheduledTime: bookingData.scheduledTime ? bookingData.scheduledTime.toISOString() : undefined,
       specialRequests: bookingData.specialRequests,
       promoCode: bookingData.promoCode,
+      requireExperienced: bookingData.requireExperienced,
     };
 
     const res = await api.post<ApiResponse<any>>('/bookings', payload);
@@ -766,19 +884,19 @@ export const validatePromoCode = async (code: string, amount: number): Promise<P
 };
 
 // PAYMENTS (BOOKINGS)
-export type RazorpayOrderPayload = {
+export type CashfreeOrderPayload = {
   alreadyPaid: boolean;
   bookingId: string;
   paymentId?: string;
   orderId?: string;
+  paymentSessionId?: string;
   amount?: number;
   currency?: string;
-  keyId?: string;
 };
 
-export const createBookingPaymentOrder = async (bookingId: string): Promise<RazorpayOrderPayload> => {
+export const createBookingPaymentOrder = async (bookingId: string): Promise<CashfreeOrderPayload> => {
   try {
-    const res = await api.post<ApiResponse<RazorpayOrderPayload>>('/payments/orders', { bookingId });
+    const res = await api.post<ApiResponse<CashfreeOrderPayload>>('/payments/orders', { bookingId });
     return unwrap(res);
   } catch (error) {
     return handleAxiosError(error);
@@ -787,9 +905,7 @@ export const createBookingPaymentOrder = async (bookingId: string): Promise<Razo
 
 export const verifyBookingPayment = async (params: {
   bookingId: string;
-  razorpay_order_id: string;
-  razorpay_payment_id: string;
-  razorpay_signature: string;
+  cf_order_id: string;
 }): Promise<any> => {
   try {
     const res = await api.post<ApiResponse<any>>('/payments/verify', params);
@@ -856,9 +972,7 @@ export const createWalletTopupOrder = async (amount: number, paymentMethod?: Pay
 };
 
 export const verifyWalletTopup = async (params: {
-  razorpay_order_id: string;
-  razorpay_payment_id: string;
-  razorpay_signature: string;
+  cf_order_id: string;
 }): Promise<any> => {
   try {
     const res = await api.post<ApiResponse<any>>('/wallet/topup/verify', params);
@@ -921,9 +1035,7 @@ export const createMembershipOrder = async (membershipType: string, paymentMetho
 
 export const verifyMembershipPurchase = async (params: {
   purchaseId: string;
-  razorpay_order_id: string;
-  razorpay_payment_id: string;
-  razorpay_signature: string;
+  cf_order_id: string;
 }): Promise<any> => {
   try {
     const res = await api.post<ApiResponse<any>>('/membership/verify', params);
@@ -963,9 +1075,7 @@ export const createTipOrder = async (tipId: string): Promise<any> => {
 
 export const verifyTipPayment = async (params: {
   tipId: string;
-  razorpay_order_id: string;
-  razorpay_payment_id: string;
-  razorpay_signature: string;
+  cf_order_id: string;
 }): Promise<any> => {
   try {
     const res = await api.post<ApiResponse<any>>('/tips/verify', params);
@@ -1069,5 +1179,174 @@ export const updateDriverAvailability = async (isAvailable: boolean): Promise<an
   }
 };
 
+// ── Trip Sharing ────────────────────────────────────────────────────
+
+export const createTripShareLink = async (bookingId: string): Promise<{ shareToken: string; shareUrl: string }> => {
+  try {
+    const res = await api.post<ApiResponse<{ shareToken: string; shareUrl: string }>>(`/bookings/${bookingId}/share`);
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+// ── Referrals ───────────────────────────────────────────────────────
+
+export const generateReferralCode = async (type: 'DRIVER' | 'CUSTOMER'): Promise<any> => {
+  try {
+    const res = await api.post<ApiResponse<any>>('/features/referral/generate', { type });
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const applyReferralCode = async (code: string): Promise<any> => {
+  try {
+    const res = await api.post<ApiResponse<any>>('/features/referral/apply', { code });
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const getReferralStats = async (): Promise<any> => {
+  try {
+    const res = await api.get<ApiResponse<any>>('/features/referral/stats');
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+// ── Driver Incentives ───────────────────────────────────────────────
+
+export const getDriverIncentives = async (): Promise<any[]> => {
+  try {
+    const res = await api.get<ApiResponse<any[]>>('/features/incentives');
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const getDriverIncentiveProgress = async (): Promise<any[]> => {
+  try {
+    const res = await api.get<ApiResponse<any[]>>('/features/incentives/progress');
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+// ── Rewards Coins ───────────────────────────────────────────────────
+
+export const getRewardsBalance = async (): Promise<{ balance: number }> => {
+  try {
+    const res = await api.get<ApiResponse<{ balance: number }>>('/features/rewards/balance');
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const getRewardsSummary = async (): Promise<any> => {
+  try {
+    const res = await api.get<ApiResponse<any>>('/features/rewards/summary');
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const getRewardsHistory = async (limit = 50): Promise<any[]> => {
+  try {
+    const res = await api.get<ApiResponse<any[]>>('/features/rewards/history', { params: { limit } });
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const redeemRewardsCoins = async (coins: number, bookingId: string): Promise<any> => {
+  try {
+    const res = await api.post<ApiResponse<any>>('/features/rewards/redeem', { coins, bookingId });
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+// ── Driver Wallet ───────────────────────────────────────────────────
+
+export const getDriverWalletSummary = async (): Promise<any> => {
+  try {
+    const res = await api.get<ApiResponse<any>>('/driver-wallet/summary');
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const getDriverWalletTransactions = async (limit = 50): Promise<any[]> => {
+  try {
+    const res = await api.get<ApiResponse<any[]>>('/driver-wallet/transactions', { params: { limit } });
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const requestDriverPayout = async (amount: number, method: 'BANK' | 'UPI'): Promise<any> => {
+  try {
+    const res = await api.post<ApiResponse<any>>('/driver-wallet/payout', { amount, method });
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const getDriverPayoutHistory = async (): Promise<any[]> => {
+  try {
+    const res = await api.get<ApiResponse<any[]>>('/driver-wallet/payouts');
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
 // Backwards-compatible aliases
 export const updateBookingStatusApi = updateBookingStatus;
+
+// ── Driver Subscription ─────────────────────────────────────────────
+
+export const getDriverSubscriptionStatus = async (): Promise<any> => {
+  try {
+    const res = await api.get<ApiResponse<any>>('/driver/subscription');
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const createDriverSubscriptionOrder = async (paymentMethod: 'UPI' | 'CARD' | 'WALLET'): Promise<any> => {
+  try {
+    const res = await api.post<ApiResponse<any>>('/driver/subscription/create', { paymentMethod });
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const verifyDriverSubscriptionPayment = async (
+  cfOrderId: string
+): Promise<any> => {
+  try {
+    const res = await api.post<ApiResponse<any>>('/driver/subscription/verify', {
+      cfOrderId,
+    });
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
