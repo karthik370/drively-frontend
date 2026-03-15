@@ -1,13 +1,14 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Share, Alert, RefreshControl, ActivityIndicator, Clipboard,
+  Share, Alert, RefreshControl, ActivityIndicator, TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
-import { generateReferralCode, getReferralStats } from '../../services/api';
+import { generateReferralCode, getReferralStats, applyReferralCode } from '../../services/api';
 import { useAppSelector } from '../../redux/store';
 import { UserType } from '../../types';
+import * as Clipboard from 'expo-clipboard';
 
 const ReferralScreen = ({ navigation }: any) => {
   const userType = useAppSelector((s) => s.auth.user?.userType);
@@ -17,6 +18,10 @@ const ReferralScreen = ({ navigation }: any) => {
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Apply code state
+  const [applyCode, setApplyCode] = useState('');
+  const [applying, setApplying] = useState(false);
 
   const isDriver = userType === UserType.DRIVER;
   const type = isDriver ? 'DRIVER' : 'CUSTOMER';
@@ -50,10 +55,31 @@ const ReferralScreen = ({ navigation }: any) => {
     } catch { }
   };
 
-  const copyCode = () => {
+  const copyCode = async () => {
     if (!referralCode) return;
-    Clipboard.setString(referralCode);
+    await Clipboard.setStringAsync(referralCode);
     Alert.alert('Copied!', 'Referral code copied to clipboard');
+  };
+
+  const handleApplyCode = async () => {
+    const code = applyCode.trim();
+    if (!code) {
+      Alert.alert('Enter Code', 'Please enter a referral code');
+      return;
+    }
+    setApplying(true);
+    try {
+      const result = await applyReferralCode(code);
+      Alert.alert(
+        '🎉 Code Applied!',
+        `Referred by ${result?.referrerName || 'a friend'}. Complete your first ride to earn ₹${result?.rewardOnFirstTrip || 0}!`,
+      );
+      setApplyCode('');
+      fetchData(); // Refresh stats
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Invalid referral code');
+    }
+    setApplying(false);
   };
 
   if (loading) {
@@ -63,6 +89,8 @@ const ReferralScreen = ({ navigation }: any) => {
       </SafeAreaView>
     );
   }
+
+  const hasAppliedCode = !!stats?.myReferral;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -108,6 +136,56 @@ const ReferralScreen = ({ navigation }: any) => {
           <Text style={styles.shareBtnText}>Share with friends</Text>
         </TouchableOpacity>
 
+        {/* Apply Referral Code — only if user hasn't already applied one */}
+        {!hasAppliedCode && (
+          <View style={styles.applyCard}>
+            <Text style={styles.applyTitle}>Have a referral code?</Text>
+            <Text style={styles.applyDesc}>
+              Enter your friend's code to earn ₹{referredReward} after your first ride
+            </Text>
+            <View style={styles.applyRow}>
+              <TextInput
+                style={styles.applyInput}
+                placeholder="Enter code"
+                placeholderTextColor="#666"
+                value={applyCode}
+                onChangeText={setApplyCode}
+                autoCapitalize="characters"
+                maxLength={15}
+                editable={!applying}
+              />
+              <TouchableOpacity
+                style={[styles.applyBtn, applying && { opacity: 0.6 }]}
+                onPress={handleApplyCode}
+                disabled={applying}
+              >
+                {applying ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.applyBtnText}>Apply</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Referred by indicator */}
+        {hasAppliedCode && (
+          <View style={styles.referredCard}>
+            <Icon name="check-circle" size={20} color="#10b981" />
+            <View style={{ marginLeft: 10, flex: 1 }}>
+              <Text style={styles.referredTitle}>
+                Referred by {stats.myReferral.referrerName}
+              </Text>
+              <Text style={styles.referredStatus}>
+                {stats.myReferral.status === 'REWARDED'
+                  ? `✅ ₹${stats.myReferral.reward} credited to your wallet`
+                  : `⏳ Complete your first ride to earn ₹${stats.myReferral.reward}`}
+              </Text>
+            </View>
+          </View>
+        )}
+
         {/* Stats */}
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
@@ -115,8 +193,8 @@ const ReferralScreen = ({ navigation }: any) => {
             <Text style={styles.statLabel}>Invited</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{stats?.completedReferrals ?? 0}</Text>
-            <Text style={styles.statLabel}>Joined</Text>
+            <Text style={styles.statNumber}>{stats?.rewardedReferrals ?? 0}</Text>
+            <Text style={styles.statLabel}>Rewarded</Text>
           </View>
           <View style={styles.statCard}>
             <Text style={[styles.statNumber, { color: '#10b981' }]}>
@@ -126,14 +204,44 @@ const ReferralScreen = ({ navigation }: any) => {
           </View>
         </View>
 
+        {/* Recent Referrals */}
+        {stats?.recentReferrals?.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>Your Referrals</Text>
+            {stats.recentReferrals.map((r: any) => (
+              <View key={r.id} style={styles.refRow}>
+                <View style={[styles.refIcon, r.status === 'REWARDED' ? styles.refIconRewarded : styles.refIconPending]}>
+                  <Icon
+                    name={r.status === 'REWARDED' ? 'check' : 'clock-outline'}
+                    size={16}
+                    color={r.status === 'REWARDED' ? '#10b981' : '#f59e0b'}
+                  />
+                </View>
+                <View style={styles.refInfo}>
+                  <Text style={styles.refName}>{r.name}</Text>
+                  <Text style={styles.refStatus}>
+                    {r.status === 'REWARDED' ? `Earned ₹${r.reward}` : 'Waiting for first ride'}
+                  </Text>
+                </View>
+                <Text style={[
+                  styles.refReward,
+                  { color: r.status === 'REWARDED' ? '#10b981' : '#666' }
+                ]}>
+                  {r.status === 'REWARDED' ? `+₹${r.reward}` : `₹${r.reward}`}
+                </Text>
+              </View>
+            ))}
+          </>
+        )}
+
         {/* How it works */}
-        <Text style={styles.sectionTitle}>How it works</Text>
+        <Text style={[styles.sectionTitle, { marginTop: 8 }]}>How it works</Text>
         <View style={styles.stepsCard}>
           {[
             { icon: 'share-variant', text: 'Share your code with friends', color: '#7c3aed' },
-            { icon: 'account-plus', text: 'They sign up using your code', color: '#C9A84C' },
+            { icon: 'account-plus', text: 'They sign up & enter your code', color: '#C9A84C' },
             { icon: 'car', text: 'They complete their first ride', color: '#f59e0b' },
-            { icon: 'wallet-plus', text: `You both get rewarded!`, color: '#10b981' },
+            { icon: 'wallet-plus', text: `You both get ₹ credited to wallet!`, color: '#10b981' },
           ].map((step, i) => (
             <View key={i} style={styles.stepRow}>
               <View style={[styles.stepIcon, { backgroundColor: `${step.color}15` }]}>
@@ -184,9 +292,37 @@ const styles = StyleSheet.create({
   },
   shareBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#C9A84C', borderRadius: 14, paddingVertical: 14, gap: 8, marginBottom: 20,
+    backgroundColor: '#C9A84C', borderRadius: 14, paddingVertical: 14, gap: 8, marginBottom: 16,
   },
   shareBtnText: { fontSize: 16, fontWeight: '800', color: '#ffffff' },
+
+  // Apply code section
+  applyCard: {
+    backgroundColor: '#0A0A0A', borderRadius: 16, padding: 16, marginBottom: 16,
+    borderWidth: 1, borderColor: 'rgba(201,168,76,0.3)',
+  },
+  applyTitle: { fontSize: 15, fontWeight: '800', color: '#FFFFFF', marginBottom: 4 },
+  applyDesc: { fontSize: 12, color: '#8A8A8A', marginBottom: 12 },
+  applyRow: { flexDirection: 'row', gap: 10 },
+  applyInput: {
+    flex: 1, backgroundColor: '#1E1E1E', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: 16, fontWeight: '700', color: '#FFFFFF', letterSpacing: 1.5,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+  },
+  applyBtn: {
+    backgroundColor: '#C9A84C', borderRadius: 12, paddingHorizontal: 20, justifyContent: 'center',
+  },
+  applyBtnText: { fontSize: 14, fontWeight: '800', color: '#ffffff' },
+
+  // Referred by card
+  referredCard: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(16,185,129,0.08)',
+    borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(16,185,129,0.2)',
+  },
+  referredTitle: { fontSize: 13, fontWeight: '700', color: '#10b981' },
+  referredStatus: { fontSize: 12, color: '#8A8A8A', marginTop: 2 },
+
+  // Stats
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   statCard: {
     flex: 1, backgroundColor: '#0A0A0A', borderRadius: 14, padding: 16, alignItems: 'center',
@@ -194,7 +330,24 @@ const styles = StyleSheet.create({
   },
   statNumber: { fontSize: 24, fontWeight: '900', color: '#FFFFFF' },
   statLabel: { fontSize: 12, color: '#8A8A8A', fontWeight: '600', marginTop: 4 },
+
+  // Recent referrals
   sectionTitle: { fontSize: 16, fontWeight: '800', color: '#FFFFFF', marginBottom: 12 },
+  refRow: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#0A0A0A',
+    borderRadius: 12, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
+  },
+  refIcon: {
+    width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
+  },
+  refIconRewarded: { backgroundColor: 'rgba(16,185,129,0.1)' },
+  refIconPending: { backgroundColor: 'rgba(245,158,11,0.1)' },
+  refInfo: { flex: 1, marginLeft: 12 },
+  refName: { fontSize: 13, fontWeight: '600', color: '#FFFFFF' },
+  refStatus: { fontSize: 11, color: '#666666', marginTop: 2 },
+  refReward: { fontSize: 15, fontWeight: '800' },
+
+  // How it works
   stepsCard: {
     backgroundColor: '#0A0A0A', borderRadius: 16, padding: 16,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',

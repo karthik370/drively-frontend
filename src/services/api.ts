@@ -1194,7 +1194,7 @@ export const createTripShareLink = async (bookingId: string): Promise<{ shareTok
 
 export const generateReferralCode = async (type: 'DRIVER' | 'CUSTOMER'): Promise<any> => {
   try {
-    const res = await api.post<ApiResponse<any>>('/features/referral/generate', { type });
+    const res = await api.get<ApiResponse<any>>('/features/referral/my-code', { params: { type } });
     return unwrap(res);
   } catch (error) {
     return handleAxiosError(error);
