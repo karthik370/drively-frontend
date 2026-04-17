@@ -5,6 +5,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import socketService from '../../services/socketService';
+import { G } from '../../constants/glassStyles';
 
 interface ChatMessage {
     id: string;
@@ -113,6 +114,10 @@ const InAppChatScreen = ({ navigation, route }: Props) => {
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
                 {/* Messages */}
                 <FlatList
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={8}
+          windowSize={5}
+          initialNumToRender={8}
                     ref={flatListRef}
                     data={messages}
                     keyExtractor={(m) => m.id}
@@ -130,6 +135,10 @@ const InAppChatScreen = ({ navigation, route }: Props) => {
                 {/* Quick replies */}
                 <View style={styles.quickReplyWrap}>
                     <FlatList
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={8}
+          windowSize={5}
+          initialNumToRender={8}
                         data={quickReplies}
                         horizontal
                         showsHorizontalScrollIndicator={false}
@@ -168,22 +177,22 @@ const InAppChatScreen = ({ navigation, route }: Props) => {
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#111111' },
+    container: { flex: 1, backgroundColor: G.bgAlt },
 
     header: {
         flexDirection: 'row', alignItems: 'center', gap: 10,
-        paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#0A0A0A',
-        borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.3)',
+        paddingHorizontal: 16, paddingVertical: 10, backgroundColor: G.bg,
+        borderBottomWidth: 1, borderBottomColor: G.border3,
     },
-    backBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#141414', alignItems: 'center', justifyContent: 'center' },
+    backBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: G.glass2, alignItems: 'center', justifyContent: 'center' },
     headerInfo: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
     headerAvatar: {
-        width: 36, height: 36, borderRadius: 18, backgroundColor: '#141414', alignItems: 'center', justifyContent: 'center',
+        width: 36, height: 36, borderRadius: 18, backgroundColor: G.glass2, alignItems: 'center', justifyContent: 'center',
     },
-    headerName: { fontSize: 14, fontWeight: '800', color: '#FFFFFF' },
+    headerName: { fontSize: 14, fontWeight: '800', color: G.textPrimary },
     headerStatus: { fontSize: 11, color: '#10b981', fontWeight: '600' },
     callBtn: {
-        width: 36, height: 36, borderRadius: 18, backgroundColor: '#141414',
+        width: 36, height: 36, borderRadius: 18, backgroundColor: G.glass2,
         alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#bbf7d0',
     },
 
@@ -192,37 +201,37 @@ const styles = StyleSheet.create({
     msgRow: { marginBottom: 8, alignItems: 'flex-start' },
     msgRowMe: { alignItems: 'flex-end' },
     msgBubble: { maxWidth: '75%', borderRadius: 16, padding: 10, paddingHorizontal: 14 },
-    msgBubbleMe: { backgroundColor: '#C9A84C', borderBottomRightRadius: 4 },
-    msgBubbleOther: { backgroundColor: '#0A0A0A', borderBottomLeftRadius: 4, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
+    msgBubbleMe: { backgroundColor: G.accent, borderBottomRightRadius: 4 },
+    msgBubbleOther: { backgroundColor: G.bg, borderBottomLeftRadius: 4, borderWidth: 1, borderColor: G.border3 },
     msgText: { fontSize: 14, color: '#CCCCCC', fontWeight: '500', lineHeight: 20 },
-    msgTextMe: { color: '#ffffff' },
-    msgTime: { fontSize: 10, color: '#666666', marginTop: 4, textAlign: 'right' },
+    msgTextMe: { color: G.textPrimary },
+    msgTime: { fontSize: 10, color: G.textMuted, marginTop: 4, textAlign: 'right' },
     msgTimeMe: { color: '#bfdbfe' },
 
     emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 60, gap: 8 },
-    emptyText: { fontSize: 15, fontWeight: '700', color: '#8A8A8A' },
-    emptySubtext: { fontSize: 12, color: '#666666' },
+    emptyText: { fontSize: 15, fontWeight: '700', color: G.textSecondary },
+    emptySubtext: { fontSize: 12, color: G.textMuted },
 
-    quickReplyWrap: { borderTopWidth: 1, borderTopColor: '#f3f4f6', backgroundColor: '#0A0A0A' },
+    quickReplyWrap: { borderTopWidth: 1, borderTopColor: '#f3f4f6', backgroundColor: G.bg },
     quickReplyList: { paddingHorizontal: 12, paddingVertical: 8, gap: 6 },
     quickReplyChip: {
-        backgroundColor: '#141414', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 7,
+        backgroundColor: G.glass2, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 7,
         borderWidth: 1, borderColor: '#bfdbfe', marginRight: 6,
     },
-    quickReplyText: { fontSize: 12, fontWeight: '600', color: '#C9A84C' },
+    quickReplyText: { fontSize: 12, fontWeight: '600', color: G.accent },
 
     inputRow: {
         flexDirection: 'row', alignItems: 'flex-end', gap: 8,
-        paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#0A0A0A',
+        paddingHorizontal: 12, paddingVertical: 10, backgroundColor: G.bg,
         borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.3)',
     },
     input: {
-        flex: 1, backgroundColor: '#141414', borderRadius: 20, paddingHorizontal: 16,
-        paddingVertical: 10, fontSize: 14, fontWeight: '500', color: '#FFFFFF',
+        flex: 1, backgroundColor: G.glass2, borderRadius: 20, paddingHorizontal: 16,
+        paddingVertical: 10, fontSize: 14, fontWeight: '500', color: G.textPrimary,
         maxHeight: 80,
     },
     sendBtn: {
-        width: 40, height: 40, borderRadius: 20, backgroundColor: '#C9A84C',
+        width: 40, height: 40, borderRadius: 20, backgroundColor: G.accent,
         alignItems: 'center', justifyContent: 'center',
     },
     sendBtnDisabled: { backgroundColor: '#93c5fd' },

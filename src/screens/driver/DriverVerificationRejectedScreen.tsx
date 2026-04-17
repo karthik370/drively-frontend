@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useAppDispatch, useAppSelector } from '../../redux/store';
 import { logout } from '../../redux/slices/authSlice';
+import { G } from '../../constants/glassStyles';
 
 const DriverVerificationRejectedScreen = ({ navigation }: any) => {
   const dispatch = useAppDispatch();
@@ -54,7 +55,7 @@ const DriverVerificationRejectedScreen = ({ navigation }: any) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0A0A0A' },
+  container: { flex: 1, backgroundColor: G.bg },
   content: { flex: 1, padding: 20, alignItems: 'center', justifyContent: 'center' },
   iconWrap: {
     width: 84,
@@ -65,7 +66,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1A1010',
     marginBottom: 18,
   },
-  title: { fontSize: 22, fontWeight: '900', color: '#FFFFFF', marginBottom: 10 },
+  title: { fontSize: 22, fontWeight: '900', color: G.textPrimary, marginBottom: 10 },
   subtitle: { textAlign: 'center', color: '#CCCCCC', fontWeight: '600', marginBottom: 16, lineHeight: 20 },
   reasonBox: {
     width: '100%',
@@ -83,13 +84,13 @@ const styles = StyleSheet.create({
   primaryButton: {
     width: '100%',
     maxWidth: 360,
-    backgroundColor: '#C9A84C',
+    backgroundColor: G.accent,
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 4,
   },
-  primaryText: { color: '#ffffff', fontWeight: '900', fontSize: 16 },
+  primaryText: { color: G.textPrimary, fontWeight: '900', fontSize: 16 },
   logoutButton: { marginTop: 18, paddingVertical: 10, paddingHorizontal: 18 },
   logoutText: { color: '#ef4444', fontWeight: '900' },
 });

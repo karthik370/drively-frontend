@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { showAlert } from '../../components/common/CustomAlert';
+import { G } from '../../constants/glassStyles';
 
 interface Props {
     navigation: any;
@@ -27,7 +29,7 @@ const DailyBookingScreen = ({ navigation }: Props) => {
             selectedDays >= 30 ? Math.round(totalPrice * 0.2) : 0;
 
     const handleBook = () => {
-        Alert.alert(
+        showAlert(
             'Confirm Daily Booking',
             `Book a driver for ${selectedDays} days (${slots.find(s => s.key === selectedSlot)?.label} slot)?\n\nTotal: ₹${totalPrice}${savings > 0 ? ` (Save ₹${savings})` : ''}`,
             [
@@ -94,7 +96,7 @@ const DailyBookingScreen = ({ navigation }: Props) => {
                             onPress={() => setSelectedSlot(s.key)}
                         >
                             <Icon name={s.icon as any} size={24} color={selectedSlot === s.key ? s.color : '#9ca3af'} />
-                            <Text style={[styles.slotLabel, selectedSlot === s.key && { color: '#FFFFFF' }]}>{s.label}</Text>
+                            <Text style={[styles.slotLabel, selectedSlot === s.key && { color: G.textPrimary }]}>{s.label}</Text>
                             <Text style={styles.slotTime}>{s.time}</Text>
                         </TouchableOpacity>
                     ))}
@@ -150,58 +152,58 @@ const DailyBookingScreen = ({ navigation }: Props) => {
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#111111' },
+    container: { flex: 1, backgroundColor: G.bgAlt },
     header: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-        paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#0A0A0A',
-        borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.3)',
+        paddingHorizontal: 16, paddingVertical: 12, backgroundColor: G.bg,
+        borderBottomWidth: 1, borderBottomColor: G.border3,
     },
-    backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#141414', alignItems: 'center', justifyContent: 'center' },
-    headerTitle: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
+    backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: G.glass2, alignItems: 'center', justifyContent: 'center' },
+    headerTitle: { fontSize: 16, fontWeight: '800', color: G.textPrimary },
     content: { padding: 16, paddingBottom: 32 },
 
     heroCard: {
-        backgroundColor: '#141414', borderRadius: 16, padding: 24, alignItems: 'center', marginBottom: 20,
+        backgroundColor: G.glass2, borderRadius: 16, padding: 24, alignItems: 'center', marginBottom: 20,
         borderWidth: 1, borderColor: '#bfdbfe',
     },
     heroTitle: { fontSize: 18, fontWeight: '900', color: '#1e40af', marginTop: 10 },
-    heroDesc: { fontSize: 13, color: '#C9A84C', textAlign: 'center', marginTop: 6, lineHeight: 20 },
+    heroDesc: { fontSize: 13, color: G.accent, textAlign: 'center', marginTop: 6, lineHeight: 20 },
 
-    sectionTitle: { fontSize: 15, fontWeight: '900', color: '#FFFFFF', marginBottom: 10 },
+    sectionTitle: { fontSize: 15, fontWeight: '900', color: G.textPrimary, marginBottom: 10 },
 
     daysRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
     dayChip: {
         paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, alignItems: 'center',
-        backgroundColor: '#0A0A0A', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)',
+        backgroundColor: G.bg, borderWidth: 1.5, borderColor: G.border3,
     },
-    dayChipActive: { borderColor: '#C9A84C', backgroundColor: '#141414' },
+    dayChipActive: { borderColor: G.accent, backgroundColor: G.glass2 },
     dayText: { fontSize: 18, fontWeight: '900', color: '#CCCCCC' },
-    dayTextActive: { color: '#C9A84C' },
-    dayLabel: { fontSize: 10, fontWeight: '600', color: '#666666' },
-    dayLabelActive: { color: '#C9A84C' },
+    dayTextActive: { color: G.accent },
+    dayLabel: { fontSize: 10, fontWeight: '600', color: G.textMuted },
+    dayLabelActive: { color: G.accent },
 
     slotsRow: { flexDirection: 'row', gap: 8, marginBottom: 20 },
     slotCard: {
-        flex: 1, backgroundColor: '#0A0A0A', borderRadius: 12, padding: 12, alignItems: 'center',
-        borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)', gap: 4,
+        flex: 1, backgroundColor: G.bg, borderRadius: 12, padding: 12, alignItems: 'center',
+        borderWidth: 1.5, borderColor: G.border3, gap: 4,
     },
-    slotCardActive: { borderColor: '#C9A84C', backgroundColor: '#141414' },
-    slotLabel: { fontSize: 12, fontWeight: '800', color: '#666666' },
-    slotTime: { fontSize: 10, color: '#666666' },
+    slotCardActive: { borderColor: G.accent, backgroundColor: G.glass2 },
+    slotLabel: { fontSize: 12, fontWeight: '800', color: G.textMuted },
+    slotTime: { fontSize: 10, color: G.textMuted },
 
     priceCard: {
-        backgroundColor: '#0A0A0A', borderRadius: 14, padding: 16, marginBottom: 16,
-        borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
+        backgroundColor: G.bg, borderRadius: 14, padding: 16, marginBottom: 16,
+        borderWidth: 1, borderColor: G.border3,
     },
     priceRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
-    priceLabel: { fontSize: 13, color: '#8A8A8A', fontWeight: '600' },
-    priceValue: { fontSize: 13, color: '#FFFFFF', fontWeight: '700' },
-    priceDivider: { height: 1, backgroundColor: '#1E1E1E', marginVertical: 8 },
-    totalLabel: { fontSize: 15, fontWeight: '900', color: '#FFFFFF' },
-    totalValue: { fontSize: 18, fontWeight: '900', color: '#FFFFFF' },
+    priceLabel: { fontSize: 13, color: G.textSecondary, fontWeight: '600' },
+    priceValue: { fontSize: 13, color: G.textPrimary, fontWeight: '700' },
+    priceDivider: { height: 1, backgroundColor: G.glass3, marginVertical: 8 },
+    totalLabel: { fontSize: 15, fontWeight: '900', color: G.textPrimary },
+    totalValue: { fontSize: 18, fontWeight: '900', color: G.textPrimary },
 
     benefitsCard: {
-        backgroundColor: '#141414', borderRadius: 14, padding: 16, marginBottom: 20,
+        backgroundColor: G.glass2, borderRadius: 14, padding: 16, marginBottom: 20,
         borderWidth: 1, borderColor: '#bbf7d0',
     },
     benefitsTitle: { fontSize: 14, fontWeight: '800', color: '#065f46', marginBottom: 10 },
@@ -210,10 +212,10 @@ const styles = StyleSheet.create({
 
     bookBtn: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-        backgroundColor: '#C9A84C', borderRadius: 14, padding: 16,
-        elevation: 4, shadowcolor: '#C9A84C', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 6,
+        backgroundColor: G.accent, borderRadius: 14, padding: 16,
+        elevation: 4, shadowColor: G.accent, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 6,
     },
-    bookBtnText: { fontSize: 15, fontWeight: '900', color: '#ffffff' },
+    bookBtnText: { fontSize: 15, fontWeight: '900', color: G.textPrimary },
 });
 
 export default DailyBookingScreen;

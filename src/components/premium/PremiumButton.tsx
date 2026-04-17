@@ -10,10 +10,11 @@ import {
     TextStyle,
 } from 'react-native';
 import { colors, goldGradientSimple, shadows, radius, typography } from '../../theme';
+import { G } from '../../constants/glassStyles';
 
 let LinearGradient: any;
 try { LinearGradient = require('expo-linear-gradient').LinearGradient; }
-catch { LinearGradient = ({ style, children }: any) => <View style={[style, { backgroundColor: '#C9A84C' }]}>{children}</View>; }
+catch { LinearGradient = ({ style, children }: any) => <View style={[style, { backgroundColor: G.accent }]}>{children}</View>; }
 
 let Haptics: any;
 try { Haptics = require('expo-haptics'); } catch { Haptics = { impactAsync: () => Promise.resolve(), ImpactFeedbackStyle: { Light: 0 } }; }

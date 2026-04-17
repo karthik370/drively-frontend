@@ -7,6 +7,8 @@ import { uploadDriverImage, submitDriverDocuments } from '../../services/api';
 import { useAppDispatch } from '../../redux/store';
 import { setDriverVerification } from '../../redux/slices/driverSlice';
 import { logout } from '../../redux/slices/authSlice';
+import { showAlert } from '../../components/common/CustomAlert';
+import { G } from '../../constants/glassStyles';
 
 type PickedImage = { uri: string; mimeType: string; fileName: string; fileSize?: number };
 
@@ -76,22 +78,22 @@ const loadingStyles = StyleSheet.create({
     borderRadius: 16,
     padding: 24,
     marginBottom: 14,
-    backgroundColor: '#141414',
+    backgroundColor: G.glass2,
     alignItems: 'center',
   },
   iconWrap: {
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: '#141414',
+    backgroundColor: G.glass2,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,
   },
   title: { fontSize: 17, fontWeight: '800', color: '#1e3a5f', marginBottom: 8 },
   dotsRow: { flexDirection: 'row', gap: 6, marginBottom: 8 },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#C9A84C' },
-  subtitle: { fontSize: 13, fontWeight: '600', color: '#8A8A8A', marginBottom: 16 },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: G.accent },
+  subtitle: { fontSize: 13, fontWeight: '600', color: G.textSecondary, marginBottom: 16 },
   stepsWrap: { width: '100%', gap: 10 },
   stepRow: { flexDirection: 'row', alignItems: 'center' },
   stepText: { fontSize: 14, fontWeight: '700', color: '#CCCCCC' },
@@ -124,7 +126,7 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
     try {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert('Permission required', 'Camera permission is required to upload documents.');
+        showAlert('Permission required', 'Camera permission is required to upload documents.');
         return;
       }
 
@@ -142,7 +144,7 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
       const asset = result.assets?.[0];
       const uri = asset?.uri;
       if (!uri) {
-        Alert.alert('Upload failed', 'Could not read image. Please try again.');
+        showAlert('Upload failed', 'Could not read image. Please try again.');
         return;
       }
 
@@ -151,30 +153,27 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
       const fileSize = typeof (asset as any)?.fileSize === 'number' ? (asset as any).fileSize : undefined;
       onPicked({ uri, mimeType: mime, fileName, fileSize });
     } catch (e: any) {
-      Alert.alert('Upload failed', e?.message || 'Please try again.');
+      showAlert('Upload failed', e?.message || 'Please try again.');
     }
   };
 
   const uploadPickedImage = async (img: PickedImage, kind: string): Promise<string> => {
     try {
-      console.log(`[${kind}] Uploading image...`);
       const result = await uploadDriverImage({
         uri: img.uri,
         mimeType: img.mimeType,
         fileName: img.fileName,
         kind,
       });
-      console.log(`[${kind}] Upload successful.`);
       return result.fileUrl;
     } catch (e: any) {
-      console.log(`[${kind}] Upload Error:`, e?.message);
       throw new Error(`[${kind}] Upload failed: ${e?.message || 'Please try again'}`);
     }
   };
 
   const onSubmit = async () => {
     if (!canSubmit) {
-      Alert.alert('Missing details', 'Please upload selfie + all 3 document photos and fill DL expiry date.');
+      showAlert('Missing details', 'Please upload selfie + all 3 document photos and fill DL expiry date.');
       return;
     }
 
@@ -209,7 +208,7 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
         navigation.replace('DriverVerificationPending');
       } catch { }
     } catch (e: any) {
-      Alert.alert('Submit failed', e?.message || 'Please try again');
+      showAlert('Submit failed', e?.message || 'Please try again');
     } finally {
       setIsLoading(false);
     }
@@ -342,7 +341,7 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0A0A0A' },
+  container: { flex: 1, backgroundColor: G.bg },
   header: {
     paddingHorizontal: 16,
     paddingTop: 12,
@@ -351,65 +350,65 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  title: { fontSize: 18, fontWeight: '800', color: '#FFFFFF' },
+  title: { fontSize: 18, fontWeight: '800', color: G.textPrimary },
   logoutButton: { flexDirection: 'row', alignItems: 'center', padding: 8 },
   logoutText: { marginLeft: 6, color: '#ef4444', fontWeight: '700' },
   content: { padding: 16, paddingBottom: 28 },
   card: {
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     borderRadius: 14,
     padding: 14,
     marginBottom: 14,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
   },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: '#FFFFFF', marginBottom: 10 },
+  sectionTitle: { fontSize: 16, fontWeight: '800', color: G.textPrimary, marginBottom: 10 },
   instruction: { color: '#CCCCCC', marginBottom: 6, fontWeight: '600' },
   label: { fontSize: 13, fontWeight: '700', color: '#CCCCCC', marginTop: 6, marginBottom: 6 },
   input: {
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 12,
     fontSize: 15,
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   uploadRow: {
     marginTop: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#111111',
+    backgroundColor: G.bgAlt,
   },
   uploadLeft: { flexDirection: 'row', alignItems: 'center' },
-  uploadText: { marginLeft: 10, fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
-  preview: { width: '100%', height: 190, borderRadius: 12, marginTop: 12, backgroundColor: '#141414' },
+  uploadText: { marginLeft: 10, fontSize: 14, fontWeight: '700', color: G.textPrimary },
+  preview: { width: '100%', height: 190, borderRadius: 12, marginTop: 12, backgroundColor: G.glass2 },
   submitButton: {
     marginTop: 8,
-    backgroundColor: '#C9A84C',
+    backgroundColor: G.accent,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
   },
   submitButtonDisabled: { opacity: 0.55 },
-  submitText: { color: '#ffffff', fontSize: 16, fontWeight: '800' },
+  submitText: { color: G.textPrimary, fontSize: 16, fontWeight: '800' },
   loadingCard: {
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     borderRadius: 14,
     padding: 24,
     marginBottom: 14,
-    backgroundColor: '#111111',
+    backgroundColor: G.bgAlt,
     alignItems: 'center',
   },
-  loadingText: { fontSize: 16, fontWeight: '800', color: '#FFFFFF', marginTop: 12 },
-  loadingSubtext: { fontSize: 13, fontWeight: '600', color: '#8A8A8A', marginTop: 6 },
+  loadingText: { fontSize: 16, fontWeight: '800', color: G.textPrimary, marginTop: 12 },
+  loadingSubtext: { fontSize: 13, fontWeight: '600', color: G.textSecondary, marginTop: 6 },
 });
 
 export default DriverDocumentsSubmitScreen;

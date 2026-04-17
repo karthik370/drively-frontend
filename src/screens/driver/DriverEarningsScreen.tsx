@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { getDriverEarnings, getEarningsBreakdown } from '../../services/api';
 import EarningsGoalCard from '../../components/driver/EarningsGoalCard';
+import { G } from '../../constants/glassStyles';
 
 const DriverEarningsScreen = () => {
   const [todayEarnings, setTodayEarnings] = useState<number | null>(null);
@@ -52,7 +53,6 @@ const DriverEarningsScreen = () => {
 
         setPreviousEarnings(list);
       } catch (e) {
-        console.warn('Failed to load earnings', e);
         setTodayEarnings(0);
         setTotalEarnings(0);
       } finally {
@@ -117,18 +117,18 @@ const DriverEarningsScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111111',
+    backgroundColor: G.bgAlt,
   },
   header: {
     padding: 24,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.3)',
+    borderBottomColor: G.border3,
   },
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   content: {
     flex: 1,
@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
   totalCard: {
     margin: 16,
     padding: 32,
-    backgroundColor: '#C9A84C',
+    backgroundColor: G.accent,
     borderRadius: 16,
     alignItems: 'center',
   },
@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
   totalAmount: {
     fontSize: 48,
     fontWeight: '700',
-    color: '#ffffff',
+    color: G.textPrimary,
   },
   totalSubtext: {
     fontSize: 14,
@@ -164,7 +164,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 16,
     padding: 20,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderRadius: 12,
     elevation: 1,
     shadowColor: '#000',
@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   section: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     padding: 20,
     marginTop: 12,
     marginHorizontal: 16,
@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: G.textPrimary,
     marginBottom: 16,
   },
   previousItem: {
@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.3)',
+    borderBottomColor: G.border3,
   },
   previousLabel: {
     fontSize: 14,
@@ -221,8 +221,8 @@ const styles = StyleSheet.create({
   previousAmount: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
 });
 
-export default DriverEarningsScreen;
+export default React.memo(DriverEarningsScreen);

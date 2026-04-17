@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { G } from '../../constants/glassStyles';
 
 interface Props {
     isActive: boolean;
@@ -109,7 +110,7 @@ const SafetyTimerCard = ({ isActive, currentLocation, expectedRoute, deviationTh
 
 const styles = StyleSheet.create({
     container: {
-        backgroundColor: '#141414',
+        backgroundColor: G.glass2,
         borderRadius: 12,
         padding: 12,
         borderWidth: 1,
@@ -129,7 +130,7 @@ const styles = StyleSheet.create({
         width: 34,
         height: 34,
         borderRadius: 10,
-        backgroundColor: '#141414',
+        backgroundColor: G.glass2,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -144,7 +145,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 8,
         paddingVertical: 3,
     },
-    alertText: { fontSize: 10, fontWeight: '800', color: '#ffffff' },
+    alertText: { fontSize: 10, fontWeight: '800', color: G.textPrimary },
 });
 
 export default SafetyTimerCard;

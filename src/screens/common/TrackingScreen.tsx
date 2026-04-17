@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useRef } from 'react';
-import QRCode from 'react-native-qrcode-svg';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { InteractionManager } from 'react-native';
+import { Image } from 'react-native';
 import {
   View,
   Text,
@@ -50,7 +51,12 @@ import {
   verifyBookingPayment,
   payBookingWithWallet,
   getBookingPaymentStatus,
+  collectCashPayment,
+  checkFavoriteDriver,
+  addFavoriteDriver,
+  removeFavoriteDriver,
 } from '../../services/api';
+import { formatMaskedPhone } from '../../utils/phoneMask';
 import socketService from '../../services/socketService';
 import { decodePolyline } from '../../utils/decodePolyline';
 import DriverMarker from '../../components/maps/DriverMarker';
@@ -61,6 +67,8 @@ import SOSButton from '../../components/common/SOSButton';
 import useDriverTracking from '../../hooks/useDriverTracking';
 import useRealTimeLocation from '../../hooks/useRealTimeLocation';
 import { BookingStatus, UserType } from '../../types';
+import { showAlert } from '../../components/common/CustomAlert';
+import { G } from '../../constants/glassStyles';
 
 const distanceApproxMeters = (a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) => {
   const dLat = a.latitude - b.latitude;
@@ -86,12 +94,28 @@ const parseRating = (raw: any): number | null => {
 const TrackingScreen = ({ navigation, route }: any) => {
   const dispatch = useAppDispatch();
   const insets = useSafeAreaInsets();
+
+  // ── Screen-ready gate: defer heavy work until navigation transition completes ──
+  const [screenReady, setScreenReady] = React.useState(false);
+  useEffect(() => {
+    const handle = InteractionManager.runAfterInteractions(() => {
+      setScreenReady(true);
+    });
+    return () => handle.cancel();
+  }, []);
+
   const booking = useAppSelector((s) => s.booking.currentBooking);
   const authedUserType = useAppSelector((s) => s.auth.user?.userType);
   const authedUserId = useAppSelector((s) => s.auth.user?.id);
   const roleOverride = useAppSelector((s) => s.auth.roleOverride);
   const { pickupLocation, dropLocation, driverLocation, decodedRoute, eta, distance, currentLocation, userLocation, routePolyline } =
     useAppSelector((s) => s.location);
+
+  // Stable refs for values used in timer-based effects (avoids re-render deps)
+  const routeStartRef = useRef<{ latitude: number; longitude: number } | null>(null);
+  const routeTargetRef = useRef<{ latitude: number; longitude: number } | null>(null);
+  const bookingStatusRef = useRef<string | null>(null);
+  const routePolylineRef = useRef<string | null>(null);
   const [isInfoVisible, setIsInfoVisible] = React.useState(true);
   const [isOtpModalVisible, setIsOtpModalVisible] = React.useState(false);
   const [otpInput, setOtpInput] = React.useState('');
@@ -112,9 +136,26 @@ const TrackingScreen = ({ navigation, route }: any) => {
   const [nearbyDrivers, setNearbyDrivers] = React.useState<NearbyDriver[]>([]);
   const [shareUrl, setShareUrl] = React.useState<string | null>(null);
   const [isSharing, setIsSharing] = React.useState(false);
+  const [isFavDriver, setIsFavDriver] = React.useState(false);
+  const [statusUpdating, setStatusUpdating] = React.useState(false); // Loading overlay for status transitions
+  const [isMapPanned, setIsMapPanned] = React.useState(false); // Suspends auto-camera when user moves map
+  const isMapPannedRef = useRef(false);
+  useEffect(() => { isMapPannedRef.current = isMapPanned; }, [isMapPanned]);
+  
+  const isCancellingRef = useRef<boolean>(false); // Prevents 'searching' flash on cancel
   const mapRef = useRef<MapView | null>(null);
   const nearbyFetchRef = useRef<{ inFlight: boolean }>({ inFlight: false });
   const lastRouteKeyRef = useRef<string | null>(null);
+  const hasRouteEtaRef = useRef<boolean>(false); // Suppress approx ETA when route API ETA exists
+  const lastEtaDispatchTsRef = useRef<number>(0); // ETA smoothing: min 5s between updates
+
+  // Android needs tracksViewChanges=true for initial bitmap render, then false to stop blinking.
+  // Important: do NOT re-enable this on coordinate changes — that causes the blinking.
+  const [markerTracksChanges, setMarkerTracksChanges] = React.useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setMarkerTracksChanges(false), 3000);
+    return () => clearTimeout(t);
+  }, []);
 
   // Poll payment status while QR modal is open
   useEffect(() => {
@@ -142,6 +183,21 @@ const TrackingScreen = ({ navigation, route }: any) => {
       }
     };
   }, [showQrModal, booking?.id, paymentDone]);
+
+  // Real-time payment confirmation � both parties update immediately
+  useEffect(() => {
+    const socket = (socketService as any)?.socket ?? (socketService as any)?.getSocket?.();
+    if (!socket) return;
+    const onPaymentConfirmed = (data: any) => {
+      if (data?.bookingId === booking?.id && data?.paymentStatus === 'PAID') {
+        setPaymentDone(true);
+        setShowQrModal(false);
+      }
+    };
+    socket.on('payment_confirmed', onPaymentConfirmed);
+    return () => { socket.off('payment_confirmed', onPaymentConfirmed); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [booking?.id]);
   const lastRouteTsRef = useRef<number>(0);
   const lastApproxEtaTsRef = useRef<number>(0);
   const lastFitTargetKeyRef = useRef<string | null>(null);
@@ -195,9 +251,13 @@ const TrackingScreen = ({ navigation, route }: any) => {
     })();
   }, [booking?.id, dispatch, trackingBookingId]);
 
+  const bookingStatus = booking?.status ?? null;
+  const bookingId = booking?.id ?? null;
+  const bookingDriver = (booking as any)?.driver ?? null;
+
   const showDriverSection = Boolean(
-    booking?.status &&
-    ['ACCEPTED', 'DRIVER_ARRIVING', 'ARRIVED', 'STARTED', 'IN_PROGRESS', 'COMPLETED'].includes(String(booking.status))
+    bookingStatus &&
+    ['ACCEPTED', 'DRIVER_ARRIVING', 'ARRIVED', 'STARTED', 'IN_PROGRESS', 'COMPLETED'].includes(String(bookingStatus))
   );
 
   const effectiveUserType = useMemo(() => {
@@ -208,26 +268,41 @@ const TrackingScreen = ({ navigation, route }: any) => {
   }, [authedUserType, roleOverride]);
 
   const isDriverMode = effectiveUserType === UserType.DRIVER;
+  const isDriverModeRef = useRef(isDriverMode);
+  isDriverModeRef.current = isDriverMode;
   const isDriverForThisBooking = Boolean(
     authedUserId && ((booking as any)?.driver?.id ? String((booking as any).driver.id) === String(authedUserId) : true)
   );
+
+  // Check if driver is already a favorite on mount
+  useEffect(() => {
+    const driverId = (booking as any)?.driver?.id || (booking as any)?.driverId;
+    if (!driverId || isDriverMode) return;
+    checkFavoriteDriver(String(driverId))
+      .then((res) => setIsFavDriver(Boolean(res?.isFavorite)))
+      .catch(() => {});
+  }, [(booking as any)?.driver?.id, (booking as any)?.driverId, isDriverMode]);
 
   const otherParty = useMemo(() => {
     if (!booking) return null;
     if (isDriverMode) {
       const c = (booking as any)?.customer;
+      const rawPhone = normalizePhone(c?.phoneNumber ?? c?.phone ?? c?.mobileNumber ?? c?.mobile ?? c?.contactNumber);
       return {
         role: 'CUSTOMER' as const,
         name: `${String(c?.firstName ?? 'Customer')} ${String(c?.lastName ?? '')}`.trim(),
-        phoneNumber: normalizePhone(c?.phoneNumber ?? c?.phone ?? c?.mobileNumber ?? c?.mobile ?? c?.contactNumber),
+        phoneNumber: rawPhone,
+        maskedPhone: formatMaskedPhone(rawPhone),
       };
     }
 
     const d = (booking as any)?.driver;
+    const rawPhone = normalizePhone(d?.phoneNumber ?? d?.phone ?? d?.mobileNumber ?? d?.mobile ?? d?.contactNumber);
     return {
       role: 'DRIVER' as const,
       name: `${String(d?.firstName ?? 'Driver')} ${String(d?.lastName ?? '')}`.trim(),
-      phoneNumber: normalizePhone(d?.phoneNumber ?? d?.phone ?? d?.mobileNumber ?? d?.mobile ?? d?.contactNumber),
+      phoneNumber: rawPhone,
+      maskedPhone: formatMaskedPhone(rawPhone),
     };
   }, [booking, isDriverMode]);
 
@@ -240,7 +315,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
       return { latitude: lat, longitude: lng };
     }
     return pickupLocation;
-  }, [booking, pickupLocation]);
+  }, [pickupLocation, (booking as any)?.pickupLocationLat, (booking as any)?.pickupLocationLng]);
 
   const effectiveDropLocation = useMemo(() => {
     const latRaw = (booking as any)?.dropLocationLat;
@@ -251,7 +326,34 @@ const TrackingScreen = ({ navigation, route }: any) => {
       return { latitude: lat, longitude: lng };
     }
     return dropLocation;
-  }, [booking, dropLocation]);
+  }, [dropLocation, (booking as any)?.dropLocationLat, (booking as any)?.dropLocationLng]);
+
+  // --- Stable pickup coordinate (prevents marker vanishing on coord update) ---
+  const stablePickupRef = useRef<{latitude: number; longitude: number} | null>(null);
+  if (
+    effectivePickupLocation &&
+    Number.isFinite(effectivePickupLocation.latitude) &&
+    Number.isFinite(effectivePickupLocation.longitude) &&
+    (effectivePickupLocation.latitude !== 0 || effectivePickupLocation.longitude !== 0)
+  ) {
+    stablePickupRef.current = effectivePickupLocation;
+  }
+  const stablePickupCoord = stablePickupRef.current ?? effectivePickupLocation;
+
+  // --- Stable drop coordinate (prevents marker vanishing on coord update) ---
+  const stableDropRef = useRef<{latitude: number; longitude: number} | null>(null);
+  if (
+    effectiveDropLocation &&
+    Number.isFinite(effectiveDropLocation.latitude) &&
+    Number.isFinite(effectiveDropLocation.longitude) &&
+    (effectiveDropLocation.latitude !== 0 || effectiveDropLocation.longitude !== 0)
+  ) {
+    stableDropRef.current = effectiveDropLocation;
+  }
+  const stableDropCoord = stableDropRef.current ?? effectiveDropLocation;
+
+  // Markers use tracksViewChanges={false} always — static coords don't need re-rendering.
+  // The initial 2.5s window handles the first render, after that Android caches the bitmap.
 
   const bookingTypeLabel = useMemo(() => {
     const t = String((booking as any)?.tripType ?? '').toUpperCase();
@@ -266,7 +368,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
       return 'Outstation';
     }
     return 'One Way';
-  }, [booking]);
+  }, [(booking as any)?.tripType, (booking as any)?.pricingBreakdown]);
 
   const selectedHoursLabel = useMemo(() => {
     const raw =
@@ -276,25 +378,99 @@ const TrackingScreen = ({ navigation, route }: any) => {
     const hours = Number(raw);
     if (!Number.isFinite(hours) || hours <= 0) return null;
     return `${Math.round(hours)} hr`;
-  }, [booking]);
+  }, [(booking as any)?.pricingBreakdown]);
 
   const tripTypeHoursLabel = useMemo(() => {
     return selectedHoursLabel ? `${bookingTypeLabel} • ${selectedHoursLabel}` : bookingTypeLabel;
   }, [bookingTypeLabel, selectedHoursLabel]);
 
+  // ── Round-trip countdown: detect round-trip in progress ──
+  const isRoundTripStarted = useMemo(() => {
+    const t = String((booking as any)?.tripType ?? '').toUpperCase();
+    const isRoundTrip = t === 'ROUND_TRIP';
+    const isTripPhase = bookingStatus && ['STARTED', 'IN_PROGRESS'].includes(bookingStatus);
+    return Boolean(isRoundTrip && isTripPhase);
+  }, [(booking as any)?.tripType, bookingStatus]);
+
+  // Get package hours for countdown
+  const packageHoursForCountdown = useMemo(() => {
+    const raw = typeof (booking as any)?.pricingBreakdown === 'object' && (booking as any)?.pricingBreakdown
+      ? ((booking as any).pricingBreakdown as any).packageHours ?? ((booking as any).pricingBreakdown as any).durationHours
+      : undefined;
+    const hours = Number(raw);
+    return Number.isFinite(hours) && hours > 0 ? hours : 0;
+  }, [(booking as any)?.pricingBreakdown]);
+
+  // Real-time countdown timer for round trips
+  const [roundTripCountdown, setRoundTripCountdown] = useState<string | null>(null);
+  const [roundTripElapsed, setRoundTripElapsed] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isRoundTripStarted) {
+      setRoundTripCountdown(null);
+      setRoundTripElapsed(null);
+      return;
+    }
+
+    // Get trip start time from booking
+    const startedAtRaw = (booking as any)?.startedAt;
+    const startMs = startedAtRaw ? new Date(startedAtRaw).getTime() : Date.now();
+    const totalMs = packageHoursForCountdown * 60 * 60 * 1000;
+
+    const updateTimer = () => {
+      const now = Date.now();
+      const elapsedMs = now - startMs;
+      const remainingMs = Math.max(0, totalMs - elapsedMs);
+
+      // Format elapsed
+      const elH = Math.floor(elapsedMs / 3_600_000);
+      const elM = Math.floor((elapsedMs % 3_600_000) / 60_000);
+      const elS = Math.floor((elapsedMs % 60_000) / 1000);
+      setRoundTripElapsed(
+        elH > 0
+          ? `${elH}h ${String(elM).padStart(2, '0')}m ${String(elS).padStart(2, '0')}s`
+          : `${elM}m ${String(elS).padStart(2, '0')}s`
+      );
+
+      // Format remaining
+      if (totalMs > 0) {
+        if (remainingMs <= 0) {
+          const overMs = elapsedMs - totalMs;
+          const overH = Math.floor(overMs / 3_600_000);
+          const overM = Math.floor((overMs % 3_600_000) / 60_000);
+          setRoundTripCountdown(`-${overH > 0 ? `${overH}h ` : ''}${overM}m (overtime)`);
+        } else {
+          const remH = Math.floor(remainingMs / 3_600_000);
+          const remM = Math.floor((remainingMs % 3_600_000) / 60_000);
+          const remS = Math.floor((remainingMs % 60_000) / 1000);
+          setRoundTripCountdown(
+            remH > 0
+              ? `${remH}h ${String(remM).padStart(2, '0')}m ${String(remS).padStart(2, '0')}s`
+              : `${remM}m ${String(remS).padStart(2, '0')}s`
+          );
+        }
+      } else {
+        setRoundTripCountdown(null);
+      }
+    };
+
+    updateTimer();
+    const timer = setInterval(updateTimer, 1000);
+    return () => clearInterval(timer);
+  }, [isRoundTripStarted, (booking as any)?.startedAt, packageHoursForCountdown]);
+
   const navTarget = useMemo(() => {
-    const status = booking?.status;
     const shouldGoToDrop = Boolean(
-      status && [BookingStatus.STARTED, BookingStatus.IN_PROGRESS, BookingStatus.COMPLETED].includes(status as any)
+      bookingStatus && [BookingStatus.STARTED, BookingStatus.IN_PROGRESS, BookingStatus.COMPLETED].includes(bookingStatus as any)
     );
     if (shouldGoToDrop && effectiveDropLocation) return effectiveDropLocation;
     if (effectivePickupLocation) return effectivePickupLocation;
     return null;
-  }, [booking?.status, effectiveDropLocation, effectivePickupLocation]);
+  }, [bookingStatus, effectiveDropLocation, effectivePickupLocation]);
 
   const openGoogleMaps = async () => {
     if (!navTarget) {
-      Alert.alert('Navigation', 'Location not available');
+      showAlert('Navigation', 'Location not available');
       return;
     }
     const lat = navTarget.latitude;
@@ -303,7 +479,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
     try {
       await Linking.openURL(url);
     } catch {
-      Alert.alert('Navigation', 'Failed to open Google Maps');
+      showAlert('Navigation', 'Failed to open Google Maps');
     }
   };
 
@@ -322,15 +498,21 @@ const TrackingScreen = ({ navigation, route }: any) => {
     return 'ETA to Pickup';
   }, [booking?.status]);
 
+  // Fix: explicitly require REQUESTED/SEARCHING status — null status no longer matches.
+  // Also gate with isCancellingRef to prevent 'Searching' flash during cancel navigation.
   const isWaitingForDriver = Boolean(
-    booking?.status && [BookingStatus.REQUESTED, BookingStatus.SEARCHING].includes(booking.status as any)
+    !isCancellingRef.current &&
+    !isDriverMode &&
+    booking?.status &&
+    typeof booking.status === 'string' &&
+    [BookingStatus.REQUESTED, BookingStatus.SEARCHING].includes(booking.status as any)
   );
 
   useEffect(() => {
     const shouldShow = Boolean(!isDriverMode && isWaitingForDriver && effectivePickupLocation);
 
     if (!shouldShow) {
-      setNearbyDrivers([]);
+      if (nearbyDrivers.length > 0) setNearbyDrivers([]);
       return;
     }
 
@@ -348,30 +530,29 @@ const TrackingScreen = ({ navigation, route }: any) => {
         if (!mounted) return;
         setNearbyDrivers(Array.isArray(res) ? res : []);
       } catch {
-        if (!mounted) return;
-        setNearbyDrivers([]);
+        // Don't clear on error — keep showing existing markers
       } finally {
         nearbyFetchRef.current.inFlight = false;
       }
     };
 
     run();
-    timer = setInterval(run, 6000);
+    timer = setInterval(run, 20000); // 20s instead of 12s — less flicker
 
     return () => {
       mounted = false;
       if (timer) clearInterval(timer);
     };
-  }, [effectivePickupLocation, isDriverMode, isWaitingForDriver]);
+  }, [effectivePickupLocation?.latitude, effectivePickupLocation?.longitude, isDriverMode, isWaitingForDriver]);
 
   const navigateTargetLabel = useMemo(() => {
-    const s = booking?.status;
-    if (s && [BookingStatus.STARTED, BookingStatus.IN_PROGRESS, BookingStatus.COMPLETED].includes(s as any)) {
+    if (bookingStatus && [BookingStatus.STARTED, BookingStatus.IN_PROGRESS, BookingStatus.COMPLETED].includes(bookingStatus as any)) {
       return 'Drop';
     }
     return 'Pickup';
-  }, [booking?.status]);
+  }, [bookingStatus]);
 
+  // Compute routeStart and routeTarget, store in refs for timer to use
   const routeStart = useMemo(() => {
     const base = isDriverMode ? (currentLocation ?? driverLocation) : driverLocation;
     if (!base) return null;
@@ -380,10 +561,17 @@ const TrackingScreen = ({ navigation, route }: any) => {
   }, [currentLocation, driverLocation, isDriverMode]);
 
   const routeTarget = useMemo(() => {
-    const status = booking?.status;
     if (!effectivePickupLocation) return null;
+
+    // ── Round-trip after STARTED: no route target (no polyline/ETA needed) ──
+    const tripType = String((booking as any)?.tripType ?? '').toUpperCase();
+    const isTripPhase = bookingStatus && ['STARTED', 'IN_PROGRESS', 'COMPLETED'].includes(bookingStatus as any);
+    if (tripType === 'ROUND_TRIP' && isTripPhase) {
+      return null; // No route calculation for started round trips
+    }
+
     const shouldGoToDrop = Boolean(
-      status && [BookingStatus.STARTED, BookingStatus.IN_PROGRESS, BookingStatus.COMPLETED].includes(status as any)
+      bookingStatus && [BookingStatus.STARTED, BookingStatus.IN_PROGRESS, BookingStatus.COMPLETED].includes(bookingStatus as any)
     );
 
     if (shouldGoToDrop && effectiveDropLocation) {
@@ -391,7 +579,15 @@ const TrackingScreen = ({ navigation, route }: any) => {
     }
 
     return { latitude: effectivePickupLocation.latitude, longitude: effectivePickupLocation.longitude };
-  }, [booking?.status, effectiveDropLocation, effectivePickupLocation]);
+  }, [bookingStatus, effectiveDropLocation, effectivePickupLocation, (booking as any)?.tripType]);
+
+  // SYNC REFS DURING RENDER (not in useEffect!) — guarantees they're up-to-date
+  // before ANY useEffect reads them. useEffect runs AFTER render and has 
+  // unpredictable ordering, which caused the entire "map stuck on drop point" bug.
+  routeStartRef.current = routeStart;
+  routeTargetRef.current = routeTarget;
+  bookingStatusRef.current = bookingStatus as string | null;
+  routePolylineRef.current = typeof routePolyline === 'string' ? routePolyline : null;
 
   const distanceText = useMemo(() => {
     if (distance === null || !Number.isFinite(distance)) return '—';
@@ -401,7 +597,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
   const callOtherParty = async () => {
     const phone = normalizePhone(otherParty?.phoneNumber);
     if (!phone) {
-      Alert.alert('Call not available', 'Phone number is not available.');
+      showAlert('Call not available', 'Phone number is not available.');
       return;
     }
 
@@ -414,7 +610,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
       }
       await Linking.openURL(url);
     } catch {
-      Alert.alert('Call', 'Unable to place call from this device.');
+      showAlert('Call', 'Unable to place call from this device.');
     }
   };
 
@@ -446,20 +642,24 @@ const TrackingScreen = ({ navigation, route }: any) => {
   const handleDriverStatusUpdate = async (nextStatus: BookingStatus) => {
     const bookingId = booking?.id;
     if (!bookingId) return;
+    if (statusUpdating) return; // Prevent double-tap
 
     if (nextStatus === BookingStatus.COMPLETED) {
-      Alert.alert('Complete trip?', 'Are you sure you want to complete this trip?', [
+      showAlert('Complete trip?', 'Are you sure you want to complete this trip?', [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Yes, complete',
           style: 'destructive',
           onPress: () => {
             void (async () => {
+              setStatusUpdating(true);
               try {
                 await updateBookingStatusApi(bookingId, nextStatus);
                 dispatch(updateBookingStatus({ id: bookingId, status: nextStatus }));
               } catch (e: any) {
-                Alert.alert('Update status', e?.message || 'Failed to update booking status');
+                showAlert('Update status', e?.message || 'Failed to update booking status');
+              } finally {
+                setStatusUpdating(false);
               }
             })();
           },
@@ -467,11 +667,14 @@ const TrackingScreen = ({ navigation, route }: any) => {
       ]);
       return;
     }
+    setStatusUpdating(true);
     try {
       await updateBookingStatusApi(bookingId, nextStatus);
       dispatch(updateBookingStatus({ id: bookingId, status: nextStatus }));
     } catch (e: any) {
-      Alert.alert('Update status', e?.message || 'Failed to update booking status');
+      showAlert('Update status', e?.message || 'Failed to update booking status');
+    } finally {
+      setStatusUpdating(false);
     }
   };
 
@@ -530,7 +733,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
       dispatch(updateBookingCustomerRating({ id: booking.id, rating: ratingValue, review: ratingReview.trim() || null }));
       dispatch(updateBookingStatus({ id: booking.id, status: BookingStatus.COMPLETED }));
       setIsRatingModalVisible(false);
-      Alert.alert('Thank you', 'Rating submitted successfully');
+      showAlert('Thank you', 'Rating submitted successfully');
     } catch (e: any) {
       const status = typeof e?.status === 'number' ? e.status : Number(e?.status);
       if (status === 409) {
@@ -550,9 +753,9 @@ const TrackingScreen = ({ navigation, route }: any) => {
           }
         } catch {
         }
-        Alert.alert('Submit rating', 'Rating already submitted');
+        showAlert('Submit rating', 'Rating already submitted');
       } else {
-        Alert.alert('Submit rating', e?.message || 'Failed to submit rating');
+        showAlert('Submit rating', e?.message || 'Failed to submit rating');
       }
     } finally {
       setIsRatingSubmitting(false);
@@ -565,7 +768,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
 
     const otp = otpInput.trim();
     if (!otp) {
-      Alert.alert('Enter OTP', 'Please enter the OTP from the customer.');
+      showAlert('Enter OTP', 'Please enter the OTP from the customer.');
       return;
     }
 
@@ -577,7 +780,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
       setIsOtpModalVisible(false);
       setOtpInput('');
     } catch (e: any) {
-      Alert.alert('Verify OTP', e?.message || 'Failed to verify OTP');
+      showAlert('Verify OTP', e?.message || 'Failed to verify OTP');
     } finally {
       setIsOtpSubmitting(false);
     }
@@ -594,6 +797,36 @@ const TrackingScreen = ({ navigation, route }: any) => {
     }
   }, [booking?.status, navigation]);
 
+  // ── Customer + Cash: poll booking status every 15s while STARTED/IN_PROGRESS ──
+  // This catches COMPLETED updates even if the socket event is missed
+  useEffect(() => {
+    if (isDriverMode) return;
+    const status = booking?.status;
+    if (status !== BookingStatus.STARTED && (status as any) !== 'IN_PROGRESS') return;
+    if (!booking?.id) return;
+
+    let active = true;
+    const interval = setInterval(async () => {
+      if (!active) return;
+      try {
+        const raw = await getBookingDetails(String(booking.id));
+        if (!active) return;
+        const newStatus = String((raw as any)?.status ?? '');
+        if (newStatus === 'COMPLETED') {
+          dispatch(updateBookingStatus({ id: String(booking.id), status: 'COMPLETED' }));
+        }
+      } catch {
+        // silently ignore
+      }
+    }, 15000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [booking?.id, booking?.status, dispatch, isDriverMode]);
+
+
   useEffect(() => {
     if (didEndNavigateRef.current) return;
     if (booking) return;
@@ -607,29 +840,45 @@ const TrackingScreen = ({ navigation, route }: any) => {
     const s = booking?.status;
     if (!s) return;
     if (s === BookingStatus.STARTED || s === BookingStatus.IN_PROGRESS) {
+      // ── FULL RESET of all route/camera tracking refs ──
+      // This is critical: when the trip starts, the target changes from PICKUP → DROP.
+      // Every single ref that cached the old pickup route must be wiped clean
+      // so the system immediately fetches a fresh route to the DROP.
       lastRouteKeyRef.current = null;
       lastRouteTsRef.current = 0;
+      lastRouteStartRef.current = null;
+      lastRouteTargetRef.current = null;
       lastFitTargetKeyRef.current = null;
       lastFollowCameraTsRef.current = 0;
+      hasRouteEtaRef.current = false;
+      lastDispatchedEtaRef.current = null;
+      lastDispatchedDistRef.current = null;
+
+      // Clear the old pickup route from Redux immediately
+      dispatch(clearRoute());
     }
-  }, [booking?.status]);
+  }, [booking?.status, dispatch]);
 
   const statusInfo = useMemo(() => {
-    const s = booking?.status;
-    if (!s) return { text: 'Waiting for driver...', color: '#C9A84C', bg: '#eff6ff', icon: 'clock-outline' as const };
-    if (s === 'SEARCHING') return { text: 'Searching for nearby drivers...', color: '#C9A84C', bg: '#eff6ff', icon: 'radar' as const };
-    if (s === 'ACCEPTED') return { text: 'Driver accepted • On the way', color: '#f59e0b', bg: '#fffbeb', icon: 'car-side' as const };
-    if (s === 'DRIVER_ARRIVING') return { text: 'Driver arriving soon', color: '#f59e0b', bg: '#fffbeb', icon: 'car-side' as const };
-    if (s === 'ARRIVED') return { text: 'Driver arrived at pickup', color: '#10b981', bg: '#f0fdf4', icon: 'map-marker-check' as const };
-    if (s === 'STARTED' || s === 'IN_PROGRESS') return { text: 'Trip in progress', color: '#C9A84C', bg: '#eff6ff', icon: 'navigation-variant' as const };
-    if (s === 'COMPLETED') return { text: 'Trip completed', color: '#059669', bg: '#f0fdf4', icon: 'check-circle' as const };
-    if (s === 'CANCELLED') return { text: 'Booking cancelled', color: '#ef4444', bg: '#fef2f2', icon: 'close-circle' as const };
-    return { text: `Status: ${s}`, color: '#8A8A8A', bg: '#f9fafb', icon: 'information' as const };
-  }, [booking?.status]);
+    if (!bookingStatus) return { text: 'Waiting for driver...', color: G.accent, bg: '#eff6ff', icon: 'clock-outline' as const };
+    if (bookingStatus === 'SEARCHING') return { text: 'Searching for nearby drivers...', color: G.accent, bg: '#eff6ff', icon: 'radar' as const };
+    if (bookingStatus === 'ACCEPTED') return { text: 'Driver accepted • On the way', color: '#f59e0b', bg: '#fffbeb', icon: 'car-side' as const };
+    if (bookingStatus === 'DRIVER_ARRIVING') return { text: 'Driver arriving soon', color: '#f59e0b', bg: '#fffbeb', icon: 'car-side' as const };
+    if (bookingStatus === 'ARRIVED') return { text: 'Driver arrived at pickup', color: '#10b981', bg: '#f0fdf4', icon: 'map-marker-check' as const };
+    if (bookingStatus === 'STARTED' || bookingStatus === 'IN_PROGRESS') return { text: 'Trip in progress', color: G.accent, bg: '#eff6ff', icon: 'navigation-variant' as const };
+    if (bookingStatus === 'COMPLETED') return { text: 'Trip completed', color: '#059669', bg: '#f0fdf4', icon: 'check-circle' as const };
+    if (bookingStatus === 'CANCELLED') return { text: 'Booking cancelled', color: '#ef4444', bg: '#fef2f2', icon: 'close-circle' as const };
+    return { text: `Status: ${bookingStatus}`, color: G.textSecondary, bg: '#f9fafb', icon: 'information' as const };
+  }, [bookingStatus]);
 
   const statusText = statusInfo.text;
 
-  const showFinalFare = Boolean(booking?.status === BookingStatus.COMPLETED && typeof booking?.totalAmount === 'number');
+  const isCashPayment = (booking as any)?.paymentMethod === 'CASH';
+  // Show the final fare card only after the trip is marked COMPLETED by the backend
+  const showFinalFare = Boolean(
+    booking?.status === BookingStatus.COMPLETED &&
+    typeof booking?.totalAmount === 'number'
+  );
   const showLiveFare = Boolean(
     booking?.status &&
     [BookingStatus.STARTED, BookingStatus.IN_PROGRESS].includes(booking.status as any) &&
@@ -672,148 +921,372 @@ const TrackingScreen = ({ navigation, route }: any) => {
 
   const mapEdgePadding = useMemo(
     () => ({
-      top: Math.max(90, insets.top + 90),
-      right: 60,
-      bottom: Math.max(320, 320 + Math.max(0, insets.bottom)),
-      left: 60,
+      top: 40,
+      right: 40,
+      bottom: 40,
+      left: 40,
     }),
-    [insets.bottom, insets.top]
+    []
   );
 
-  useEffect(() => {
-    if (!showDriverSection) return;
+  // ── Production-grade Uber/Ola-style map camera ──
+  // Fits map to show BOTH driver position and destination with full polyline visible
+  const cameraFitDoneForStatusRef = useRef<string | null>(null);
+  const lastCameraDriverRef = useRef<{ latitude: number; longitude: number } | null>(null);
+  const lastCameraTimestampRef = useRef<number>(0);
 
-    const status = booking?.status;
-    const tripStarted = Boolean(status && [BookingStatus.STARTED, BookingStatus.IN_PROGRESS].includes(status as any));
+  // Core fit function — uses multiple fallback layers to ALWAYS find both points
+  const fitMapToRoute = React.useCallback((
+    overrideDriver?: { latitude: number; longitude: number } | null,
+    overrideTarget?: { latitude: number; longitude: number } | null,
+  ) => {
+    const status = bookingStatusRef.current;
+    const isActive = Boolean(status && ['ACCEPTED', 'DRIVER_ARRIVING', 'ARRIVED', 'STARTED', 'IN_PROGRESS'].includes(status));
+    if (!isActive) return;
 
-    if (routeStart && routeTarget) {
-      const targetKey = `${routeTarget.latitude.toFixed(5)},${routeTarget.longitude.toFixed(5)}`;
-      const now = Date.now();
-      const shouldFit = lastFitTargetKeyRef.current !== targetKey;
+    // Layer 1: explicit overrides, Layer 2: refs, Layer 3: direct Redux state
+    // In driver mode, prefer GPS location over socket driverLocation
+    const driverFallback = isDriverModeRef.current ? (currentLocation ?? driverLocation) : (driverLocation ?? currentLocation);
+    const driverPos = overrideDriver ?? routeStartRef.current ?? driverFallback ?? null;
+    const targetPos = overrideTarget ?? routeTargetRef.current ?? null;
 
-      if (tripStarted) {
-        const intervalMs = 2200;
-        const prevFollow = lastFollowCameraCoordRef.current;
-        const movedMeters = prevFollow ? distanceApproxMeters(prevFollow, routeStart) : Number.POSITIVE_INFINITY;
-
-        if (movedMeters >= 10 && now - lastFollowCameraTsRef.current >= intervalMs) {
-          lastFollowCameraTsRef.current = now;
-          lastFollowCameraCoordRef.current = { latitude: routeStart.latitude, longitude: routeStart.longitude };
-
-          const distKm = routeTarget ? distanceApproxMeters(routeStart, routeTarget) / 1000 : 0;
-          const zoom = clamp(0.008 + distKm * 0.002, 0.008, 0.03);
-          mapRef.current?.animateToRegion(
-            {
-              latitude: routeStart.latitude,
-              longitude: routeStart.longitude,
-              latitudeDelta: zoom,
-              longitudeDelta: zoom,
-            },
-            650
-          );
-        }
-        return;
-      }
-
-      if (shouldFit) {
-        lastFitTargetKeyRef.current = targetKey;
-        lastCameraFitTsRef.current = now;
-        mapRef.current?.fitToCoordinates([routeStart, routeTarget], {
+    // For round trips in progress, no target — just fit around driver + pickup
+    if (!targetPos) {
+      if (!driverPos) return;
+      const pickup = effectivePickupRef.current;
+      if (pickup) {
+        mapRef.current?.fitToCoordinates([driverPos, pickup], {
           edgePadding: mapEdgePadding,
           animated: true,
         });
       }
-
       return;
     }
 
-    if (!driverLocation) return;
-    if (lastCameraFitTsRef.current > 0) return;
+    // Build points array: ALWAYS include driver + target as the two anchor points
+    let points: { latitude: number; longitude: number }[] = [];
 
-    lastCameraFitTsRef.current = Date.now();
-    mapRef.current?.animateToRegion(
-      {
-        latitude: driverLocation.latitude,
-        longitude: driverLocation.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      },
-      650
-    );
-  }, [driverLocation?.latitude, driverLocation?.longitude, mapEdgePadding, routeStart, routeTarget, showDriverSection]);
+    // If we have a decoded polyline, sample it for full route visibility
+    const currentRoute = decodedRoute;
+    if (currentRoute && currentRoute.length > 2) {
+      points.push(currentRoute[0]);
+      for (let i = 5; i < currentRoute.length - 1; i += 5) {
+        points.push(currentRoute[i]);
+      }
+      points.push(currentRoute[currentRoute.length - 1]);
+    }
+
+    // Always include driver position and target — these are the two "ends"
+    if (driverPos) points.push(driverPos);
+    points.push(targetPos);
+
+    // Prevent extreme zoom-in when driver is very close to target (<300m)
+    if (driverPos) {
+      const d = Math.max(Math.abs(driverPos.latitude - targetPos.latitude), Math.abs(driverPos.longitude - targetPos.longitude));
+      if (d < 0.003) {
+        const center = { latitude: (driverPos.latitude + targetPos.latitude) / 2, longitude: (driverPos.longitude + targetPos.longitude) / 2 };
+        points.push({ latitude: center.latitude + 0.004, longitude: center.longitude + 0.004 });
+        points.push({ latitude: center.latitude - 0.004, longitude: center.longitude - 0.004 });
+      }
+    } else if (points.length < 2) {
+      // No driver pos available — add a buffer around target so map doesn't crash
+      const p = points[0] || targetPos;
+      points = [p, { latitude: p.latitude + 0.004, longitude: p.longitude + 0.004 }];
+    }
+
+    mapRef.current?.fitToCoordinates(points, {
+      edgePadding: mapEdgePadding,
+      animated: true,
+    });
+  }, [decodedRoute, mapEdgePadding, driverLocation]);
+  // Store fitMapToRoute in a ref so effects don't depend on it
+  // (fitMapToRoute changes every time driverLocation updates, which was killing the timeouts!)
+  const fitMapToRouteRef = useRef(fitMapToRoute);
+  fitMapToRouteRef.current = fitMapToRoute;
+
+  // Keep live coordinate values in refs (sync during render, not useEffect)
+  const driverLocationRef = useRef(driverLocation);
+  driverLocationRef.current = driverLocation;
+  const currentLocationRef = useRef(currentLocation);
+  currentLocationRef.current = currentLocation;
+  const effectiveDropRef = useRef(effectiveDropLocation);
+  effectiveDropRef.current = effectiveDropLocation;
+  const effectivePickupRef = useRef(effectivePickupLocation);
+  effectivePickupRef.current = effectivePickupLocation;
+
+  // Helper: compute the two map endpoints from current state (reads from refs = always fresh)
+  const getMapEndpoints = React.useCallback(() => {
+    const status = bookingStatusRef.current;
+    const isTripPhase = status && ['STARTED', 'IN_PROGRESS', 'COMPLETED'].includes(status);
+
+    const drop = effectiveDropRef.current;
+    const pickup = effectivePickupRef.current;
+    // In driver mode, prefer GPS (currentLocation) over socket (driverLocation)
+    // In customer mode, prefer socket (driverLocation) since that's the remote driver
+    const driver = isDriverModeRef.current
+      ? (currentLocationRef.current ?? driverLocationRef.current)
+      : (driverLocationRef.current ?? currentLocationRef.current);
+
+    const target = (isTripPhase && drop)
+      ? { latitude: drop.latitude, longitude: drop.longitude }
+      : pickup
+        ? { latitude: pickup.latitude, longitude: pickup.longitude }
+        : null;
+
+    const driverPos = driver
+      ? { latitude: driver.latitude, longitude: driver.longitude }
+      : null;
+
+    return { driverPos, target };
+  }, []);
+
+  // 1) Initial fit when status changes (ACCEPTED, STARTED, etc.)
+  //    ONLY depends on bookingStatus — nothing else. This prevents the effect from
+  //    re-running due to driverLocation changes, which was clearing our scheduled timeouts.
+  useEffect(() => {
+    const status = bookingStatus;
+    if (!status) return;
+    const isActive = ['ACCEPTED', 'DRIVER_ARRIVING', 'ARRIVED', 'STARTED', 'IN_PROGRESS'].includes(status);
+    if (!isActive) return;
+
+    // Only re-fit when status actually changes
+    if (cameraFitDoneForStatusRef.current === status) return;
+    cameraFitDoneForStatusRef.current = status;
+    lastCameraDriverRef.current = null;
+    lastCameraTimestampRef.current = 0;
+
+    console.log('[MAP-FIT] Status changed to:', status);
+
+    // Step 1: Immediately fit map to show both driver + target
+    const t1 = setTimeout(() => {
+      const { driverPos, target } = getMapEndpoints();
+      console.log('[MAP-FIT] Step1 fit — driver:', driverPos, 'target:', target);
+      setIsMapPanned(false);
+      fitMapToRouteRef.current(driverPos, target);
+    }, 400);
+
+    // Step 2: Fetch fresh route for new target
+    const t2 = setTimeout(() => {
+      const { driverPos, target } = getMapEndpoints();
+      console.log('[MAP-FIT] Step2 route fetch — driver:', driverPos, 'target:', target);
+      if (!driverPos || !target) return;
+
+      calculateRoute(driverPos, target)
+        .then((res) => {
+          const poly = String((res as any)?.polyline ?? '');
+          if (!poly) return;
+          const decoded = decodePolyline(poly);
+          dispatch(setRoute({ polyline: poly, decodedRoute: decoded }));
+
+          const durationSeconds = typeof (res as any)?.duration === 'number' ? Number((res as any).duration) : NaN;
+          const distanceMeters = typeof (res as any)?.distance === 'number' ? Number((res as any).distance) : NaN;
+          if (Number.isFinite(durationSeconds) && Number.isFinite(distanceMeters)) {
+            const newEta = Math.max(1, Math.round(durationSeconds / 60));
+            const newDist = Math.round((distanceMeters / 1000) * 10) / 10;
+            lastDispatchedEtaRef.current = newEta;
+            lastDispatchedDistRef.current = newDist;
+            lastEtaDispatchTsRef.current = Date.now();
+            dispatch(updateETA({ eta: newEta, distance: newDist }));
+            console.log('[MAP-FIT] Step2 ETA:', newEta, 'min, dist:', newDist, 'km');
+          }
+
+          // Step 3: Refit with polyline in view
+          setTimeout(() => {
+            const pts = getMapEndpoints();
+            fitMapToRouteRef.current(pts.driverPos, pts.target);
+          }, 500);
+        })
+        .catch((e) => console.warn('[MAP-FIT] Route fetch failed:', e));
+    }, 1500);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookingStatus]);
+
+  // 2) Re-fit when decoded route (polyline) arrives or changes
+  useEffect(() => {
+    if (!decodedRoute || decodedRoute.length < 2) return;
+    const status = bookingStatusRef.current;
+    const isActive = Boolean(status && ['ACCEPTED', 'DRIVER_ARRIVING', 'ARRIVED', 'STARTED', 'IN_PROGRESS'].includes(status));
+    if (!isActive) return;
+
+    // Fit to show the full polyline
+    const t = setTimeout(() => fitMapToRouteRef.current(), 300);
+    return () => clearTimeout(t);
+  // Only on polyline change — use routePolyline string as dependency (stable)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routePolyline]);
+
+  // 3) Periodic follow: recenter as driver moves
+  useEffect(() => {
+    const status = bookingStatus;
+    if (!status) return;
+    const isActive = ['ACCEPTED', 'DRIVER_ARRIVING', 'ARRIVED', 'STARTED', 'IN_PROGRESS'].includes(status);
+    if (!isActive) return;
+
+    const timer = setInterval(() => {
+      const driverPos = routeStartRef.current;
+      if (!driverPos) return;
+
+      const now = Date.now();
+      const prev = lastCameraDriverRef.current;
+      const movedMeters = prev ? distanceApproxMeters(prev, driverPos) : Number.POSITIVE_INFINITY;
+
+      // Suspend auto-following if the user is looking around the map
+      if (isMapPannedRef.current) return;
+
+      // Recenter every 6s or when driver moves >30m
+      if (movedMeters >= 30 || now - lastCameraTimestampRef.current >= 6000) {
+        lastCameraTimestampRef.current = now;
+        lastCameraDriverRef.current = { latitude: driverPos.latitude, longitude: driverPos.longitude };
+        fitMapToRouteRef.current();
+      }
+    }, 4000);
+
+    return () => clearInterval(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookingStatus]);
+
+  // ── Route calculation — timer-based (checks every 15s during trip, 20s before) ──
+  // SINGLE source of truth: Google Route API provides ETA and distance
+  // No approx fallback — eliminates flip-flopping between two different values
+  const lastDispatchedEtaRef = useRef<number | null>(null);
+  const lastDispatchedDistRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const status = booking?.status;
-    if (!status || status === BookingStatus.CANCELLED) {
+    const status = bookingStatusRef.current;
+    if (!status || status === 'CANCELLED') {
       dispatch(clearRoute());
       lastRouteKeyRef.current = null;
       lastFitTargetKeyRef.current = null;
+      lastDispatchedEtaRef.current = null;
+      lastDispatchedDistRef.current = null;
       return;
     }
 
-    const canDraw = Boolean(routeStart && routeTarget);
-    if (!canDraw) {
-      dispatch(clearRoute());
-      lastRouteKeyRef.current = null;
-      lastRouteStartRef.current = null;
-      lastRouteTargetRef.current = null;
-      return;
-    }
+    const tick = () => {
+      const start = routeStartRef.current;
+      const target = routeTargetRef.current;
+      const curStatus = bookingStatusRef.current;
 
-    const now = Date.now();
-    const approxDistKm = distanceApproxMeters(routeStart!, routeTarget!) / 1000;
-    if (Number.isFinite(approxDistKm)) {
-      const approxIntervalMs = 900;
-      if (now - lastApproxEtaTsRef.current >= approxIntervalMs) {
-        lastApproxEtaTsRef.current = now;
-        const assumedKmph = 24;
-        const approxEtaMin = Math.max(1, Math.round((approxDistKm / assumedKmph) * 60));
-        dispatch(updateETA({ eta: approxEtaMin, distance: approxDistKm }));
-      }
-    }
+      if (!start || !target || !curStatus || curStatus === 'CANCELLED') return;
 
-    const prevStart = lastRouteStartRef.current;
-    const prevTarget = lastRouteTargetRef.current;
-    const startMovedMeters = prevStart ? distanceApproxMeters(prevStart, routeStart!) : Number.POSITIVE_INFINITY;
+      const now = Date.now();
 
-    const targetKey = `${routeTarget!.latitude.toFixed(5)},${routeTarget!.longitude.toFixed(5)}`;
-    const prevTargetKey = prevTarget ? `${prevTarget.latitude.toFixed(5)},${prevTarget.longitude.toFixed(5)}` : null;
-    const targetChanged = prevTargetKey !== targetKey;
+      // Check if route API call is needed
+      const prevStart = lastRouteStartRef.current;
+      const prevTarget = lastRouteTargetRef.current;
+      const startMovedMeters = prevStart ? distanceApproxMeters(prevStart, start) : Number.POSITIVE_INFINITY;
+      const targetKey = `${target.latitude.toFixed(5)},${target.longitude.toFixed(5)}`;
+      const prevTargetKey = prevTarget ? `${prevTarget.latitude.toFixed(5)},${prevTarget.longitude.toFixed(5)}` : null;
+      const targetChanged = prevTargetKey !== targetKey;
 
-    const tripStarted = Boolean([BookingStatus.STARTED, BookingStatus.IN_PROGRESS].includes(status as any));
-    const minIntervalMs = tripStarted ? 9000 : 12000;
-    const shouldSkip =
-      !targetChanged &&
-      now - lastRouteTsRef.current < minIntervalMs &&
-      Number.isFinite(startMovedMeters) &&
-      startMovedMeters < 35;
+      const tripStarted = ['STARTED', 'IN_PROGRESS'].includes(curStatus);
+      const minIntervalMs = tripStarted ? 15000 : 20000;
+      const shouldSkip =
+        !targetChanged &&
+        now - lastRouteTsRef.current < minIntervalMs &&
+        Number.isFinite(startMovedMeters) &&
+        startMovedMeters < 50;
 
-    if (shouldSkip) {
-      return;
-    }
+      if (shouldSkip) return;
 
-    lastRouteKeyRef.current = `${routeStart!.latitude.toFixed(5)},${routeStart!.longitude.toFixed(5)}->${targetKey}`;
-    lastRouteTsRef.current = now;
-    lastRouteStartRef.current = routeStart!;
-    lastRouteTargetRef.current = routeTarget!;
+      lastRouteKeyRef.current = `${start.latitude.toFixed(5)},${start.longitude.toFixed(5)}->${targetKey}`;
+      lastRouteTsRef.current = now;
+      lastRouteStartRef.current = start;
+      lastRouteTargetRef.current = target;
 
-    calculateRoute(routeStart!, routeTarget!)
+      calculateRoute(start, target)
+        .then((res) => {
+          const poly = String((res as any)?.polyline ?? '');
+          if (!poly) return;
+          if (routePolylineRef.current && poly === routePolylineRef.current) return;
+          const decoded = decodePolyline(poly);
+          dispatch(setRoute({ polyline: poly, decodedRoute: decoded }));
+
+          const durationSeconds = typeof (res as any)?.duration === 'number' ? Number((res as any).duration) : NaN;
+          const distanceMeters = typeof (res as any)?.distance === 'number' ? Number((res as any).distance) : NaN;
+          if (Number.isFinite(durationSeconds) && Number.isFinite(distanceMeters)) {
+            const newEta = Math.max(1, Math.round(durationSeconds / 60));
+            const newDist = Math.round((distanceMeters / 1000) * 10) / 10; // 1 decimal
+            const prevEta = lastDispatchedEtaRef.current;
+            const prevDist = lastDispatchedDistRef.current;
+
+            // Skip if values haven't actually changed
+            if (newEta === prevEta && newDist === prevDist) return;
+
+            // Monotonic guard: during active trip, ETA should only decrease
+            // Allow increase of max 2 min (for re-routing). Prevents wild jumps
+            const isTripActive = ['STARTED', 'IN_PROGRESS'].includes(bookingStatusRef.current ?? '');
+            const shouldUpdate = !isTripActive || prevEta === null || newEta <= prevEta + 2;
+
+            if (shouldUpdate) {
+              lastDispatchedEtaRef.current = newEta;
+              lastDispatchedDistRef.current = newDist;
+              lastEtaDispatchTsRef.current = Date.now();
+              dispatch(updateETA({ eta: newEta, distance: newDist }));
+            }
+          }
+        })
+        .catch(() => {});
+    };
+
+    tick(); // Initial
+    const timer = setInterval(tick, 15000); // Poll every 15s — stable numbers
+    return () => clearInterval(timer);
+  }, [bookingStatus, dispatch]); // Only re-setup when booking status transitions
+
+  // ── Immediately refetch route when driverLocation first becomes available ──
+  // The initial tick() above runs before driverLocation arrives (it's null on mount),
+  // so no route is fetched. This effect watches for the first valid driverLocation
+  // and resets the cache key so the next tick fires immediately.
+  const prevDriverLocationRef = useRef<{ latitude: number; longitude: number } | null>(null);
+  useEffect(() => {
+    if (!driverLocation) return;
+    const prev = prevDriverLocationRef.current;
+    prevDriverLocationRef.current = driverLocation;
+
+    // Only act on the FIRST location update (prev was null)
+    if (prev !== null) return;
+
+    // Reset cached keys so tick() sees a "new" start and fetches immediately
+    lastRouteKeyRef.current = null;
+    lastRouteTsRef.current = 0;
+    lastRouteStartRef.current = null;
+
+    // Directly trigger an immediate route fetch with the new driverLocation as start
+    const target = routeTargetRef.current;
+    if (!target) return;
+
+    const start = { latitude: driverLocation.latitude, longitude: driverLocation.longitude };
+    lastRouteKeyRef.current = `${start.latitude.toFixed(5)},${start.longitude.toFixed(5)}->${target.latitude.toFixed(5)},${target.longitude.toFixed(5)}`;
+    lastRouteTsRef.current = Date.now();
+    lastRouteStartRef.current = start;
+    lastRouteTargetRef.current = target;
+
+    calculateRoute(start, target)
       .then((res) => {
         const poly = String((res as any)?.polyline ?? '');
         if (!poly) return;
-        if (typeof routePolyline === 'string' && routePolyline && poly === routePolyline) return;
         const decoded = decodePolyline(poly);
         dispatch(setRoute({ polyline: poly, decodedRoute: decoded }));
-
         const durationSeconds = typeof (res as any)?.duration === 'number' ? Number((res as any).duration) : NaN;
         const distanceMeters = typeof (res as any)?.distance === 'number' ? Number((res as any).distance) : NaN;
         if (Number.isFinite(durationSeconds) && Number.isFinite(distanceMeters)) {
-          dispatch(updateETA({ eta: Math.max(1, Math.round(durationSeconds / 60)), distance: distanceMeters / 1000 }));
+          const newEta = Math.max(1, Math.round(durationSeconds / 60));
+          const newDist = Math.round((distanceMeters / 1000) * 10) / 10;
+          lastDispatchedEtaRef.current = newEta;
+          lastDispatchedDistRef.current = newDist;
+          dispatch(updateETA({ eta: newEta, distance: newDist }));
         }
       })
-      .catch(() => {
-      });
-  }, [booking?.status, dispatch, eta, mapEdgePadding, routePolyline, routeStart, routeTarget]);
+      .catch(() => {});
+  }, [driverLocation, dispatch]);
+
+
 
   useEffect(() => {
     if (!booking?.status) return;
@@ -885,6 +1358,25 @@ const TrackingScreen = ({ navigation, route }: any) => {
     setIsRatingModalVisible(true);
   }, [canCustomerRateDriver]);
 
+  // Show minimal loading UI during navigation transition
+  if (!screenReady) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Icon name="arrow-left" size={24} color="#C9A84C" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Track Ride</Text>
+          <View style={{ width: 24 }} />
+        </View>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color="#C9A84C" />
+          <Text style={{ color: '#8A8A8A', marginTop: 12, fontSize: 14, fontWeight: '600' }}>Loading ride…</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
@@ -903,27 +1395,28 @@ const TrackingScreen = ({ navigation, route }: any) => {
           provider={PROVIDER_GOOGLE}
           style={StyleSheet.absoluteFill}
           initialRegion={initialRegion}
+          onPanDrag={() => setIsMapPanned(true)}
         >
-          {decodedRoute && decodedRoute.length > 1 ? (
+          {decodedRoute && decodedRoute.length > 1 && !isRoundTripStarted ? (
             <RoutePolyline coordinates={decodedRoute} strokeWidth={4} strokeColor="#2412eaff" animated />
           ) : null}
-          {effectivePickupLocation ? (
-            <Marker coordinate={effectivePickupLocation} zIndex={5} title="Pickup">
-              <View style={{ alignItems: 'center' }}>
-                <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#10b981', alignItems: 'center', justifyContent: 'center', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4 }}>
-                  <Icon name="account" size={14} color="#ffffff" />
+          {stablePickupCoord ? (
+            <Marker coordinate={stablePickupCoord} tracksViewChanges={markerTracksChanges} zIndex={5} title="Pickup">
+              <View style={markerStyles.center}>
+                <View style={markerStyles.pickupCircle}>
+                  <Icon name="account" size={18} color="#ffffff" />
                 </View>
-                <View style={{ width: 0, height: 0, borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 8, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: '#10b981', marginTop: -2 }} />
+                <View style={markerStyles.pickupArrow} />
               </View>
             </Marker>
           ) : null}
-          {effectiveDropLocation ? (
-            <Marker coordinate={effectiveDropLocation} zIndex={5} title="Drop">
-              <View style={{ alignItems: 'center' }}>
-                <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#ef4444', alignItems: 'center', justifyContent: 'center', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4 }}>
-                  <Icon name="flag-checkered" size={14} color="#ffffff" />
+          {stableDropCoord && !isRoundTripStarted ? (
+            <Marker coordinate={stableDropCoord} tracksViewChanges={markerTracksChanges} zIndex={5} title="Drop">
+              <View style={markerStyles.center}>
+                <View style={markerStyles.dropCircle}>
+                  <Icon name="flag-checkered" size={18} color="#ffffff" />
                 </View>
-                <View style={{ width: 0, height: 0, borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 8, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: '#ef4444', marginTop: -2 }} />
+                <View style={markerStyles.dropArrow} />
               </View>
             </Marker>
           ) : null}
@@ -933,21 +1426,48 @@ const TrackingScreen = ({ navigation, route }: any) => {
               const lng = Number((d as any)?.location?.longitude);
               if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
               return (
-                <DriverMarker
-                  key={String((d as any)?.id)}
-                  latitude={lat}
-                  longitude={lng}
-                  status="online"
-                  driverPhoto={(d as any)?.photo ?? null}
-                />
+                <Marker key={String((d as any)?.id)} coordinate={{ latitude: lat, longitude: lng }} tracksViewChanges={markerTracksChanges} zIndex={6} title="Driver">
+                  <View style={markerStyles.center}>
+                    <View style={markerStyles.driverCircle}>
+                      <Icon name="car-side" size={18} color="#C9A84C" />
+                    </View>
+                    <View style={markerStyles.driverArrow} />
+                  </View>
+                </Marker>
               );
             })
             : null}
           {driverLocation ? (
-            <DriverMarker latitude={driverLocation.latitude} longitude={driverLocation.longitude} status="busy" />
+            <DriverMarker
+              latitude={driverLocation.latitude}
+              longitude={driverLocation.longitude}
+              heading={(driverLocation as any)?.heading}
+              routeCoordinates={decodedRoute}
+            />
           ) : null}
         </MapView>
+
+        {/* Uber-style Recenter Button when map is panned */}
+        {isMapPanned ? (
+          <TouchableOpacity 
+            style={[styles.recenterBtn, { bottom: mapEdgePadding.bottom + 20 }]} 
+            onPress={() => {
+              setIsMapPanned(false);
+              fitMapToRoute();
+            }}
+          >
+            <Icon name="crosshairs-gps" size={24} color="#C9A84C" />
+          </TouchableOpacity>
+        ) : null}
       </View>
+
+      {/* Status transition overlay — shows spinner during Arrived/Start Trip/Complete */}
+      {statusUpdating ? (
+        <View style={styles.statusOverlay}>
+          <ActivityIndicator size="large" color="#C9A84C" />
+          <Text style={styles.statusOverlayText}>Updating...</Text>
+        </View>
+      ) : null}
 
       <ScrollView style={styles.bottomScrollView} contentContainerStyle={[styles.bottomSheet, { paddingBottom: 20 + Math.max(0, insets.bottom) }]} bounces={false}>
         <View style={[styles.statusBar, { backgroundColor: statusInfo.bg }]}>
@@ -996,6 +1516,13 @@ const TrackingScreen = ({ navigation, route }: any) => {
                 (booking as any)?.driver?.mobile ??
                 (booking as any)?.driver?.contactNumber
               )}
+              maskedPhone={formatMaskedPhone(normalizePhone(
+                (booking as any)?.driver?.phoneNumber ??
+                (booking as any)?.driver?.phone ??
+                (booking as any)?.driver?.mobileNumber ??
+                (booking as any)?.driver?.mobile ??
+                (booking as any)?.driver?.contactNumber
+              ))}
               shareUrl={shareUrl}
               onCall={booking?.status === 'STARTED' || booking?.status === 'IN_PROGRESS' || booking?.status === 'COMPLETED' ? undefined : callOtherParty}
               onChat={booking?.status === 'STARTED' || booking?.status === 'IN_PROGRESS' || booking?.status === 'COMPLETED' ? undefined : () => {
@@ -1015,17 +1542,56 @@ const TrackingScreen = ({ navigation, route }: any) => {
                     setShareUrl(url);
                   }
                   await Share.share({
-                    message: `Track my DriveMate ride live: ${url}`,
+                    message: `Track my Drively ride live: ${url}`,
                   });
                 } catch (e: any) {
                   if (e?.message !== 'User did not share') {
-                    Alert.alert('Share', 'Failed to create share link');
+                    showAlert('Share', 'Failed to create share link');
                   }
                 } finally {
                   setIsSharing(false);
                 }
               }}
             />
+
+            {/* Favorite driver button */}
+            {(booking as any)?.driver?.id && !isDriverMode ? (
+              <TouchableOpacity
+                style={[styles.favDriverBtn, isFavDriver && { borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.08)' }]}
+                onPress={async () => {
+                  const driverId = String((booking as any).driver.id);
+                  if (isFavDriver) {
+                    // Remove from favorites
+                    try {
+                      await removeFavoriteDriver(driverId);
+                      setIsFavDriver(false);
+                      showAlert('Removed', 'Driver removed from your favorites.');
+                    } catch (e: any) {
+                      showAlert('Error', e?.message || 'Failed to remove favorite driver');
+                    }
+                  } else {
+                    // Add to favorites
+                    try {
+                      await addFavoriteDriver(driverId);
+                      setIsFavDriver(true);
+                      showAlert('Favorite Driver ⭐', 'Driver added to your favorites! They will get priority notification on your future bookings.');
+                    } catch (e: any) {
+                      if (e?.message?.includes('already')) {
+                        setIsFavDriver(true);
+                        showAlert('Favorite Driver', 'This driver is already in your favorites!');
+                      } else {
+                        showAlert('Error', e?.message || 'Failed to add favorite driver');
+                      }
+                    }
+                  }
+                }}
+              >
+                <Icon name={isFavDriver ? 'star' : 'star-outline'} size={16} color={isFavDriver ? '#10b981' : '#C9A84C'} />
+                <Text style={[styles.favDriverText, isFavDriver && { color: '#10b981' }]}>
+                  {isFavDriver ? 'In Favorites' : 'Add to Favorites'}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         ) : null}
 
@@ -1037,7 +1603,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
             vehicleType={(booking as any)?.vehicleType}
             onCancel={canCustomerCancelSearching ? () => {
               if (!booking?.id) return;
-              Alert.alert('Cancel booking?', 'Do you want to cancel this booking request?', [
+              showAlert('Cancel booking?', 'Do you want to cancel this booking request?', [
                 { text: 'No', style: 'cancel' },
                 {
                   text: 'Yes, cancel',
@@ -1049,7 +1615,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
                       dispatch(clearCurrentBooking());
                       navigation.navigate('Tabs');
                     } catch (e: any) {
-                      Alert.alert('Cancel booking', e?.message || 'Failed to cancel booking');
+                      showAlert('Cancel booking', e?.message || 'Failed to cancel booking');
                     }
                   },
                 },
@@ -1112,76 +1678,80 @@ const TrackingScreen = ({ navigation, route }: any) => {
 
         {showDriverSection && booking?.id && isDriverMode && otherParty ? (
           <View style={styles.contactCard}>
-            <View style={styles.contactTopRow}>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.contactTitle}>{otherParty.name || 'Customer'}</Text>
-                <Text style={styles.tripMetaStrong} numberOfLines={2}>
-                  {tripTypeHoursLabel}
-                </Text>
-                <Text style={styles.contactSubTitle}>
-                  {etaTargetLabel}: {etaText}  •  Distance: {distanceText}
-                </Text>
-              </View>
+            {/* Name and trip info — full width */}
+            <Text style={styles.contactTitle} numberOfLines={1}>{otherParty.name || 'Customer'}</Text>
+            <Text style={styles.tripMetaStrong} numberOfLines={1}>
+              {tripTypeHoursLabel}
+            </Text>
+            <Text style={styles.contactSubTitle} numberOfLines={1}>
+              {isRoundTripStarted
+                ? `Elapsed: ${roundTripElapsed ?? '—'}${roundTripCountdown ? `  •  Remaining: ${roundTripCountdown}` : ''}`
+                : `${etaTargetLabel}: ${etaText}  •  Distance: ${distanceText}`}
+            </Text>
 
-              <View style={styles.contactActionsRow}>
-                <TouchableOpacity style={styles.navigateBtn} onPress={openGoogleMaps}>
-                  <Icon name="map-marker-path" size={18} color="#ffffff" />
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={styles.navigateBtnTitle} numberOfLines={1}>
-                      Navigate to {navigateTargetLabel}
-                    </Text>
-                    <Text style={styles.navigateBtnSub} numberOfLines={1}>
-                      Open Google Maps
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-                {booking?.status !== 'STARTED' && booking?.status !== 'IN_PROGRESS' && booking?.status !== 'COMPLETED' ? (
-                  <>
-                    <TouchableOpacity style={styles.contactActionBtn} onPress={callOtherParty}>
-                      <Icon name="phone" size={18} color="#10b981" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.contactActionBtn}
-                      onPress={() => {
-                        if (booking?.id) {
-                          setUnreadChatCount(0);
-                          navigation.navigate('Chat', { bookingId: booking.id });
-                        }
-                      }}
-                    >
-                      <Icon name="chat" size={18} color="#C9A84C" />
-                      {unreadChatCount > 0 ? (
-                        <View style={styles.chatBadge}>
-                          <Text style={styles.chatBadgeText}>{unreadChatCount > 9 ? '9+' : unreadChatCount}</Text>
-                        </View>
-                      ) : null}
-                    </TouchableOpacity>
-                  </>
-                ) : null}
-              </View>
+            {/* Actions row — below the info */}
+            <View style={styles.contactActionsRow}>
+              <TouchableOpacity style={styles.navigateBtn} onPress={openGoogleMaps}>
+                <Icon name="map-marker-path" size={18} color="#ffffff" />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.navigateBtnTitle} numberOfLines={1}>
+                    Navigate to {navigateTargetLabel}
+                  </Text>
+                  <Text style={styles.navigateBtnSub} numberOfLines={1}>
+                    Open Google Maps
+                  </Text>
+                </View>
+              </TouchableOpacity>
+              {booking?.status !== 'STARTED' && booking?.status !== 'IN_PROGRESS' && booking?.status !== 'COMPLETED' ? (
+                <>
+                  <TouchableOpacity style={styles.contactActionBtn} onPress={callOtherParty}>
+                    <Icon name="phone" size={18} color="#10b981" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.contactActionBtn}
+                    onPress={() => {
+                      if (booking?.id) {
+                        setUnreadChatCount(0);
+                        navigation.navigate('Chat', { bookingId: booking.id });
+                      }
+                    }}
+                  >
+                    <Icon name="chat" size={18} color="#C9A84C" />
+                    {unreadChatCount > 0 ? (
+                      <View style={styles.chatBadge}>
+                        <Text style={styles.chatBadgeText}>{unreadChatCount > 9 ? '9+' : unreadChatCount}</Text>
+                      </View>
+                    ) : null}
+                  </TouchableOpacity>
+                </>
+              ) : null}
             </View>
           </View>
         ) : null}
+
+
 
         {canDriverCancelPreStart ? (
           <TouchableOpacity
             style={styles.driverCancelButton}
             onPress={() => {
               if (!booking?.id) return;
-              Alert.alert('Cancel ride?', 'Do you want to cancel this ride?', [
+              showAlert('Cancel ride?', 'Do you want to cancel this ride?', [
                 { text: 'No', style: 'cancel' },
                 {
                   text: 'Yes, cancel',
                   style: 'destructive',
                   onPress: async () => {
                     try {
+                      isCancellingRef.current = true; // Prevent 'searching' flash
                       await cancelBooking(booking.id, 'Cancelled by driver', 'DRIVER');
                       dispatch(clearCurrentBooking());
                       dispatch(clearLocations());
                       dispatch(clearRoute());
                       navigation.navigate('Tabs');
                     } catch (e: any) {
-                      Alert.alert('Cancel ride', e?.message || 'Failed to cancel ride');
+                      isCancellingRef.current = false;
+                      showAlert('Cancel ride', e?.message || 'Failed to cancel ride');
                     }
                   },
                 },
@@ -1198,7 +1768,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
             style={styles.cancelSearchingButton}
             onPress={() => {
               if (!booking?.id) return;
-              Alert.alert('Cancel booking?', 'Do you want to cancel this booking request?', [
+              showAlert('Cancel booking?', 'Do you want to cancel this booking request?', [
                 { text: 'No', style: 'cancel' },
                 {
                   text: 'Yes, cancel',
@@ -1210,7 +1780,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
                       dispatch(clearCurrentBooking());
                       navigation.navigate('Tabs');
                     } catch (e: any) {
-                      Alert.alert('Cancel booking', e?.message || 'Failed to cancel booking');
+                      showAlert('Cancel booking', e?.message || 'Failed to cancel booking');
                     }
                   },
                 },
@@ -1251,16 +1821,16 @@ const TrackingScreen = ({ navigation, route }: any) => {
                     const order = await createBookingPaymentOrder(booking.id);
                     if (order.alreadyPaid) {
                       setPaymentDone(true);
-                      Alert.alert('Payment', 'Already paid!');
+                      showAlert('Payment', 'Already paid!');
                       return;
                     }
                     const cfEnv = __DEV__ ? 'sandbox' : 'api';
                     const payUrl = `https://${cfEnv}.cashfree.com/pg/orders/sessions/${order.paymentSessionId}`;
                     setQrPayUrl(payUrl);
-                    setQrOrderId(order.orderId);
+                    setQrOrderId(order.orderId ?? null);
                     setShowQrModal(true);
                   } catch (e: any) {
-                    Alert.alert('QR Code', e?.message || 'Could not generate QR code');
+                    showAlert('QR Code', e?.message || 'Could not generate QR code');
                   } finally {
                     setQrLoading(false);
                   }
@@ -1274,6 +1844,43 @@ const TrackingScreen = ({ navigation, route }: any) => {
               </TouchableOpacity>
             ) : null}
 
+            {/* DRIVER: Collect Cash button */}
+            {isDriverMode && !paymentDone && (booking as any)?.paymentStatus !== 'PAID' ? (
+              <TouchableOpacity
+                style={[styles.finalFareDone, { backgroundColor: G.accent, marginBottom: 12 }]}
+                onPress={() => {
+                  if (!booking?.id) return;
+                  const amount = Number(booking?.totalAmount || 0).toFixed(0);
+                  showAlert(
+                    'Collect Cash',
+                    `Did you collect ₹${amount} in cash from the customer?`,
+                    [
+                      { text: 'No', style: 'cancel' },
+                      {
+                        text: 'Yes, Collected',
+                        onPress: async () => {
+                          try {
+                            const result = await collectCashPayment(booking.id);
+                            if (result.alreadyPaid) {
+                              setPaymentDone(true);
+                              showAlert('Payment', 'Already marked as paid!');
+                              return;
+                            }
+                            setPaymentDone(true);
+                            showAlert('Cash Collected ✅', `₹${amount} cash payment recorded successfully!`);
+                          } catch (e: any) {
+                            showAlert('Error', e?.message || 'Could not record cash payment');
+                          }
+                        },
+                      },
+                    ]
+                  );
+                }}
+              >
+                <Text style={styles.finalFareDoneText}>💵 Collect Cash</Text>
+              </TouchableOpacity>
+            ) : null}
+
             {/* DRIVER: Payment received indicator */}
             {isDriverMode && (paymentDone || (booking as any)?.paymentStatus === 'PAID') ? (
               <View style={[styles.finalFareDone, { backgroundColor: '#059669', marginBottom: 12, opacity: 1 }]}>
@@ -1283,7 +1890,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
 
             {!isDriverMode && ((booking as any)?.paymentMethod === 'UPI' || (booking as any)?.paymentMethod === 'CARD') && !paymentDone && (booking as any)?.paymentStatus !== 'PAID' ? (
               <TouchableOpacity
-                style={[styles.finalFareDone, { backgroundColor: '#7c3aed', marginBottom: 12 }]}
+                style={[styles.finalFareDone, { backgroundColor: '#7c3aed', marginBottom: 8 }]}
                 disabled={paymentProcessing}
                 onPress={async () => {
                   if (!booking?.id) return;
@@ -1292,27 +1899,27 @@ const TrackingScreen = ({ navigation, route }: any) => {
                     const order = await createBookingPaymentOrder(booking.id);
                     if (order.alreadyPaid) {
                       setPaymentDone(true);
-                      Alert.alert('Payment', 'Already paid!');
+                      showAlert('Payment', 'Already paid!');
                       return;
                     }
-                    // Open Cashfree payment link
-                    const cfEnv = __DEV__ ? 'sandbox' : 'api';
-                    const payUrl = `https://${cfEnv}.cashfree.com/pg/orders/sessions/${order.paymentSessionId}`;
-                    await Linking.openURL(payUrl);
-                    // After returning, verify
-                    setTimeout(async () => {
-                      try {
-                        await verifyBookingPayment({ bookingId: booking.id, cf_order_id: order.orderId });
-                        setPaymentDone(true);
-                        Alert.alert('Payment', 'Payment successful!');
-                      } catch {
-                        Alert.alert('Payment', 'Payment not verified yet. Pull down to check again or retry.');
-                      } finally {
-                        setPaymentProcessing(false);
-                      }
-                    }, 3000);
+                    // Use Cashfree in-app SDK — NOT browser Linking (which crashes)
+                    const { openCashfreeCheckout } = await import('../../services/cashfreeService');
+                    const result = await openCashfreeCheckout({
+                      orderId: order.orderId ?? '',
+                      paymentSessionId: order.paymentSessionId ?? '',
+                    });
+                    // Verify with backend after SDK confirms
+                    await verifyBookingPayment({ bookingId: booking.id, cf_order_id: result.orderId });
+                    setPaymentDone(true);
+                    showAlert('Payment Successful ✅', 'Your payment has been confirmed!');
                   } catch (e: any) {
-                    Alert.alert('Payment', e?.message || 'Could not initiate payment');
+                    const msg = e?.message || '';
+                    if (msg.toLowerCase().includes('cancel')) {
+                      showAlert('Payment Cancelled', 'Payment was not completed. Please try again.');
+                    } else {
+                      showAlert('Payment Failed', msg || 'Could not complete payment. Try wallet below.');
+                    }
+                  } finally {
                     setPaymentProcessing(false);
                   }
                 }}
@@ -1320,15 +1927,51 @@ const TrackingScreen = ({ navigation, route }: any) => {
                 {paymentProcessing ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={styles.finalFareDoneText}>Pay ₹{Number(booking?.totalAmount || 0).toFixed(0)}</Text>
+                  <Text style={styles.finalFareDoneText}>Pay ₹{Number(booking?.totalAmount || 0).toFixed(0)} via {(booking as any)?.paymentMethod === 'CARD' ? 'Card' : 'UPI'}</Text>
                 )}
+              </TouchableOpacity>
+            ) : null}
+
+            {/* Wallet fallback for UPI/CARD — in case SDK fails or user prefers wallet */}
+            {!isDriverMode && !paymentDone && (booking as any)?.paymentStatus !== 'PAID' &&
+              ((booking as any)?.paymentMethod === 'UPI' || (booking as any)?.paymentMethod === 'CARD') ? (
+              <TouchableOpacity
+                style={[styles.finalFareDone, { backgroundColor: 'transparent', borderWidth: 1, borderColor: G.accent, marginBottom: 12 }]}
+                disabled={paymentProcessing}
+                onPress={() => {
+                  if (!booking?.id) return;
+                  showAlert(
+                    'Pay from Wallet?',
+                    `Switch to wallet payment ₹${Number(booking?.totalAmount || 0).toFixed(0)} for this ride?`,
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Pay from Wallet',
+                        onPress: async () => {
+                          setPaymentProcessing(true);
+                          try {
+                            const result = await payBookingWithWallet(booking.id);
+                            setPaymentDone(true);
+                            showAlert('Payment Successful ✅', result.alreadyPaid ? 'Already paid!' : `Paid ₹${Number(booking?.totalAmount || 0).toFixed(0)} from wallet!`);
+                          } catch (e: any) {
+                            showAlert('Wallet Failed', e?.message || 'Insufficient balance. Please top up your wallet.');
+                          } finally {
+                            setPaymentProcessing(false);
+                          }
+                        },
+                      },
+                    ]
+                  );
+                }}
+              >
+                <Text style={[styles.finalFareDoneText, { color: G.accent }]}>💳 Pay from Wallet instead</Text>
               </TouchableOpacity>
             ) : null}
 
             {/* WALLET: Auto-pay button */}
             {!isDriverMode && (booking as any)?.paymentMethod === 'WALLET' && !paymentDone && (booking as any)?.paymentStatus !== 'PAID' ? (
               <TouchableOpacity
-                style={[styles.finalFareDone, { backgroundColor: '#C9A84C', marginBottom: 12 }]}
+                style={[styles.finalFareDone, { backgroundColor: G.accent, marginBottom: 12 }]}
                 disabled={paymentProcessing}
                 onPress={async () => {
                   if (!booking?.id) return;
@@ -1337,13 +1980,13 @@ const TrackingScreen = ({ navigation, route }: any) => {
                     const result = await payBookingWithWallet(booking.id);
                     if (result.alreadyPaid) {
                       setPaymentDone(true);
-                      Alert.alert('Payment', 'Already paid!');
+                      showAlert('Payment', 'Already paid!');
                     } else {
                       setPaymentDone(true);
-                      Alert.alert('Payment', `Paid from wallet! Remaining balance: ₹${result.balance?.toFixed(0) ?? '—'}`);
+                      showAlert('Payment', `Paid from wallet! Remaining balance: ₹${result.balance?.toFixed(0) ?? '—'}`);
                     }
                   } catch (e: any) {
-                    Alert.alert('Payment Failed', e?.message || 'Could not pay from wallet');
+                    showAlert('Payment Failed', e?.message || 'Could not pay from wallet');
                   } finally {
                     setPaymentProcessing(false);
                   }
@@ -1357,8 +2000,18 @@ const TrackingScreen = ({ navigation, route }: any) => {
               </TouchableOpacity>
             ) : null}
 
+            {/* Payment confirmed banner — shown to both driver and customer */}
+            {(paymentDone || (booking as any)?.paymentStatus === 'PAID') ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+                backgroundColor: 'rgba(5,150,105,0.12)', borderRadius: 12, paddingVertical: 10,
+                paddingHorizontal: 16, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(5,150,105,0.3)' }}>
+                <Icon name="check-circle" size={18} color="#059669" />
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#059669' }}>Payment Confirmed ✓</Text>
+              </View>
+            ) : null}
+
             <TouchableOpacity
-              style={[styles.finalFareDone, { backgroundColor: '#1E1E1E', marginBottom: 12 }]}
+              style={[styles.finalFareDone, { backgroundColor: G.glass3, marginBottom: 12 }]}
               onPress={() => {
                 if (booking) {
                   navigation.navigate('RideReceipt', { booking });
@@ -1368,17 +2021,17 @@ const TrackingScreen = ({ navigation, route }: any) => {
               <Text style={styles.finalFareDoneText}>View Receipt</Text>
             </TouchableOpacity>
 
+            {/* Done button — gated for BOTH driver and customer until payment is confirmed */}
+            {/* For CASH: driver must press 'Collect Cash' first, which fires payment_confirmed */}
+            {/* For non-CASH: customer must complete online payment via Cashfree/UPI */}
             <TouchableOpacity
               style={[
                 styles.finalFareDone,
-                // Disable Done for online methods until paid
-                !isDriverMode && (booking as any)?.paymentMethod !== 'CASH' && !paymentDone && (booking as any)?.paymentStatus !== 'PAID'
+                !paymentDone && (booking as any)?.paymentStatus !== 'PAID'
                   ? { opacity: 0.4 }
                   : {},
               ]}
-              disabled={
-                !isDriverMode && (booking as any)?.paymentMethod !== 'CASH' && !paymentDone && (booking as any)?.paymentStatus !== 'PAID'
-              }
+              disabled={!paymentDone && (booking as any)?.paymentStatus !== 'PAID'}
               onPress={() => {
                 dispatch(clearCurrentBooking());
                 dispatch(clearLocations());
@@ -1386,7 +2039,17 @@ const TrackingScreen = ({ navigation, route }: any) => {
                 navigation.navigate('Tabs');
               }}
             >
-              <Text style={styles.finalFareDoneText}>Done</Text>
+              <Text style={styles.finalFareDoneText}>
+                {!paymentDone && (booking as any)?.paymentStatus !== 'PAID'
+                  ? isDriverMode
+                    ? (booking as any)?.paymentMethod === 'CASH'
+                      ? 'Collect cash first'
+                      : 'Awaiting customer payment...'
+                    : (booking as any)?.paymentMethod === 'CASH'
+                      ? 'Awaiting cash collection...'
+                      : 'Pay to proceed'
+                  : 'Done'}
+              </Text>
             </TouchableOpacity>
           </View>
         ) : null}
@@ -1435,9 +2098,11 @@ const TrackingScreen = ({ navigation, route }: any) => {
         {showDriverSection && booking?.id && !isDriverMode ? (
           <View style={styles.etaCard}>
             <View style={styles.etaInfo}>
-              <Icon name="clock-outline" size={20} color="#8A8A8A" />
+              <Icon name={isRoundTripStarted ? 'timer-sand' : 'clock-outline'} size={20} color={isRoundTripStarted ? '#C9A84C' : '#8A8A8A'} />
               <Text style={styles.etaText}>
-                {etaTargetLabel}: {etaText}  •  Distance: {distanceText}
+                {isRoundTripStarted
+                  ? `Elapsed: ${roundTripElapsed ?? '—'}${roundTripCountdown ? `  •  Remaining: ${roundTripCountdown}` : ''}`
+                  : `${etaTargetLabel}: ${etaText}  •  Distance: ${distanceText}`}
               </Text>
             </View>
           </View>
@@ -1490,13 +2155,17 @@ const TrackingScreen = ({ navigation, route }: any) => {
       {/* QR Code Payment Modal */}
       <Modal visible={showQrModal} transparent animationType="fade" onRequestClose={() => { setShowQrModal(false); }}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-          <View style={{ backgroundColor: '#FFFFFF', borderRadius: 24, padding: 28, alignItems: 'center', width: '100%', maxWidth: 340 }}>
+          <View style={{ backgroundColor: G.textPrimary, borderRadius: 24, padding: 28, alignItems: 'center', width: '100%', maxWidth: 340 }}>
             <Text style={{ fontSize: 20, fontWeight: '800', color: '#111', marginBottom: 4 }}>Scan to Pay</Text>
             <Text style={{ fontSize: 14, color: '#666', marginBottom: 20 }}>Customer, scan this QR with any UPI app</Text>
 
             {qrPayUrl ? (
               <View style={{ backgroundColor: '#fff', padding: 16, borderRadius: 12, borderWidth: 2, borderColor: '#E5E5E5' }}>
-                <QRCode value={qrPayUrl} size={220} backgroundColor="#FFFFFF" color="#000000" />
+                <Image
+                  source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrPayUrl)}` }}
+                  style={{ width: 220, height: 220 }}
+                  resizeMode="contain"
+                />
               </View>
             ) : (
               <ActivityIndicator size="large" color="#C9A84C" />
@@ -1533,7 +2202,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111111',
+    backgroundColor: G.bgAlt,
   },
   pickupMarker: {
     width: 34,
@@ -1543,7 +2212,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#ffffff',
+    borderColor: G.textPrimary,
   },
   dropMarker: {
     width: 34,
@@ -1553,17 +2222,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#ffffff',
+    borderColor: G.textPrimary,
   },
   driverMarker: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#C9A84C',
+    backgroundColor: G.accent,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#ffffff',
+    borderColor: G.textPrimary,
   },
   header: {
     flexDirection: 'row',
@@ -1572,20 +2241,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 10,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   mapWrap: {
-    height: Dimensions.get('window').height * 0.38,
-    backgroundColor: '#141414',
+    height: Dimensions.get('window').height * 0.45,
+    backgroundColor: G.glass2,
   },
   bottomScrollView: {
     flex: 1,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
   },
@@ -1612,7 +2281,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   finalFareCard: {
-    backgroundColor: '#141414',
+    backgroundColor: G.glass2,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#bbf7d0',
@@ -1620,7 +2289,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   finalFareTitle: { color: '#065f46', fontWeight: '800', fontSize: 14 },
-  finalFareValue: { marginTop: 6, color: '#FFFFFF', fontWeight: '900', fontSize: 24 },
+  finalFareValue: { marginTop: 6, color: G.textPrimary, fontWeight: '900', fontSize: 24 },
   finalFareHint: { marginTop: 4, color: '#065f46', fontWeight: '700' },
   finalFareDone: {
     marginTop: 12,
@@ -1630,9 +2299,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  finalFareDoneText: { color: '#ffffff', fontWeight: '900' },
+  finalFareDoneText: { color: G.textPrimary, fontWeight: '900' },
   liveFareCard: {
-    backgroundColor: '#141414',
+    backgroundColor: G.glass2,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#bfdbfe',
@@ -1640,18 +2309,18 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   liveFareTitle: { color: '#1e3a8a', fontWeight: '800', fontSize: 14 },
-  liveFareValue: { marginTop: 6, color: '#FFFFFF', fontWeight: '900', fontSize: 22 },
+  liveFareValue: { marginTop: 6, color: G.textPrimary, fontWeight: '900', fontSize: 22 },
   otpCard: {
     backgroundColor: '#1a1400',
     borderRadius: 14,
     borderWidth: 2,
-    borderColor: '#C9A84C',
+    borderColor: G.accent,
     padding: 16,
     marginBottom: 16,
   },
-  otpTitle: { color: '#C9A84C', fontWeight: '800', fontSize: 14 },
-  otpValue: { marginTop: 8, color: '#FFFFFF', fontWeight: '900', fontSize: 36, letterSpacing: 6, textAlign: 'center' },
-  otpHint: { marginTop: 6, color: '#C9A84C', fontWeight: '700', fontSize: 13, textAlign: 'center' },
+  otpTitle: { color: G.accent, fontWeight: '800', fontSize: 14 },
+  otpValue: { marginTop: 8, color: G.textPrimary, fontWeight: '900', fontSize: 36, letterSpacing: 6, textAlign: 'center' },
+  otpHint: { marginTop: 6, color: G.accent, fontWeight: '700', fontSize: 13, textAlign: 'center' },
   cancelSearchingButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1664,7 +2333,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   cancelSearchingText: {
-    color: '#ffffff',
+    color: G.textPrimary,
     fontWeight: '800',
   },
   driverCancelButton: {
@@ -1679,16 +2348,16 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   driverCancelText: {
-    color: '#ffffff',
+    color: G.textPrimary,
     fontWeight: '800',
   },
   contactCard: {
-    backgroundColor: '#111111',
+    backgroundColor: G.bgAlt,
     borderRadius: 12,
     padding: 14,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
   },
   contactTopRow: {
     flexDirection: 'row',
@@ -1697,42 +2366,42 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   contactTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '900',
+    color: G.textPrimary,
   },
   contactSubTitle: {
     marginTop: 4,
     fontSize: 13,
     fontWeight: '600',
-    color: '#8A8A8A',
+    color: G.textSecondary,
   },
   tripMetaStrong: {
     marginTop: 4,
     fontSize: 13,
     fontWeight: '900',
-    color: '#FFFFFF',
+    color: G.accent,
   },
   contactActionsRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: 10,
+    marginTop: 12,
   },
   navigateBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     paddingHorizontal: 12,
     height: 42,
     borderRadius: 14,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: G.glass3,
     borderWidth: 1,
-    borderColor: '#FFFFFF',
-    minWidth: 160,
-    maxWidth: 220,
+    borderColor: G.textPrimary,
   },
   navigateBtnTitle: {
-    color: '#ffffff',
+    color: G.textPrimary,
     fontWeight: '900',
     fontSize: 13,
     lineHeight: 15,
@@ -1748,9 +2417,9 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1758,7 +2427,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#111111',
+    backgroundColor: G.bgAlt,
     borderRadius: 12,
     marginBottom: 16,
   },
@@ -1766,7 +2435,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#C9A84C',
+    backgroundColor: G.accent,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -1774,7 +2443,7 @@ const styles = StyleSheet.create({
   driverAvatarText: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#ffffff',
+    color: G.textPrimary,
   },
   driverInfo: {
     flex: 1,
@@ -1782,7 +2451,7 @@ const styles = StyleSheet.create({
   driverName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: G.textPrimary,
     marginBottom: 4,
   },
   ratingRow: {
@@ -1792,7 +2461,7 @@ const styles = StyleSheet.create({
   },
   ratingText: {
     fontSize: 14,
-    color: '#8A8A8A',
+    color: G.textSecondary,
   },
   actionButtons: {
     flexDirection: 'row',
@@ -1802,7 +2471,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 2,
@@ -1815,7 +2484,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     padding: 16,
-    backgroundColor: '#111111',
+    backgroundColor: G.bgAlt,
     borderRadius: 12,
     marginBottom: 16,
   },
@@ -1827,7 +2496,7 @@ const styles = StyleSheet.create({
   etaText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   waitingCard: {
     flexDirection: 'row',
@@ -1835,7 +2504,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 10,
     paddingVertical: 12,
-    backgroundColor: '#141414',
+    backgroundColor: G.glass2,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#bfdbfe',
@@ -1853,33 +2522,33 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   otpModalCard: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
   },
   otpModalTitle: {
     fontSize: 16,
     fontWeight: '900',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   otpModalSubTitle: {
     marginTop: 4,
     fontSize: 13,
     fontWeight: '600',
-    color: '#8A8A8A',
+    color: G.textSecondary,
   },
   otpInput: {
     marginTop: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 18,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: G.textPrimary,
     letterSpacing: 2,
   },
   otpModalActionsRow: {
@@ -1895,21 +2564,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   otpModalBtnSecondary: {
-    backgroundColor: '#141414',
+    backgroundColor: G.glass2,
   },
   otpModalBtnPrimary: {
-    backgroundColor: '#C9A84C',
+    backgroundColor: G.accent,
   },
   otpModalBtnDisabled: {
     opacity: 0.6,
   },
   otpModalBtnSecondaryText: {
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   otpModalBtnPrimaryText: {
     fontWeight: '800',
-    color: '#ffffff',
+    color: G.textPrimary,
   },
   driverControlsRow: {
     flexDirection: 'row',
@@ -1927,7 +2596,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   tripActionPrimary: {
-    backgroundColor: '#C9A84C',
+    backgroundColor: G.accent,
   },
   tripActionDanger: {
     backgroundColor: '#16a34a',
@@ -1935,7 +2604,7 @@ const styles = StyleSheet.create({
   tripActionTextPrimary: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#ffffff',
+    color: G.textPrimary,
   },
   driverChatButton: {
     flexDirection: 'row',
@@ -1945,13 +2614,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderRadius: 12,
-    backgroundColor: '#141414',
+    backgroundColor: G.glass2,
     marginBottom: 16,
   },
   driverChatText: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#C9A84C',
+    color: G.accent,
   },
   driverCardWrap: {
     marginBottom: 12,
@@ -1969,9 +2638,110 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   chatBadgeText: {
-    color: '#ffffff',
+    color: G.textPrimary,
     fontSize: 10,
     fontWeight: '900',
+  },
+  favDriverBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(201,168,76,0.1)',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(201,168,76,0.3)',
+  },
+  favDriverText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: G.accent,
+  },
+  recenterBtn: {
+    position: 'absolute',
+    right: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#1A1A2E',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    borderWidth: 1.5,
+    borderColor: '#C9A84C',
+  },
+  statusOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusOverlayText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
+    marginTop: 12,
+  },
+});
+
+const markerStyles = StyleSheet.create({
+  center: { alignItems: 'center' },
+  pickupCircle: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: '#10b981',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 3, borderColor: '#ffffff',
+    elevation: 8,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3, shadowRadius: 6,
+  },
+  pickupArrow: {
+    width: 0, height: 0,
+    borderLeftWidth: 7, borderRightWidth: 7, borderTopWidth: 10,
+    borderLeftColor: 'transparent', borderRightColor: 'transparent',
+    borderTopColor: '#10b981', marginTop: -2,
+  },
+  dropCircle: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: '#ef4444',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 3, borderColor: '#ffffff',
+    elevation: 8,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3, shadowRadius: 6,
+  },
+  dropArrow: {
+    width: 0, height: 0,
+    borderLeftWidth: 7, borderRightWidth: 7, borderTopWidth: 10,
+    borderLeftColor: 'transparent', borderRightColor: 'transparent',
+    borderTopColor: '#ef4444', marginTop: -2,
+  },
+  driverCircle: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: '#1A1A2E',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 3, borderColor: '#C9A84C',
+    elevation: 8,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3, shadowRadius: 6,
+  },
+  driverArrow: {
+    width: 0, height: 0,
+    borderLeftWidth: 7, borderRightWidth: 7, borderTopWidth: 10,
+    borderLeftColor: 'transparent', borderRightColor: 'transparent',
+    borderTopColor: '#1A1A2E', marginTop: -2,
   },
 });
 

@@ -1,14 +1,16 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Share, Alert, RefreshControl, ActivityIndicator, TextInput,
+  Share, Alert, RefreshControl, ActivityIndicator, TextInput, Clipboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { generateReferralCode, getReferralStats, applyReferralCode } from '../../services/api';
 import { useAppSelector } from '../../redux/store';
 import { UserType } from '../../types';
-import * as Clipboard from 'expo-clipboard';
+import { showAlert } from '../../components/common/CustomAlert';
+import { G } from '../../constants/glassStyles';
+
 
 const ReferralScreen = ({ navigation }: any) => {
   const userType = useAppSelector((s) => s.auth.user?.userType);
@@ -49,35 +51,35 @@ const ReferralScreen = ({ navigation }: any) => {
     if (!referralCode) return;
     try {
       const msg = isDriver
-        ? `Join DriveMate as a driver! Use my referral code: ${referralCode} and earn ₹${referredReward} on your first ride. Download: https://play.google.com/store/apps/details?id=com.drivemateservice.driver`
-        : `Get ₹${referredReward} off your first DriveMate ride! Use code: ${referralCode}. Download: https://play.google.com/store/apps/details?id=com.drivemateservice.app`;
+        ? `Join Drively as a driver! Use my referral code: ${referralCode} and earn ₹${referredReward} on your first ride. Download: https://play.google.com/store/apps/details?id=com.drively.driver`
+        : `Get ₹${referredReward} off your first Drively ride! Use code: ${referralCode}. Download: https://play.google.com/store/apps/details?id=com.drively.app`;
       await Share.share({ message: msg });
     } catch { }
   };
 
   const copyCode = async () => {
     if (!referralCode) return;
-    await Clipboard.setStringAsync(referralCode);
-    Alert.alert('Copied!', 'Referral code copied to clipboard');
+    Clipboard.setString(referralCode);
+    showAlert('Copied!', 'Referral code copied to clipboard');
   };
 
   const handleApplyCode = async () => {
     const code = applyCode.trim();
     if (!code) {
-      Alert.alert('Enter Code', 'Please enter a referral code');
+      showAlert('Enter Code', 'Please enter a referral code');
       return;
     }
     setApplying(true);
     try {
       const result = await applyReferralCode(code);
-      Alert.alert(
+      showAlert(
         '🎉 Code Applied!',
         `Referred by ${result?.referrerName || 'a friend'}. Complete your first ride to earn ₹${result?.rewardOnFirstTrip || 0}!`,
       );
       setApplyCode('');
       fetchData(); // Refresh stats
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Invalid referral code');
+      showAlert('Error', e?.message || 'Invalid referral code');
     }
     setApplying(false);
   };
@@ -239,7 +241,7 @@ const ReferralScreen = ({ navigation }: any) => {
         <View style={styles.stepsCard}>
           {[
             { icon: 'share-variant', text: 'Share your code with friends', color: '#7c3aed' },
-            { icon: 'account-plus', text: 'They sign up & enter your code', color: '#C9A84C' },
+            { icon: 'account-plus', text: 'They sign up & enter your code', color: G.accent },
             { icon: 'car', text: 'They complete their first ride', color: '#f59e0b' },
             { icon: 'wallet-plus', text: `You both get ₹ credited to wallet!`, color: '#10b981' },
           ].map((step, i) => (
@@ -258,17 +260,17 @@ const ReferralScreen = ({ navigation }: any) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#111111' },
+  container: { flex: 1, backgroundColor: G.bgAlt },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 12,
-    backgroundColor: '#0A0A0A', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: G.bg, borderBottomWidth: 1, borderBottomColor: G.border3,
   },
   backBtn: {
-    width: 40, height: 40, borderRadius: 12, backgroundColor: '#141414',
+    width: 40, height: 40, borderRadius: 12, backgroundColor: G.glass2,
     alignItems: 'center', justifyContent: 'center',
   },
-  headerTitle: { fontSize: 17, fontWeight: '800', color: '#FFFFFF' },
+  headerTitle: { fontSize: 17, fontWeight: '800', color: G.textPrimary },
   content: { padding: 16, paddingBottom: 40 },
   heroCard: {
     backgroundColor: '#7c3aed', borderRadius: 20, padding: 24, alignItems: 'center', marginBottom: 16,
@@ -277,42 +279,42 @@ const styles = StyleSheet.create({
     width: 72, height: 72, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.3)',
     alignItems: 'center', justifyContent: 'center', marginBottom: 12,
   },
-  heroTitle: { fontSize: 22, fontWeight: '900', color: '#ffffff', textAlign: 'center' },
+  heroTitle: { fontSize: 22, fontWeight: '900', color: G.textPrimary, textAlign: 'center' },
   heroSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.7)', marginTop: 4, fontWeight: '600' },
   codeCard: {
-    backgroundColor: '#0A0A0A', borderRadius: 16, padding: 16, marginBottom: 12,
-    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)', borderStyle: 'dashed',
+    backgroundColor: G.bg, borderRadius: 16, padding: 16, marginBottom: 12,
+    borderWidth: 1.5, borderColor: G.border3, borderStyle: 'dashed',
   },
-  codeLabel: { fontSize: 12, color: '#8A8A8A', fontWeight: '600', marginBottom: 8 },
+  codeLabel: { fontSize: 12, color: G.textSecondary, fontWeight: '600', marginBottom: 8 },
   codeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  codeValue: { fontSize: 28, fontWeight: '900', color: '#FFFFFF', letterSpacing: 2 },
+  codeValue: { fontSize: 28, fontWeight: '900', color: G.textPrimary, letterSpacing: 2 },
   copyBtn: {
-    width: 44, height: 44, borderRadius: 12, backgroundColor: '#141414',
+    width: 44, height: 44, borderRadius: 12, backgroundColor: G.glass2,
     alignItems: 'center', justifyContent: 'center',
   },
   shareBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#C9A84C', borderRadius: 14, paddingVertical: 14, gap: 8, marginBottom: 16,
+    backgroundColor: G.accent, borderRadius: 14, paddingVertical: 14, gap: 8, marginBottom: 16,
   },
-  shareBtnText: { fontSize: 16, fontWeight: '800', color: '#ffffff' },
+  shareBtnText: { fontSize: 16, fontWeight: '800', color: G.textPrimary },
 
   // Apply code section
   applyCard: {
-    backgroundColor: '#0A0A0A', borderRadius: 16, padding: 16, marginBottom: 16,
+    backgroundColor: G.bg, borderRadius: 16, padding: 16, marginBottom: 16,
     borderWidth: 1, borderColor: 'rgba(201,168,76,0.3)',
   },
-  applyTitle: { fontSize: 15, fontWeight: '800', color: '#FFFFFF', marginBottom: 4 },
-  applyDesc: { fontSize: 12, color: '#8A8A8A', marginBottom: 12 },
+  applyTitle: { fontSize: 15, fontWeight: '800', color: G.textPrimary, marginBottom: 4 },
+  applyDesc: { fontSize: 12, color: G.textSecondary, marginBottom: 12 },
   applyRow: { flexDirection: 'row', gap: 10 },
   applyInput: {
-    flex: 1, backgroundColor: '#1E1E1E', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
-    fontSize: 16, fontWeight: '700', color: '#FFFFFF', letterSpacing: 1.5,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+    flex: 1, backgroundColor: G.glass3, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: 16, fontWeight: '700', color: G.textPrimary, letterSpacing: 1.5,
+    borderWidth: 1, borderColor: G.border1,
   },
   applyBtn: {
-    backgroundColor: '#C9A84C', borderRadius: 12, paddingHorizontal: 20, justifyContent: 'center',
+    backgroundColor: G.accent, borderRadius: 12, paddingHorizontal: 20, justifyContent: 'center',
   },
-  applyBtnText: { fontSize: 14, fontWeight: '800', color: '#ffffff' },
+  applyBtnText: { fontSize: 14, fontWeight: '800', color: G.textPrimary },
 
   // Referred by card
   referredCard: {
@@ -320,22 +322,22 @@ const styles = StyleSheet.create({
     borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(16,185,129,0.2)',
   },
   referredTitle: { fontSize: 13, fontWeight: '700', color: '#10b981' },
-  referredStatus: { fontSize: 12, color: '#8A8A8A', marginTop: 2 },
+  referredStatus: { fontSize: 12, color: G.textSecondary, marginTop: 2 },
 
   // Stats
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   statCard: {
-    flex: 1, backgroundColor: '#0A0A0A', borderRadius: 14, padding: 16, alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
+    flex: 1, backgroundColor: G.bg, borderRadius: 14, padding: 16, alignItems: 'center',
+    borderWidth: 1, borderColor: G.border3,
   },
-  statNumber: { fontSize: 24, fontWeight: '900', color: '#FFFFFF' },
-  statLabel: { fontSize: 12, color: '#8A8A8A', fontWeight: '600', marginTop: 4 },
+  statNumber: { fontSize: 24, fontWeight: '900', color: G.textPrimary },
+  statLabel: { fontSize: 12, color: G.textSecondary, fontWeight: '600', marginTop: 4 },
 
   // Recent referrals
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: '#FFFFFF', marginBottom: 12 },
+  sectionTitle: { fontSize: 16, fontWeight: '800', color: G.textPrimary, marginBottom: 12 },
   refRow: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#0A0A0A',
-    borderRadius: 12, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
+    flexDirection: 'row', alignItems: 'center', backgroundColor: G.bg,
+    borderRadius: 12, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: G.border3,
   },
   refIcon: {
     width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
@@ -343,23 +345,23 @@ const styles = StyleSheet.create({
   refIconRewarded: { backgroundColor: 'rgba(16,185,129,0.1)' },
   refIconPending: { backgroundColor: 'rgba(245,158,11,0.1)' },
   refInfo: { flex: 1, marginLeft: 12 },
-  refName: { fontSize: 13, fontWeight: '600', color: '#FFFFFF' },
-  refStatus: { fontSize: 11, color: '#666666', marginTop: 2 },
+  refName: { fontSize: 13, fontWeight: '600', color: G.textPrimary },
+  refStatus: { fontSize: 11, color: G.textMuted, marginTop: 2 },
   refReward: { fontSize: 15, fontWeight: '800' },
 
   // How it works
   stepsCard: {
-    backgroundColor: '#0A0A0A', borderRadius: 16, padding: 16,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: G.bg, borderRadius: 16, padding: 16,
+    borderWidth: 1, borderColor: G.border3,
   },
   stepRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, position: 'relative' },
   stepIcon: {
     width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
   },
-  stepText: { flex: 1, marginLeft: 14, fontSize: 14, fontWeight: '600', color: '#FFFFFF' },
+  stepText: { flex: 1, marginLeft: 14, fontSize: 14, fontWeight: '600', color: G.textPrimary },
   stepConnector: {
     position: 'absolute', left: 21, top: 44, width: 2, height: 16,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: G.glass3,
   },
 });
 

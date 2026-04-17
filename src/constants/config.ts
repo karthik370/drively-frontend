@@ -41,10 +41,10 @@ export const MSG91_WIDGET_ID = process.env.EXPO_PUBLIC_MSG91_WIDGET_ID || '';
 export const MSG91_TOKEN_AUTH = process.env.EXPO_PUBLIC_MSG91_TOKEN_AUTH || '';
 
 export const APP_CONFIG = {
-  name: 'DriveMate',
+  name: 'Drively',
   version: '1.0.0',
-  supportEmail: 'support@drivemate.com',
-  supportPhone: '+1234567890',
+  supportEmail: 'support@drively.in',
+  supportPhone: '+916304767391',
 };
 
 export const LOCATION_CONFIG = {
@@ -54,6 +54,6 @@ export const LOCATION_CONFIG = {
 };
 
 export const NOTIFICATION_CONFIG = {
-  channelId: 'drivemate-default',
-  channelName: 'DriveMate Notifications',
+  channelId: 'drively-default',
+  channelName: 'Drively Notifications',
 };

@@ -2,8 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { G } from '../../constants/glassStyles';
 
 import { listActivePromotions, Promotion } from '../../services/api';
+import { showAlert } from '../../components/common/CustomAlert';
 
 const PromoCodesScreen = ({ navigation, route }: any) => {
   const onSelect = route?.params?.onSelect as ((code: string) => void) | undefined;
@@ -23,7 +25,7 @@ const PromoCodesScreen = ({ navigation, route }: any) => {
       })
       .catch((e: any) => {
         if (!alive) return;
-        Alert.alert('Promos', e?.message || 'Failed to load promo codes');
+        showAlert('Promos', e?.message || 'Failed to load promo codes');
       })
       .finally(() => {
         if (!alive) return;
@@ -92,39 +94,39 @@ const PromoCodesScreen = ({ navigation, route }: any) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#111111' },
+  container: { flex: 1, backgroundColor: G.bgAlt },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.3)',
+    borderBottomColor: G.border3,
   },
   backBtn: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#141414',
+    backgroundColor: G.glass2,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
   },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: G.textPrimary },
   content: { padding: 16, paddingBottom: 24 },
   center: { alignItems: 'center', paddingVertical: 30 },
-  centerText: { marginTop: 10, color: '#FFFFFF', fontWeight: '600' },
-  emptyTitle: { marginTop: 12, fontSize: 18, fontWeight: '800', color: '#FFFFFF' },
-  emptySubtitle: { marginTop: 6, fontSize: 13, color: '#8A8A8A' },
+  centerText: { marginTop: 10, color: G.textPrimary, fontWeight: '600' },
+  emptyTitle: { marginTop: 12, fontSize: 18, fontWeight: '800', color: G.textPrimary },
+  emptySubtitle: { marginTop: 6, fontSize: 13, color: G.textSecondary },
   card: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderRadius: 16,
     padding: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     marginBottom: 12,
   },
   cardRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -132,15 +134,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#141414',
+    backgroundColor: G.glass2,
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 999,
   },
   code: { color: '#1d4ed8', fontWeight: '900' },
-  desc: { marginTop: 10, color: '#FFFFFF', fontWeight: '600' },
+  desc: { marginTop: 10, color: G.textPrimary, fontWeight: '600' },
   metaRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
-  metaText: { color: '#8A8A8A', fontWeight: '600', fontSize: 12 },
+  metaText: { color: G.textSecondary, fontWeight: '600', fontSize: 12 },
 });
 
 export default PromoCodesScreen;

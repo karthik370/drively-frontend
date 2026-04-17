@@ -3,6 +3,7 @@ import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View }
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { listSupportThreads, type SupportThread } from '../../services/api';
+import { G } from '../../constants/glassStyles';
 
 const AdminNeedHelpInboxScreen = ({ navigation }: any) => {
   const [loading, setLoading] = useState(false);
@@ -55,6 +56,10 @@ const AdminNeedHelpInboxScreen = ({ navigation }: any) => {
       ) : null}
 
       <FlatList
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={8}
+          windowSize={5}
+          initialNumToRender={8}
         data={threads}
         keyExtractor={(item) => `${item.bookingId}:${item.threadUserId}`}
         contentContainerStyle={threads.length ? styles.list : styles.listEmpty}
@@ -138,7 +143,7 @@ const AdminNeedHelpInboxScreen = ({ navigation }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111111',
+    backgroundColor: G.bgAlt,
   },
   headerRow: {
     padding: 16,
@@ -155,13 +160,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   refreshBtn: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 12,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: G.glass3,
   },
   loadingRow: {
     flexDirection: 'row',
@@ -171,7 +176,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   loadingText: {
-    color: '#FFFFFF',
+    color: G.textPrimary,
     fontWeight: '800',
   },
   list: {
@@ -184,28 +189,28 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   emptyCard: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     padding: 16,
   },
   emptyTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   emptySub: {
     marginTop: 6,
     fontSize: 13,
-    color: '#8A8A8A',
+    color: G.textSecondary,
     lineHeight: 18,
   },
   item: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
@@ -215,7 +220,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#141414',
+    backgroundColor: G.glass2,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -236,37 +241,37 @@ const styles = StyleSheet.create({
     minWidth: 0,
     fontSize: 13,
     fontWeight: '900',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   statusPill: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: '#141414',
+    backgroundColor: G.glass2,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
   },
   statusText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   itemSub: {
     marginTop: 4,
     fontSize: 12,
     fontWeight: '700',
-    color: '#8A8A8A',
+    color: G.textSecondary,
   },
   itemMsg: {
     marginTop: 6,
     fontSize: 13,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   itemMeta: {
     marginTop: 6,
     fontSize: 12,
-    color: '#8A8A8A',
+    color: G.textSecondary,
   },
 });
 

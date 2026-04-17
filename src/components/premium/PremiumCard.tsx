@@ -1,10 +1,11 @@
 import React, { useRef } from 'react';
 import { Animated, Pressable, StyleSheet, View, ViewStyle } from 'react-native';
 import { colors, goldGradient, radius, shadows } from '../../theme';
+import { G } from '../../constants/glassStyles';
 
 let LinearGradient: any;
 try { LinearGradient = require('expo-linear-gradient').LinearGradient; }
-catch { LinearGradient = ({ style, children }: any) => <View style={[style, { backgroundColor: '#C9A84C' }]}>{children}</View>; }
+catch { LinearGradient = ({ style, children }: any) => <View style={[style, { backgroundColor: G.accent }]}>{children}</View>; }
 
 type PremiumCardProps = {
     children: React.ReactNode;

@@ -9,6 +9,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { UserType } from '../../types';
+import { G } from '../../constants/glassStyles';
 
 const UserTypeSelectionScreen = ({ route, navigation }: any) => {
   const { phoneNumber, msg91AccessToken, otpSignupToken } = route.params;
@@ -31,7 +32,7 @@ const UserTypeSelectionScreen = ({ route, navigation }: any) => {
 
       <View style={styles.content}>
         <View style={styles.titleContainer}>
-          <Text style={styles.title}>How would you like to use DriveMate?</Text>
+          <Text style={styles.title}>How would you like to use Drively?</Text>
           <Text style={styles.subtitle}>
             Select one option to create your account
           </Text>
@@ -97,7 +98,7 @@ const UserTypeSelectionScreen = ({ route, navigation }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
   },
   content: {
     flex: 1,
@@ -110,12 +111,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: G.textPrimary,
     marginBottom: 12,
   },
   subtitle: {
     fontSize: 16,
-    color: '#8A8A8A',
+    color: G.textSecondary,
     lineHeight: 24,
   },
   optionsContainer: {
@@ -123,21 +124,21 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   optionCard: {
-    backgroundColor: '#111111',
+    backgroundColor: G.bgAlt,
     padding: 24,
     borderRadius: 16,
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     position: 'relative',
   },
   selectedCard: {
-    borderColor: '#C9A84C',
-    backgroundColor: '#141414',
+    borderColor: G.accent,
+    backgroundColor: G.glass2,
   },
   iconContainer: {
     width: 60,
     height: 60,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
@@ -149,12 +150,12 @@ const styles = StyleSheet.create({
   optionTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: G.textPrimary,
     marginBottom: 8,
   },
   optionDescription: {
     fontSize: 14,
-    color: '#8A8A8A',
+    color: G.textSecondary,
     lineHeight: 20,
   },
   checkmark: {
@@ -163,7 +164,7 @@ const styles = StyleSheet.create({
     right: 16,
   },
   continueButton: {
-    backgroundColor: '#C9A84C',
+    backgroundColor: G.accent,
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',

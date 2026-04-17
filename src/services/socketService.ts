@@ -29,7 +29,6 @@ import { updateUser } from '../redux/slices/authSlice';
 import { setDriverVerification } from '../redux/slices/driverSlice';
 import { addNotification } from '../redux/slices/notificationSlice';
 import { getBookingDetails } from './api';
-import { incrementStreakRide } from '../screens/customer/StreakBonusScreen';
 import { BookingStatus, PaymentMethod, VehicleType } from '../types';
 
 class SocketService {
@@ -96,21 +95,8 @@ class SocketService {
           bookingId: String(data?.bookingId ?? data?.id ?? ''),
         })
       );
-
-      try {
-        const userType = String((store.getState().auth.user as any)?.userType ?? '');
-        if (userType === 'DRIVER' || userType === 'BOTH') {
-          void Notifications.scheduleNotificationAsync({
-            content: {
-              title: 'New booking request',
-              body: data?.pickup?.address ? `Pickup: ${String(data.pickup.address)}` : 'Open the app to view details',
-              sound: 'default',
-            },
-            trigger: null,
-          });
-        }
-      } catch {
-      }
+      // NOTE: No local push here — backend already sends Expo push notification.
+      // Scheduling one here too would cause a double notification for drivers.
     });
 
     this.socket.on('booking:error', (data: any) => {
@@ -131,20 +117,8 @@ class SocketService {
       if (!bookingId || !status) return;
       store.dispatch(updateBookingStatus({ id: bookingId, status }));
 
-      try {
-        const userType = String((store.getState().auth.user as any)?.userType ?? '');
-        if ((userType === 'CUSTOMER' || userType === 'BOTH') && (status === 'DRIVER_ARRIVING' || status === 'ARRIVED')) {
-          void Notifications.scheduleNotificationAsync({
-            content: {
-              title: status === 'ARRIVED' ? 'Driver arrived' : 'Driver is on the way',
-              body: status === 'ARRIVED' ? 'Your driver has reached the pickup point.' : 'Your driver is heading to your pickup location.',
-              sound: 'default',
-            },
-            trigger: null,
-          });
-        }
-      } catch {
-      }
+      // NOTE: No local push for ARRIVED/DRIVER_ARRIVING — backend already sends Expo push.
+      // Scheduling one here too would cause a double notification for customers.
 
       if (status === 'SEARCHING' || status === 'REQUESTED') {
         const current = store.getState().booking.currentBooking;
@@ -169,15 +143,27 @@ class SocketService {
         store.dispatch(clearRoute());
       }
 
-      // Increment streak when ride completes (for customers)
-      if (status === 'COMPLETED') {
-        try {
-          const userType = String((store.getState().auth.user as any)?.userType ?? '');
-          if (userType === 'CUSTOMER' || userType === 'BOTH') {
-            void incrementStreakRide();
-          }
-        } catch {}
+      // Re-fetch full booking on STARTED so startedAt is available for round-trip countdown
+      if (status === 'STARTED') {
+        void (async () => {
+          try {
+            const current = store.getState().booking.currentBooking;
+            if (!current || String(current.id) !== bookingId) return;
+            const raw = await getBookingDetails(bookingId);
+            if (raw) {
+              store.dispatch(
+                setCurrentBooking({
+                  ...(current as any),
+                  ...(raw as any),
+                  status: 'STARTED' as any,
+                })
+              );
+            }
+          } catch {}
+        })();
       }
+
+      // Streak tracking is now server-side (DiscountService counts completed bookings from DB)
     });
 
     this.socket.on('booking:fare-updated', (data: any) => {
@@ -462,17 +448,19 @@ class SocketService {
       );
     });
 
-    this.socket.on('eta:update', (data: any) => {
-      const currentBookingId = store.getState().booking.currentBooking?.id;
-      const bookingId = typeof data?.bookingId === 'string' ? data.bookingId : null;
-      if (!bookingId) return;
-      if (!currentBookingId) return;
-      if (bookingId !== currentBookingId) return;
-      const eta = Number(data?.eta);
-      const distanceKm = Number(data?.distanceKm);
-      if (!Number.isFinite(eta)) return;
-      store.dispatch(updateETA({ eta, distance: Number.isFinite(distanceKm) ? distanceKm : undefined }));
-    });
+    // DISABLED: Socket eta:update competes with frontend's route-based ETA (single source of truth).
+    // Backend uses Distance Matrix API which returns different values than Directions API causing flicker.
+    // this.socket.on('eta:update', (data: any) => {
+    //   const currentBookingId = store.getState().booking.currentBooking?.id;
+    //   const bookingId = typeof data?.bookingId === 'string' ? data.bookingId : null;
+    //   if (!bookingId) return;
+    //   if (!currentBookingId) return;
+    //   if (bookingId !== currentBookingId) return;
+    //   const eta = Number(data?.eta);
+    //   const distanceKm = Number(data?.distanceKm);
+    //   if (!Number.isFinite(eta)) return;
+    //   store.dispatch(updateETA({ eta, distance: Number.isFinite(distanceKm) ? distanceKm : undefined }));
+    // });
 
     const handleLocation = (data: any) => {
       const currentBookingId = store.getState().booking.currentBooking?.id;
@@ -526,28 +514,16 @@ class SocketService {
     }
 
     this.socket.on('connect', () => {
-      if (__DEV__) {
-        console.log('Socket connected');
-      }
     });
 
     this.socket.on('disconnect', () => {
-      if (__DEV__) {
-        console.log('Socket disconnected');
-      }
     });
 
     this.socket.on('error', (error: any) => {
-      if (__DEV__) {
-        console.error('Socket error:', error);
-      }
     });
 
     this.socket.on('connect_error', async (err: any) => {
       const message = String(err?.message || '');
-      if (__DEV__) {
-        console.error('Socket connect_error:', message);
-      }
 
       if (this.isReauthInProgress) {
         return;
@@ -569,9 +545,6 @@ class SocketService {
         this.disconnect();
         await this.connect();
       } catch (e) {
-        if (__DEV__) {
-          console.error('Socket re-auth failed:', e);
-        }
         this.disconnect();
       } finally {
         this.isReauthInProgress = false;

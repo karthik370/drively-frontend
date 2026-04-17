@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, Alert } from 'react-native';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { G } from '../../constants/glassStyles';
 
 interface Stop {
     id: string;
@@ -79,11 +80,11 @@ const MultiStopSelector = ({ stops, onAddStop, onRemoveStop, maxStops = 4 }: Pro
 
 const styles = StyleSheet.create({
     container: {
-        backgroundColor: '#0A0A0A',
+        backgroundColor: G.bg,
         borderRadius: 14,
         padding: 14,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.3)',
+        borderColor: G.border3,
     },
     headerRow: {
         flexDirection: 'row',
@@ -91,7 +92,7 @@ const styles = StyleSheet.create({
         gap: 6,
         marginBottom: 12,
     },
-    title: { fontSize: 14, fontWeight: '800', color: '#FFFFFF', flex: 1 },
+    title: { fontSize: 14, fontWeight: '800', color: G.textPrimary, flex: 1 },
     countBadge: {
         fontSize: 11, fontWeight: '700', color: '#6366f1',
         backgroundColor: 'rgba(139,92,246,0.1)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8,
@@ -110,13 +111,13 @@ const styles = StyleSheet.create({
     connectorLine: {
         width: 2,
         height: 10,
-        backgroundColor: '#1E1E1E',
+        backgroundColor: G.glass3,
     },
     stopDot: {
         width: 24,
         height: 24,
         borderRadius: 12,
-        backgroundColor: '#C9A84C',
+        backgroundColor: G.accent,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -126,7 +127,7 @@ const styles = StyleSheet.create({
     stopDotText: {
         fontSize: 11,
         fontWeight: '800',
-        color: '#ffffff',
+        color: G.textPrimary,
     },
     stopInfo: {
         flex: 1,
@@ -144,11 +145,11 @@ const styles = StyleSheet.create({
         marginTop: 10,
         paddingVertical: 10,
         borderWidth: 1.5,
-        borderColor: '#C9A84C',
+        borderColor: G.accent,
         borderRadius: 10,
         borderStyle: 'dashed',
     },
-    addBtnText: { fontSize: 13, fontWeight: '700', color: '#C9A84C' },
+    addBtnText: { fontSize: 13, fontWeight: '700', color: G.accent },
 
     limitReached: {
         flexDirection: 'row',

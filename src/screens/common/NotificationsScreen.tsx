@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useAppDispatch, useAppSelector } from '../../redux/store';
 import { clearNotifications, removeNotification } from '../../redux/slices/notificationSlice';
+import { G } from '../../constants/glassStyles';
 
 const NotificationsScreen = ({ navigation }: any) => {
   const dispatch = useAppDispatch();
@@ -41,6 +42,10 @@ const NotificationsScreen = ({ navigation }: any) => {
         </View>
       ) : (
         <FlatList
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={8}
+          windowSize={5}
+          initialNumToRender={8}
           data={items}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
@@ -82,7 +87,7 @@ const NotificationsScreen = ({ navigation }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111111',
+    backgroundColor: G.bgAlt,
   },
   headerRow: {
     padding: 16,
@@ -99,42 +104,42 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   clearBtn: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 12,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: G.glass3,
   },
   clearBtnDisabled: {
-    backgroundColor: '#1E1E1E',
+    backgroundColor: G.glass3,
   },
   clearText: {
-    color: '#ffffff',
+    color: G.textPrimary,
     fontWeight: '800',
     fontSize: 12,
   },
   clearTextDisabled: {
-    color: '#8A8A8A',
+    color: G.textSecondary,
   },
   emptyCard: {
     marginHorizontal: 16,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     padding: 16,
   },
   cardTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   cardSub: {
     marginTop: 6,
     fontSize: 13,
-    color: '#8A8A8A',
+    color: G.textSecondary,
     lineHeight: 18,
   },
   list: {
@@ -143,10 +148,10 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   item: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
@@ -156,7 +161,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#141414',
+    backgroundColor: G.glass2,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -167,12 +172,12 @@ const styles = StyleSheet.create({
   itemMessage: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   itemMeta: {
     marginTop: 6,
     fontSize: 12,
-    color: '#8A8A8A',
+    color: G.textSecondary,
   },
 });
 

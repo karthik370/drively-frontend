@@ -50,19 +50,25 @@ export const useDriverTracking = (bookingId: string): UseDriverTrackingResult =>
           if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
 
           const now = Date.now();
-          const next = { latitude, longitude };
+          const next: any = { latitude, longitude };
           const prev = lastLocationRef.current;
 
+          // Pass heading through for directional arrow on marker
+          const heading = Number(data?.heading);
+          if (Number.isFinite(heading)) next.heading = heading;
+
           const movedMeters = prev ? distanceApproxMeters(prev, next) : Number.POSITIVE_INFINITY;
-          if (Number.isFinite(movedMeters) && movedMeters < 3) {
+          // Reduced from 3m to 1m for smoother movement — AnimatedRegion interpolates visually
+          if (Number.isFinite(movedMeters) && movedMeters < 1) {
             return;
           }
 
-          if (now - lastLocationDispatchTsRef.current < 450 && movedMeters < 20) {
+          // Reduced from 450ms to 200ms — smoother like Uber/Ola
+          if (now - lastLocationDispatchTsRef.current < 200 && movedMeters < 15) {
             return;
           }
 
-          lastLocationRef.current = next;
+          lastLocationRef.current = { latitude, longitude };
           lastLocationDispatchTsRef.current = now;
           dispatch(setDriverLocation(next));
         };
@@ -71,8 +77,11 @@ export const useDriverTracking = (bookingId: string): UseDriverTrackingResult =>
           if (data?.bookingId && String(data.bookingId) !== bookingId) return;
           const etaVal = Number(data?.eta);
           const distKm = Number(data?.distanceKm);
-          if (!Number.isFinite(etaVal)) return;
-          dispatch(updateETA({ eta: etaVal, distance: Number.isFinite(distKm) ? distKm : undefined }));
+          // DISABLED: Socket eta:update competes with frontend's own route-based ETA
+          // The backend uses Distance Matrix API which gives different values than
+          // the Directions API used by frontend, causing flip-flopping
+          // if (!Number.isFinite(etaVal)) return;
+          // dispatch(updateETA({ eta: etaVal, distance: Number.isFinite(distKm) ? distKm : undefined }));
         };
 
         statusHandlerRef.current = (data: any) => {
@@ -83,7 +92,7 @@ export const useDriverTracking = (bookingId: string): UseDriverTrackingResult =>
         };
 
         socketService.on('driver:location-update', locationHandlerRef.current);
-        socketService.on('eta:update', etaHandlerRef.current);
+        // socketService.on('eta:update', etaHandlerRef.current); // Disabled — single source is frontend route calc
         socketService.on('booking:status', statusHandlerRef.current);
 
         setIsTracking(true);

@@ -29,13 +29,15 @@ const RoutePolyline = ({
 }: RoutePolylineProps) => {
   const progress = useRef(new Animated.Value(0)).current;
   const [visibleCount, setVisibleCount] = useState<number>(coordinates.length);
+  const hasAnimatedRef = useRef<boolean>(false);
 
   const safeCoords = useMemo(() => {
     return Array.isArray(coordinates) ? coordinates.filter((c) => Number.isFinite(c.latitude) && Number.isFinite(c.longitude)) : [];
   }, [coordinates]);
 
   useEffect(() => {
-    if (!animated) {
+    // Already animated once — show full polyline immediately on recalculations
+    if (hasAnimatedRef.current || !animated) {
       setVisibleCount(safeCoords.length);
       return;
     }
@@ -45,6 +47,9 @@ const RoutePolyline = ({
       return;
     }
 
+    // First-time draw-in animation only
+    hasAnimatedRef.current = true;
+
     const id = progress.addListener(({ value }) => {
       const target = clamp(Math.floor(value * safeCoords.length), 2, safeCoords.length);
       setVisibleCount(target);
@@ -53,7 +58,7 @@ const RoutePolyline = ({
     progress.setValue(0);
     Animated.timing(progress, {
       toValue: 1,
-      duration: 900,
+      duration: 700,
       useNativeDriver: false,
     }).start();
 
@@ -95,4 +100,4 @@ const RoutePolyline = ({
   );
 };
 
-export default RoutePolyline;
+export default React.memo(RoutePolyline);

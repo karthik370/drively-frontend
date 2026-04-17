@@ -2,10 +2,12 @@ import React, { useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { G } from '../../constants/glassStyles';
 
 import { createTip, createTipOrder, payTipWithWallet, verifyTipPayment } from '../../services/api';
 import { openCashfreeCheckout } from '../../services/cashfreeService';
 import { useAppSelector } from '../../redux/store';
+import { showAlert } from '../../components/common/CustomAlert';
 
 const TipDriverScreen = ({ navigation, route }: any) => {
   const user = useAppSelector((s) => s.auth.user);
@@ -21,11 +23,11 @@ const TipDriverScreen = ({ navigation, route }: any) => {
 
   const tipWithWallet = async () => {
     if (!bookingId) {
-      Alert.alert('Tip', 'Missing bookingId');
+      showAlert('Tip', 'Missing bookingId');
       return;
     }
     if (!Number.isFinite(amount) || amount <= 0) {
-      Alert.alert('Tip', 'Enter a valid amount');
+      showAlert('Tip', 'Enter a valid amount');
       return;
     }
     if (isPaying) return;
@@ -34,10 +36,10 @@ const TipDriverScreen = ({ navigation, route }: any) => {
     try {
       const tip = await createTip({ bookingId, amount, paymentMethod: 'WALLET' });
       await payTipWithWallet(String(tip.tipId));
-      Alert.alert('Tip', 'Tip paid successfully');
+      showAlert('Tip', 'Tip paid successfully');
       navigation.goBack();
     } catch (e: any) {
-      Alert.alert('Tip', e?.message || 'Failed to pay tip');
+      showAlert('Tip', e?.message || 'Failed to pay tip');
     } finally {
       setIsPaying(false);
     }
@@ -45,11 +47,11 @@ const TipDriverScreen = ({ navigation, route }: any) => {
 
   const tipWithCashfree = async () => {
     if (!bookingId) {
-      Alert.alert('Tip', 'Missing bookingId');
+      showAlert('Tip', 'Missing bookingId');
       return;
     }
     if (!Number.isFinite(amount) || amount <= 0) {
-      Alert.alert('Tip', 'Enter a valid amount');
+      showAlert('Tip', 'Enter a valid amount');
       return;
     }
     if (isPaying) return;
@@ -65,10 +67,10 @@ const TipDriverScreen = ({ navigation, route }: any) => {
       });
 
       await verifyTipPayment({ tipId: String(tip.tipId), cf_order_id: success.orderId });
-      Alert.alert('Tip', 'Tip paid successfully');
+      showAlert('Tip', 'Tip paid successfully');
       navigation.goBack();
     } catch (e: any) {
-      Alert.alert('Tip', e?.message || 'Payment failed');
+      showAlert('Tip', e?.message || 'Payment failed');
     } finally {
       setIsPaying(false);
     }
@@ -128,45 +130,45 @@ const TipDriverScreen = ({ navigation, route }: any) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#111111' },
+  container: { flex: 1, backgroundColor: G.bgAlt },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.3)',
+    borderBottomColor: G.border3,
   },
   backBtn: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#141414',
+    backgroundColor: G.glass2,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
   },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: G.textPrimary },
   content: { padding: 16 },
   card: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
   },
-  label: { color: '#8A8A8A', fontWeight: '700' },
+  label: { color: G.textSecondary, fontWeight: '700' },
   input: {
     marginTop: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 12,
-    color: '#FFFFFF',
+    color: G.textPrimary,
     fontWeight: '800',
     fontSize: 18,
   },
@@ -176,21 +178,21 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-    backgroundColor: '#111111',
+    borderColor: G.border3,
+    backgroundColor: G.bgAlt,
   },
-  quickText: { color: '#FFFFFF', fontWeight: '800' },
+  quickText: { color: G.textPrimary, fontWeight: '800' },
   cta: {
     marginTop: 14,
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
   },
-  ctaWallet: { backgroundColor: '#1E1E1E' },
-  ctaCashfree: { backgroundColor: '#C9A84C' },
+  ctaWallet: { backgroundColor: G.glass3 },
+  ctaCashfree: { backgroundColor: G.accent },
   ctaDisabled: { opacity: 0.6 },
-  ctaText: { color: '#ffffff', fontWeight: '900' },
-  hint: { marginTop: 12, color: '#8A8A8A', fontWeight: '600', fontSize: 12 },
+  ctaText: { color: G.textPrimary, fontWeight: '900' },
+  hint: { marginTop: 12, color: G.textSecondary, fontWeight: '600', fontSize: 12 },
 });
 
 export default TipDriverScreen;

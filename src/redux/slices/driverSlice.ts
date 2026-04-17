@@ -11,6 +11,7 @@ export type DriverVerificationState = {
   updatedAt: string | null;
   reason: string | null;
   isLoading: boolean;
+  hydrated: boolean;
 };
 
 interface DriverState {
@@ -27,6 +28,7 @@ const initialState: DriverState = {
     updatedAt: null,
     reason: null,
     isLoading: false,
+    hydrated: false,
   },
 };
 
@@ -79,6 +81,7 @@ const driverSlice = createSlice({
       })
       .addCase(loadDriverVerificationStatus.fulfilled, (state, action) => {
         state.verification.isLoading = false;
+        state.verification.hydrated = true;
         state.verification.documentsVerified = Boolean((action.payload as any)?.documentsVerified);
         state.verification.backgroundCheckStatus = String((action.payload as any)?.backgroundCheckStatus || 'PENDING') as any;
         state.verification.submitted = Boolean((action.payload as any)?.submitted);
@@ -86,6 +89,7 @@ const driverSlice = createSlice({
       })
       .addCase(loadDriverVerificationStatus.rejected, (state) => {
         state.verification.isLoading = false;
+        state.verification.hydrated = true;
       });
   },
 });

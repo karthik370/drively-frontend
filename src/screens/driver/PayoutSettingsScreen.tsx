@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { showAlert } from '../../components/common/CustomAlert';
+import { G } from '../../constants/glassStyles';
 
 interface PayoutSettings {
     frequency: 'DAILY' | 'WEEKLY' | 'MONTHLY';
@@ -20,16 +22,16 @@ const PayoutSettingsScreen = ({ navigation }: any) => {
 
     const saveSettings = async () => {
         if (payoutMethod === 'BANK' && (!bankNumber || !ifsc)) {
-            return Alert.alert('Missing details', 'Please fill in bank account number and IFSC code');
+            return showAlert('Missing details', 'Please fill in bank account number and IFSC code');
         }
         if (payoutMethod === 'UPI' && !upiId) {
-            return Alert.alert('Missing UPI ID', 'Please enter your UPI ID');
+            return showAlert('Missing UPI ID', 'Please enter your UPI ID');
         }
         setSaving(true);
         // In production, this would call backend API
         setTimeout(() => {
             setSaving(false);
-            Alert.alert('Settings saved', `Payouts will be processed ${frequency.toLowerCase()}.`, [
+            showAlert('Settings saved', `Payouts will be processed ${frequency.toLowerCase()}.`, [
                 { text: 'OK', onPress: () => navigation.goBack() },
             ]);
         }, 800);
@@ -127,55 +129,55 @@ const PayoutSettingsScreen = ({ navigation }: any) => {
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#111111' },
+    container: { flex: 1, backgroundColor: G.bgAlt },
     header: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-        paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#0A0A0A',
-        borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.3)',
+        paddingHorizontal: 16, paddingVertical: 12, backgroundColor: G.bg,
+        borderBottomWidth: 1, borderBottomColor: G.border3,
     },
-    backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#141414', alignItems: 'center', justifyContent: 'center' },
-    headerTitle: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
+    backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: G.glass2, alignItems: 'center', justifyContent: 'center' },
+    headerTitle: { fontSize: 16, fontWeight: '800', color: G.textPrimary },
     content: { padding: 16, paddingBottom: 32 },
 
-    sectionTitle: { fontSize: 15, fontWeight: '900', color: '#FFFFFF', marginBottom: 10, marginTop: 8 },
+    sectionTitle: { fontSize: 15, fontWeight: '900', color: G.textPrimary, marginBottom: 10, marginTop: 8 },
 
     freqRow: { gap: 8, marginBottom: 16 },
     freqCard: {
         flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10,
-        backgroundColor: '#0A0A0A', borderRadius: 12, padding: 14,
-        borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)',
+        backgroundColor: G.bg, borderRadius: 12, padding: 14,
+        borderWidth: 1.5, borderColor: G.border3,
     },
-    freqCardActive: { borderColor: '#C9A84C', backgroundColor: '#141414' },
+    freqCardActive: { borderColor: G.accent, backgroundColor: G.glass2 },
     freqLabel: { fontSize: 14, fontWeight: '800', color: '#CCCCCC', minWidth: 60 },
-    freqLabelActive: { color: '#C9A84C' },
-    freqDesc: { flex: 1, fontSize: 12, color: '#8A8A8A' },
+    freqLabelActive: { color: G.accent },
+    freqDesc: { flex: 1, fontSize: 12, color: G.textSecondary },
     checkMark: {
-        width: 20, height: 20, borderRadius: 10, backgroundColor: '#C9A84C',
+        width: 20, height: 20, borderRadius: 10, backgroundColor: G.accent,
         alignItems: 'center', justifyContent: 'center',
     },
 
     methodRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
     methodChip: {
         flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-        backgroundColor: '#0A0A0A', borderRadius: 12, padding: 14,
-        borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)',
+        backgroundColor: G.bg, borderRadius: 12, padding: 14,
+        borderWidth: 1.5, borderColor: G.border3,
     },
-    methodChipActive: { borderColor: '#C9A84C', backgroundColor: '#141414' },
-    methodText: { fontSize: 13, fontWeight: '700', color: '#8A8A8A' },
-    methodTextActive: { color: '#C9A84C' },
+    methodChipActive: { borderColor: G.accent, backgroundColor: G.glass2 },
+    methodText: { fontSize: 13, fontWeight: '700', color: G.textSecondary },
+    methodTextActive: { color: G.accent },
 
-    formCard: { backgroundColor: '#0A0A0A', borderRadius: 14, padding: 16, gap: 8, marginBottom: 16 },
-    inputLabel: { fontSize: 12, fontWeight: '700', color: '#8A8A8A' },
+    formCard: { backgroundColor: G.bg, borderRadius: 14, padding: 16, gap: 8, marginBottom: 16 },
+    inputLabel: { fontSize: 12, fontWeight: '700', color: G.textSecondary },
     input: {
-        borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)', borderRadius: 10, padding: 12,
-        fontSize: 14, fontWeight: '600', color: '#FFFFFF', marginBottom: 4,
+        borderWidth: 1.5, borderColor: G.border3, borderRadius: 10, padding: 12,
+        fontSize: 14, fontWeight: '600', color: G.textPrimary, marginBottom: 4,
     },
 
     saveBtn: {
-        backgroundColor: '#C9A84C', borderRadius: 14, padding: 16, alignItems: 'center',
-        elevation: 4, shadowcolor: '#C9A84C', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 6,
+        backgroundColor: G.accent, borderRadius: 14, padding: 16, alignItems: 'center',
+        elevation: 4, shadowColor: G.accent, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 6,
     },
-    saveBtnText: { color: '#ffffff', fontSize: 15, fontWeight: '900' },
+    saveBtnText: { color: G.textPrimary, fontSize: 15, fontWeight: '900' },
 
     infoCard: {
         flexDirection: 'row', alignItems: 'flex-start', gap: 8,

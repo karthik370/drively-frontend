@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, Share, Linking, Animated } from 'react-native';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { G } from '../../constants/glassStyles';
 
 interface Props {
     driverName: string;
@@ -11,6 +12,7 @@ interface Props {
     etaMinutes?: number | null;
     status: string;
     phoneNumber?: string | null;
+    maskedPhone?: string | null;
     shareUrl?: string | null;
     onCall?: () => void;
     onChat?: () => void;
@@ -26,6 +28,7 @@ const DriverArrivingCard = ({
     etaMinutes,
     status,
     phoneNumber,
+    maskedPhone,
     onCall,
     onChat,
     onShare,
@@ -78,7 +81,7 @@ const DriverArrivingCard = ({
         if (shareUrl) {
             try {
                 await Share.share({
-                    message: `Track my DriveMate ride: ${shareUrl}`,
+                    message: `Track my Drively ride: ${shareUrl}`,
                     url: shareUrl,
                 });
             } catch { }
@@ -128,6 +131,9 @@ const DriverArrivingCard = ({
                             <Text style={styles.plateText}>{licensePlate}</Text>
                         </View>
                     )}
+                    {maskedPhone ? (
+                        <Text style={styles.maskedPhoneText}>{maskedPhone}</Text>
+                    ) : null}
                 </View>
             </View>
 
@@ -135,7 +141,7 @@ const DriverArrivingCard = ({
             {status !== 'STARTED' && status !== 'IN_PROGRESS' && status !== 'COMPLETED' && (
             <View style={styles.actions}>
                 <TouchableOpacity style={styles.actionBtn} onPress={handleCall}>
-                    <View style={[styles.actionIcon, { backgroundColor: '#141414' }]}>
+                    <View style={[styles.actionIcon, { backgroundColor: G.glass2 }]}>
                         <Icon name="phone" size={18} color="#16a34a" />
                     </View>
                     <Text style={styles.actionLabel}>Call</Text>
@@ -143,7 +149,7 @@ const DriverArrivingCard = ({
 
                 {onChat && (
                     <TouchableOpacity style={styles.actionBtn} onPress={onChat}>
-                        <View style={[styles.actionIcon, { backgroundColor: '#141414' }]}>
+                        <View style={[styles.actionIcon, { backgroundColor: G.glass2 }]}>
                             <Icon name="message-text" size={18} color="#C9A84C" />
                         </View>
                         <Text style={styles.actionLabel}>Chat</Text>
@@ -164,7 +170,7 @@ const DriverArrivingCard = ({
 
 const styles = StyleSheet.create({
     container: {
-        backgroundColor: '#0A0A0A',
+        backgroundColor: G.bg,
         borderRadius: 20,
         overflow: 'hidden',
         elevation: 4,
@@ -173,7 +179,7 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.12,
         shadowRadius: 12,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.3)',
+        borderColor: G.border3,
     },
     statusBar: {
         flexDirection: 'row',
@@ -188,7 +194,7 @@ const styles = StyleSheet.create({
         gap: 6,
     },
     statusText: {
-        color: '#ffffff',
+        color: G.textPrimary,
         fontWeight: '700',
         fontSize: 14,
     },
@@ -202,7 +208,7 @@ const styles = StyleSheet.create({
         gap: 4,
     },
     etaNumber: {
-        color: '#ffffff',
+        color: G.textPrimary,
         fontWeight: '900',
         fontSize: 18,
     },
@@ -221,12 +227,12 @@ const styles = StyleSheet.create({
         width: 56,
         height: 56,
         borderRadius: 28,
-        backgroundColor: '#141414',
+        backgroundColor: G.glass2,
         alignItems: 'center',
         justifyContent: 'center',
         overflow: 'hidden',
         borderWidth: 2,
-        borderColor: 'rgba(255,255,255,0.3)',
+        borderColor: G.border3,
     },
     driverPhoto: {
         width: 56,
@@ -240,7 +246,7 @@ const styles = StyleSheet.create({
     driverName: {
         fontSize: 17,
         fontWeight: '800',
-        color: '#FFFFFF',
+        color: G.textPrimary,
     },
     ratingRow: {
         flexDirection: 'row',
@@ -261,16 +267,23 @@ const styles = StyleSheet.create({
     plateBadge: {
         marginTop: 4,
         alignSelf: 'flex-start',
-        backgroundColor: '#1E1E1E',
+        backgroundColor: G.glass3,
         paddingHorizontal: 10,
         paddingVertical: 4,
         borderRadius: 6,
     },
     plateText: {
-        color: '#ffffff',
+        color: G.textPrimary,
         fontSize: 12,
         fontWeight: '800',
         letterSpacing: 1,
+    },
+    maskedPhoneText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#8A8A8A',
+        marginTop: 3,
+        letterSpacing: 0.5,
     },
     actions: {
         flexDirection: 'row',
@@ -298,4 +311,4 @@ const styles = StyleSheet.create({
     },
 });
 
-export default DriverArrivingCard;
+export default React.memo(DriverArrivingCard);

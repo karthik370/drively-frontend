@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { G } from '../../constants/glassStyles';
 
 import { getBookingHistory } from '../../services/api';
 import { BookingStatus } from '../../types';
@@ -93,6 +94,10 @@ const ScheduledBookingsScreen = () => {
       </View>
 
       <FlatList
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={8}
+          windowSize={5}
+          initialNumToRender={8}
         data={data}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
@@ -133,7 +138,7 @@ const ScheduledBookingsScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111111',
+    backgroundColor: G.bgAlt,
   },
   header: {
     paddingHorizontal: 16,
@@ -146,18 +151,18 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   list: {
     padding: 16,
     gap: 12,
   },
   card: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
   },
   cardRow: {
     flexDirection: 'row',
@@ -168,7 +173,7 @@ const styles = StyleSheet.create({
   dateText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   locationRow: {
     flexDirection: 'row',
@@ -184,7 +189,7 @@ const styles = StyleSheet.create({
   connector: {
     width: 2,
     height: 14,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: G.glass3,
     marginLeft: 4,
     marginVertical: 6,
   },
@@ -198,12 +203,12 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 18,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   emptySub: {
     marginTop: 8,
     fontSize: 14,
-    color: '#8A8A8A',
+    color: G.textSecondary,
     textAlign: 'center',
   },
 });

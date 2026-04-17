@@ -12,6 +12,9 @@ import { store } from './src/redux/store';
 import AppNavigator from './src/navigation/AppNavigator';
 import { theme } from './src/constants/theme';
 import NotificationToast from './src/components/NotificationToast';
+import { CustomAlertProvider, AlertBridge } from './src/components/common/CustomAlert';
+import AnimatedSplash from './src/components/common/AnimatedSplash';
+import ErrorBoundary from './src/components/common/ErrorBoundary';
 import { MSG91_TOKEN_AUTH, MSG91_WIDGET_ID } from './src/constants/config';
 import { OTPWidget } from '@msg91comm/sendotp-react-native';
 import * as Notifications from 'expo-notifications';
@@ -19,17 +22,19 @@ import * as Notifications from 'expo-notifications';
 SplashScreen.preventAutoHideAsync();
 
 export default function App() {
-  const [appIsReady, setAppIsReady] = useState(false);
+  const [fontsLoaded, setFontsLoaded] = useState(false);
+  const [splashDone, setSplashDone] = useState(false);
 
   useEffect(() => {
     async function prepare() {
       try {
         await Font.loadAsync(MaterialCommunityIcons.font);
-        await new Promise((resolve) => setTimeout(resolve, 2000));
       } catch (e) {
         console.warn(e);
       } finally {
-        setAppIsReady(true);
+        setFontsLoaded(true);
+        // Hide the native splash immediately — our animated one takes over
+        SplashScreen.hideAsync();
       }
     }
 
@@ -75,13 +80,8 @@ export default function App() {
     })();
   }, []);
 
-  useEffect(() => {
-    if (appIsReady) {
-      SplashScreen.hideAsync();
-    }
-  }, [appIsReady]);
-
-  if (!appIsReady) {
+  // Show nothing until fonts are loaded
+  if (!fontsLoaded) {
     return null;
   }
 
@@ -89,9 +89,18 @@ export default function App() {
     <ReduxProvider store={store}>
       <PaperProvider theme={theme}>
         <SafeAreaProvider>
-          <StatusBar style="auto" />
-          <NotificationToast />
-          <AppNavigator />
+          <ErrorBoundary>
+            <CustomAlertProvider>
+              <AlertBridge />
+              <StatusBar style="light" />
+              <NotificationToast />
+              <AppNavigator />
+              {/* Animated splash overlays everything until its animation finishes */}
+              {!splashDone && (
+                <AnimatedSplash onFinish={() => setSplashDone(true)} />
+              )}
+            </CustomAlertProvider>
+          </ErrorBoundary>
         </SafeAreaProvider>
       </PaperProvider>
     </ReduxProvider>

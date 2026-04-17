@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { G } from '../../constants/glassStyles';
 
 const SwitchModeScreen = () => {
   return (
@@ -12,7 +13,7 @@ const SwitchModeScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111111',
+    backgroundColor: G.bgAlt,
   },
 });
 

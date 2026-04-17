@@ -1,29 +1,40 @@
 {
   "expo": {
-    "name": "DriveMate",
+    "name": "Drively",
     "slug": "drivemate",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
+    "icon": "./assets/drively_logo.png",
+    "splash": {
+      "image": "./assets/drively_logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0A0A0A"
+    },
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.drivemate.app",
+      "supportsTablet": false,
+      "bundleIdentifier": "com.drively.app",
+      "buildNumber": "1",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "DriveMate needs your location to show nearby drivers and track your ride.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "DriveMate needs your location to provide real-time tracking during rides.",
-        "NSCameraUsageDescription": "DriveMate needs camera access to capture documents and profile photos.",
-        "NSPhotoLibraryUsageDescription": "DriveMate needs photo library access to upload documents and profile photos."
+        "NSLocationWhenInUseUsageDescription": "Drively needs your location to show nearby drivers and track your ride.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Drively needs your location to provide real-time tracking during rides.",
+        "NSCameraUsageDescription": "Drively needs camera access to capture documents and profile photos.",
+        "NSPhotoLibraryUsageDescription": "Drively needs photo library access to upload documents and profile photos."
       },
       "config": {
         "googleMapsApiKey": "AIzaSyA_Dun255HHND3b_lX5N05zvGT77NhDeCI"
       }
     },
     "android": {
-      "package": "com.drivemate.app",
-      "usesCleartextTraffic": true,
+      "package": "com.drively.app",
+      "versionCode": 5,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/drively_logo.png",
+        "backgroundColor": "#0A0A0A"
+      },
       "permissions": [
         "INTERNET",
         "ACCESS_NETWORK_STATE",
@@ -32,7 +43,13 @@
         "ACCESS_BACKGROUND_LOCATION",
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
+        "WRITE_EXTERNAL_STORAGE",
+        "VIBRATE"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECEIVE_SMS",
+        "android.permission.READ_SMS",
+        "android.permission.SEND_SMS"
       ],
       "config": {
         "googleMaps": {
@@ -42,7 +59,29 @@
     },
     "web": {},
     "plugins": [
-      "expo-dev-client",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Drively needs your location for real-time ride tracking.",
+          "locationAlwaysPermission": "Drively needs background location access to track active rides.",
+          "locationWhenInUsePermission": "Drively needs your location to show nearby drivers.",
+          "isAndroidBackgroundLocationEnabled": true
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/drively_logo.png",
+          "color": "#C9A84C"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Drively needs photo access to upload documents and profile photos.",
+          "cameraPermission": "Drively needs camera access to take document photos."
+        }
+      ],
       "@react-native-community/datetimepicker"
     ],
     "extra": {
@@ -50,6 +89,13 @@
         "projectId": "f83fb1ee-b304-4120-bb2d-6d950b6f569a"
       }
     },
-    "owner": "govardhan30"
+    "scheme": "drively",
+    "owner": "govardhan30",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/f83fb1ee-b304-4120-bb2d-6d950b6f569a"
+    }
   }
 }

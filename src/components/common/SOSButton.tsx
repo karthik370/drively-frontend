@@ -2,6 +2,8 @@ import React, { useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing, Alert, Linking, Platform } from 'react-native';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { showAlert } from './CustomAlert';
+import { G } from '../../constants/glassStyles';
 
 const EMERGENCY_CONTACTS_KEY = '@dmate_emergency_contacts';
 
@@ -25,7 +27,7 @@ const SOSButton = ({ bookingId, compact = false }: Props) => {
     }, [pulseAnim]);
 
     const handleSOS = async () => {
-        Alert.alert(
+        showAlert(
             '🚨 Emergency SOS',
             'This will:\n• Call emergency services (112)\n• Alert your emergency contacts\n\nAre you sure?',
             [
@@ -49,7 +51,7 @@ const SOSButton = ({ bookingId, compact = false }: Props) => {
             const contacts = JSON.parse(raw);
             if (!contacts.length) return;
 
-            const message = `EMERGENCY SOS from DriveMate ride${bookingId ? ` #${bookingId}` : ''}. Please check on me immediately!`;
+            const message = `EMERGENCY SOS from Drively ride${bookingId ? ` #${bookingId}` : ''}. Please check on me immediately!`;
             const phones = contacts.map((c: any) => c.phone).join(',');
             const smsUrl = Platform.OS === 'android'
                 ? `sms:${phones}?body=${encodeURIComponent(message)}`
@@ -116,7 +118,7 @@ const styles = StyleSheet.create({
     text: {
         fontSize: 8,
         fontWeight: '900',
-        color: '#ffffff',
+        color: G.textPrimary,
         letterSpacing: 1,
     },
     compactBtn: {

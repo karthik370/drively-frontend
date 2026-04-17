@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { Switch } from 'react-native-paper';
+import { G } from '../../constants/glassStyles';
 
 const SettingsScreen = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -62,7 +63,7 @@ const SettingsScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111111',
+    backgroundColor: G.bgAlt,
   },
   content: {
     padding: 16,
@@ -76,19 +77,19 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   card: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
   },
   row: {
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.3)',
+    borderBottomColor: G.border3,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -101,7 +102,7 @@ const styles = StyleSheet.create({
   rowTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   note: {
     marginTop: 4,
@@ -112,7 +113,7 @@ const styles = StyleSheet.create({
   noteText: {
     flex: 1,
     fontSize: 13,
-    color: '#8A8A8A',
+    color: G.textSecondary,
     lineHeight: 18,
   },
 });

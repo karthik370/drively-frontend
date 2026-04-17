@@ -229,7 +229,7 @@ class LocationService {
         pausesUpdatesAutomatically: false,
         showsBackgroundLocationIndicator: true,
         foregroundService: {
-          notificationTitle: 'MateDrive - You\'re Online',
+          notificationTitle: 'Drively - You\'re Online',
           notificationBody: 'Location tracking is active while you\'re online',
           notificationColor: '#34C759',
         },

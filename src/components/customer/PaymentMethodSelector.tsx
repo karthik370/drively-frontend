@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { G } from '../../constants/glassStyles';
 
 export type PaymentOption = 'CASH' | 'UPI' | 'WALLET' | 'CARD';
 
@@ -13,7 +14,7 @@ interface Props {
 const METHODS: { key: PaymentOption; icon: string; label: string; desc: string; color: string }[] = [
     { key: 'CASH', icon: 'cash', label: 'Cash', desc: 'Pay the driver directly', color: '#10b981' },
     { key: 'UPI', icon: 'cellphone-nfc', label: 'UPI', desc: 'GPay, PhonePe, Paytm', color: '#7c3aed' },
-    { key: 'WALLET', icon: 'wallet', label: 'Wallet', desc: 'Pay from DriveMate wallet', color: '#C9A84C' },
+    { key: 'WALLET', icon: 'wallet', label: 'Wallet', desc: 'Pay from Drively wallet', color: G.accent },
     { key: 'CARD', icon: 'credit-card', label: 'Card', desc: 'Debit / Credit card', color: '#f59e0b' },
 ];
 
@@ -87,10 +88,10 @@ const styles = StyleSheet.create({
     selector: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#0A0A0A',
+        backgroundColor: G.bg,
         borderRadius: 14,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.3)',
+        borderColor: G.border3,
         padding: 14,
         marginTop: 10,
         marginBottom: 6,
@@ -109,7 +110,7 @@ const styles = StyleSheet.create({
     selectorLabel: {
         fontSize: 15,
         fontWeight: '700',
-        color: '#FFFFFF',
+        color: G.textPrimary,
     },
     selectorDesc: {
         fontSize: 12,
@@ -122,7 +123,7 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
     },
     modalSheet: {
-        backgroundColor: '#0A0A0A',
+        backgroundColor: G.bg,
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         paddingHorizontal: 20,
@@ -132,7 +133,7 @@ const styles = StyleSheet.create({
     handleBar: {
         width: 40,
         height: 4,
-        backgroundColor: '#1E1E1E',
+        backgroundColor: G.glass3,
         borderRadius: 2,
         alignSelf: 'center',
         marginBottom: 16,
@@ -140,7 +141,7 @@ const styles = StyleSheet.create({
     modalTitle: {
         fontSize: 20,
         fontWeight: '800',
-        color: '#FFFFFF',
+        color: G.textPrimary,
     },
     modalSubtitle: {
         fontSize: 13,
@@ -151,16 +152,16 @@ const styles = StyleSheet.create({
     methodRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#111111',
+        backgroundColor: G.bgAlt,
         borderRadius: 14,
         borderWidth: 1.5,
-        borderColor: 'rgba(255,255,255,0.3)',
+        borderColor: G.border3,
         padding: 14,
         marginBottom: 10,
     },
     methodRowActive: {
-        borderColor: '#C9A84C',
-        backgroundColor: '#141414',
+        borderColor: G.accent,
+        backgroundColor: G.glass2,
     },
     methodIcon: {
         width: 44,
@@ -176,7 +177,7 @@ const styles = StyleSheet.create({
     methodLabel: {
         fontSize: 15,
         fontWeight: '700',
-        color: '#FFFFFF',
+        color: G.textPrimary,
     },
     methodDesc: {
         fontSize: 12,
@@ -188,18 +189,18 @@ const styles = StyleSheet.create({
         height: 22,
         borderRadius: 11,
         borderWidth: 2,
-        borderColor: 'rgba(255,255,255,0.3)',
+        borderColor: G.border3,
         alignItems: 'center',
         justifyContent: 'center',
     },
     radioActive: {
-        borderColor: '#C9A84C',
+        borderColor: G.accent,
     },
     radioDot: {
         width: 12,
         height: 12,
         borderRadius: 6,
-        backgroundColor: '#C9A84C',
+        backgroundColor: G.accent,
     },
 });
 

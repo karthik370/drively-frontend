@@ -17,6 +17,8 @@ import { verifyMsg91AccessToken } from '../../redux/slices/authSlice';
 import { OTPWidget } from '@msg91comm/sendotp-react-native';
 import { API_URL } from '../../constants/config';
 import { FadeIn, SlideUp, ScaleIn } from '../../components/premium/AnimatedComponents';
+import { showAlert } from '../../components/common/CustomAlert';
+import { G } from '../../constants/glassStyles';
 
 const OtpVerificationScreen = ({ route, navigation }: any) => {
   const { phoneNumber, reqId, msg91Identifier } = route.params;
@@ -190,31 +192,11 @@ const OtpVerificationScreen = ({ route, navigation }: any) => {
     return findAccessTokenRecursive(payload);
   };
 
-  const sanitizeForLog = (value: any, depth = 0): any => {
-    if (depth > 6) return '[max-depth]';
-    if (value === null || value === undefined) return value;
-    if (typeof value === 'string') {
-      const s = value;
-      if (s.length <= 16) return s;
-      return `${s.slice(0, 8)}...(${s.length})`;
-    }
-    if (typeof value !== 'object') return value;
-    if (Array.isArray(value)) return value.slice(0, 20).map((v) => sanitizeForLog(v, depth + 1));
-    const out: any = {};
-    for (const [k, v] of Object.entries(value)) {
-      out[k] = sanitizeForLog(v, depth + 1);
-    }
-    return out;
-  };
-
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [timer, setTimer] = useState(30);
+  const [focusedIndex, setFocusedIndex] = useState<number | null>(0);
   const inputRefs = useRef<Array<TextInput | null>>([]);
-
-  useEffect(() => {
-    // OTP Auto-fill using 'react-native-otp-verify' disabled to prevent 
-    // "not linked" warnings in Expo dev clients.
-  }, []);
+  const verifyingRef = useRef(false);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -223,8 +205,32 @@ const OtpVerificationScreen = ({ route, navigation }: any) => {
     return () => clearInterval(interval);
   }, []);
 
+  // Auto-submit: fires verify the moment all 6 digits are filled
+  const tryAutoSubmit = (digits: string[]) => {
+    if (verifyingRef.current || localLoading || isLoading) return;
+    if (digits.length === 6 && digits.every((d) => d !== '')) {
+      verifyingRef.current = true;
+      handleVerifyOtp(digits.join('')).finally(() => {
+        verifyingRef.current = false;
+      });
+    }
+  };
+
+  // Hidden input auto-fill handler (for SMS auto-fill on Android/iOS)
+  const handleAutoFillChange = (value: string) => {
+    const digitsOnly = String(value || '').replace(/\D/g, '');
+    if (digitsOnly.length >= 6) {
+      const pasted = digitsOnly.slice(0, 6).split('');
+      setOtp(pasted);
+      inputRefs.current[5]?.focus();
+      tryAutoSubmit(pasted);
+    }
+  };
+
   const handleOtpChange = (value: string, index: number) => {
-    const normalized = String(value || '').replace(/\D/g, '').slice(-1);
+    const digitsOnly = String(value || '').replace(/\D/g, '');
+
+    const normalized = digitsOnly.slice(-1);
     const newOtp = [...otp];
     newOtp[index] = normalized;
     setOtp(newOtp);
@@ -233,7 +239,10 @@ const OtpVerificationScreen = ({ route, navigation }: any) => {
       inputRefs.current[index + 1]?.focus();
     }
 
-    // Verify is triggered explicitly by the user via the button below
+    // Auto-submit when last digit entered
+    if (normalized && index === 5) {
+      tryAutoSubmit(newOtp);
+    }
   };
 
   const handleKeyPress = (e: any, index: number) => {
@@ -259,7 +268,7 @@ const OtpVerificationScreen = ({ route, navigation }: any) => {
       try {
         verifyResp = await attemptVerifyOtp();
       } catch (firstErr: any) {
-        await new Promise((r) => setTimeout(r, 600));
+        await new Promise((r) => setTimeout(r, 300));
         verifyResp = await attemptVerifyOtp();
       }
 
@@ -281,41 +290,6 @@ const OtpVerificationScreen = ({ route, navigation }: any) => {
       }
 
       const msg91AccessToken = extractMsg91AccessToken(verifyResp);
-      console.log('MSG91 verifyOTP response:', {
-        type: typeof verifyResp,
-        keys: verifyResp && typeof verifyResp === 'object' ? Object.keys(verifyResp) : null,
-        dataKeys:
-          (verifyResp as any)?.data && typeof (verifyResp as any)?.data === 'object'
-            ? Object.keys((verifyResp as any).data)
-            : null,
-        messageType:
-          verifyResp && typeof verifyResp === 'object' ? typeof (verifyResp as any)?.message : null,
-        messageLen:
-          verifyResp && typeof verifyResp === 'object' && typeof (verifyResp as any)?.message === 'string'
-            ? String((verifyResp as any).message).length
-            : null,
-        messagePrefix:
-          verifyResp && typeof verifyResp === 'object' && typeof (verifyResp as any)?.message === 'string'
-            ? String((verifyResp as any).message).slice(0, 10)
-            : null,
-        dataMessageType:
-          (verifyResp as any)?.data && typeof (verifyResp as any)?.data === 'object'
-            ? typeof (verifyResp as any)?.data?.message
-            : null,
-        dataMessageLen:
-          (verifyResp as any)?.data && typeof (verifyResp as any)?.data === 'object' && typeof (verifyResp as any)?.data?.message === 'string'
-            ? String((verifyResp as any).data.message).length
-            : null,
-        dataMessagePrefix:
-          (verifyResp as any)?.data && typeof (verifyResp as any)?.data === 'object' && typeof (verifyResp as any)?.data?.message === 'string'
-            ? String((verifyResp as any).data.message).slice(0, 10)
-            : null,
-        stringLen: typeof verifyResp === 'string' ? verifyResp.length : null,
-        stringPrefix: typeof verifyResp === 'string' ? verifyResp.slice(0, 8) : null,
-        tokenLen: msg91AccessToken ? msg91AccessToken.length : 0,
-        tokenPrefix: msg91AccessToken ? msg91AccessToken.slice(0, 8) : '',
-        sanitized: sanitizeForLog(verifyResp),
-      });
 
       if (!msg91AccessToken) {
         const debug =
@@ -332,8 +306,6 @@ const OtpVerificationScreen = ({ route, navigation }: any) => {
       const result = await dispatch(
         verifyMsg91AccessToken({ accessToken: String(msg91AccessToken), phoneNumber })
       ).unwrap();
-
-      console.log('Backend verifyMsg91AccessToken result:', sanitizeForLog(result));
 
       if (result?.accessToken && result?.refreshToken) {
         return;
@@ -352,13 +324,7 @@ const OtpVerificationScreen = ({ route, navigation }: any) => {
 
       throw new Error(`Login failed. ${JSON.stringify({ userExists: (result as any)?.userExists, verified: (result as any)?.verified })}`);
     } catch (err: any) {
-      console.log('OTP verify flow error:', {
-        apiUrl: API_URL,
-        errType: typeof err,
-        message: typeof err === 'string' ? err : err?.message,
-        name: typeof err === 'object' ? err?.name : undefined,
-      });
-      Alert.alert('Error', getErrorMessage(err) || 'Invalid OTP');
+      showAlert('Error', getErrorMessage(err) || 'Invalid OTP');
       setOtp(['', '', '', '', '', '']);
       inputRefs.current[0]?.focus();
     } finally {
@@ -376,7 +342,6 @@ const OtpVerificationScreen = ({ route, navigation }: any) => {
         }
 
         const retryResp: any = await OTPWidget.retryOTP({ reqId: reqIdToUse } as any);
-        console.log('MSG91 retryOTP response:', sanitizeForLog(retryResp));
 
         if (retryResp && typeof retryResp === 'object') {
           const respType = String((retryResp as any)?.type || '').toLowerCase();
@@ -403,7 +368,6 @@ const OtpVerificationScreen = ({ route, navigation }: any) => {
           }
 
           const sendResp: any = await OTPWidget.sendOTP({ identifier } as any);
-          console.log('MSG91 sendOTP (fallback) response:', sanitizeForLog(sendResp));
           const newReqId = extractReqId(sendResp);
           if (!newReqId) {
             throw new Error(getErrorMessage(err) || 'Failed to resend OTP');
@@ -411,7 +375,7 @@ const OtpVerificationScreen = ({ route, navigation }: any) => {
           setCurrentReqId(newReqId);
           setTimer(30);
         } catch (fallbackErr: any) {
-          Alert.alert('Error', getErrorMessage(fallbackErr) || 'Failed to resend OTP');
+          showAlert('Error', getErrorMessage(fallbackErr) || 'Failed to resend OTP');
         }
       } finally {
         setLocalLoading(false);
@@ -442,19 +406,33 @@ const OtpVerificationScreen = ({ route, navigation }: any) => {
 
         <ScaleIn delay={250}>
           <View style={styles.otpContainer}>
+            {/* Hidden input for SMS auto-fill — captures full OTP from keyboard suggestion */}
+            <TextInput
+              style={{ position: 'absolute', opacity: 0, height: 0, width: 0 }}
+              keyboardType="number-pad"
+              textContentType={Platform.OS === 'ios' ? 'oneTimeCode' : undefined}
+              autoComplete={Platform.OS === 'android' ? 'sms-otp' : undefined}
+              maxLength={6}
+              onChangeText={handleAutoFillChange}
+              autoFocus={false}
+            />
             {otp.map((digit, index) => (
               <TextInput
                 key={index}
                 ref={(ref) => {
                   inputRefs.current[index] = ref;
                 }}
-                style={styles.otpInput}
+                style={[
+                  styles.otpInput,
+                  focusedIndex === index && styles.otpInputFocused,
+                  digit !== '' && styles.otpInputFilled,
+                ]}
                 value={digit}
                 onChangeText={(value) => handleOtpChange(value, index)}
                 onKeyPress={(e) => handleKeyPress(e, index)}
+                onFocus={() => setFocusedIndex(index)}
+                onBlur={() => setFocusedIndex(null)}
                 keyboardType="number-pad"
-                textContentType={Platform.OS === 'ios' ? 'oneTimeCode' : undefined}
-                autoComplete={Platform.OS === 'android' ? 'sms-otp' : undefined}
                 maxLength={1}
                 selectTextOnFocus
               />
@@ -503,7 +481,7 @@ const OtpVerificationScreen = ({ route, navigation }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
   },
   header: {
     paddingHorizontal: 16,
@@ -525,16 +503,16 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: G.textPrimary,
     marginBottom: 12,
   },
   subtitle: {
     fontSize: 16,
-    color: '#8A8A8A',
+    color: G.textSecondary,
     lineHeight: 24,
   },
   phoneText: {
-    color: '#FFFFFF',
+    color: G.textPrimary,
     fontWeight: '600',
   },
   otpContainer: {
@@ -546,13 +524,21 @@ const styles = StyleSheet.create({
     width: 50,
     height: 60,
     borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     borderRadius: 12,
     textAlign: 'center',
     fontSize: 24,
     fontWeight: '600',
-    color: '#FFFFFF',
-    backgroundColor: '#141414',
+    color: G.textPrimary,
+    backgroundColor: G.glass2,
+  },
+  otpInputFocused: {
+    borderColor: G.accent,
+    borderWidth: 2,
+    backgroundColor: 'rgba(201, 168, 76, 0.08)',
+  },
+  otpInputFilled: {
+    borderColor: 'rgba(201, 168, 76, 0.5)',
   },
   loadingContainer: {
     alignItems: 'center',
@@ -561,21 +547,21 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 8,
     fontSize: 14,
-    color: '#8A8A8A',
+    color: G.textSecondary,
   },
   resendContainer: {
     alignItems: 'center',
     marginTop: 24,
   },
   verifyButton: {
-    backgroundColor: '#C9A84C',
+    backgroundColor: G.accent,
     paddingVertical: 16,
     paddingHorizontal: 24,
     borderRadius: 14,
     alignItems: 'center',
     width: '100%',
     marginBottom: 16,
-    shadowColor: '#C9A84C',
+    shadowColor: G.accent,
     shadowOpacity: 0.35,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
@@ -592,11 +578,11 @@ const styles = StyleSheet.create({
   },
   timerText: {
     fontSize: 14,
-    color: '#8A8A8A',
+    color: G.textSecondary,
   },
   resendText: {
     fontSize: 14,
-    color: '#C9A84C',
+    color: G.accent,
     fontWeight: '600',
   },
 });

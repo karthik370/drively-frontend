@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-native';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { colors } from '../../theme';
+import { G } from '../../constants/glassStyles';
 
 type GoldHeaderProps = {
     title: string;

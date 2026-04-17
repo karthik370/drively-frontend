@@ -10,6 +10,8 @@ import {
     getDriverWalletTransactions,
     requestDriverPayout,
 } from '../../services/api';
+import { showAlert } from '../../components/common/CustomAlert';
+import { G } from '../../constants/glassStyles';
 
 const DriverWalletScreen = ({ navigation }: any) => {
     const [summary, setSummary] = useState<any>(null);
@@ -45,18 +47,22 @@ const DriverWalletScreen = ({ navigation }: any) => {
     const handlePayout = async () => {
         const amt = parseFloat(payoutAmount);
         if (!amt || amt < 100) {
-            Alert.alert('Invalid amount', 'Minimum withdrawal is ₹100');
+            showAlert('Invalid amount', 'Minimum withdrawal is ₹100');
             return;
         }
         if (amt > (summary?.withdrawableBalance ?? 0)) {
-            Alert.alert('Insufficient balance', `Available: ₹${(summary?.withdrawableBalance ?? 0).toFixed(0)}`);
+            showAlert('Insufficient balance', `Available: ₹${(summary?.withdrawableBalance ?? 0).toFixed(0)}`);
             return;
         }
         let details: any = {};
         if (payoutMethod === 'UPI') {
             const effectiveUpi = upiId.trim() || summary?.payoutMethods?.upiId;
             if (!effectiveUpi) {
-                Alert.alert('UPI ID Required', 'Please enter your UPI ID');
+                showAlert('UPI ID Required', 'Please enter your UPI ID');
+                return;
+            }
+            if (!effectiveUpi.includes('@')) {
+                showAlert('Invalid UPI ID', 'UPI ID must be in format like yourname@upi or 9999999999@ybl. A plain phone number is not a valid UPI ID.');
                 return;
             }
             // Always send details so backend knows what UPI to use
@@ -66,7 +72,7 @@ const DriverWalletScreen = ({ navigation }: any) => {
             const hasBank = summary?.payoutMethods?.bank;
             if (!hasBank || isEditingPayoutMethod) {
                 if (!bankAcc.trim() || !bankIfsc.trim() || !bankName.trim()) {
-                    Alert.alert('Bank Details Required', 'Please fill all bank details');
+                    showAlert('Bank Details Required', 'Please fill all bank details');
                     return;
                 }
                 details.bankAccountNumber = bankAcc.trim();
@@ -78,7 +84,7 @@ const DriverWalletScreen = ({ navigation }: any) => {
         setIsSubmitting(true);
         try {
             await requestDriverPayout(amt, payoutMethod, Object.keys(details).length > 0 ? details : undefined);
-            Alert.alert(
+            showAlert(
                 'Withdrawal Initiated',
                 `₹${amt.toFixed(0)} withdrawal via ${payoutMethod} has been submitted. Your balance will update once the transfer completes.`
             );
@@ -91,7 +97,7 @@ const DriverWalletScreen = ({ navigation }: any) => {
             setBankName('');
             fetchData();
         } catch (e: any) {
-            Alert.alert('Payout Failed', e?.message || 'Could not process payout');
+            showAlert('Payout Failed', e?.message || 'Could not process payout');
         } finally {
             setIsSubmitting(false);
         }
@@ -115,8 +121,8 @@ const DriverWalletScreen = ({ navigation }: any) => {
         switch (type) {
             case 'RIDE_EARNING': return { name: 'car', bg: '#dcfce7', color: '#16a34a' };
             case 'TIP': return { name: 'heart', bg: '#fce7f3', color: '#db2777' };
-            case 'PAYOUT': return { name: 'bank-transfer', bg: '#dbeafe', color: '#C9A84C' };
-            default: return { name: 'cash', bg: '#f3f4f6', color: '#8A8A8A' };
+            case 'PAYOUT': return { name: 'bank-transfer', bg: '#dbeafe', color: G.accent };
+            default: return { name: 'cash', bg: '#f3f4f6', color: G.textSecondary };
         }
     };
 
@@ -165,7 +171,7 @@ const DriverWalletScreen = ({ navigation }: any) => {
                     style={[styles.withdrawBtn, withdrawable < 100 && styles.withdrawBtnDisabled]}
                     onPress={() => {
                         if (withdrawable < 100) {
-                            Alert.alert('Minimum ₹100', 'You need at least ₹100 to withdraw');
+                            showAlert('Minimum ₹100', 'You need at least ₹100 to withdraw');
                             return;
                         }
                         setPayoutAmount(String(Math.floor(withdrawable)));
@@ -184,7 +190,7 @@ const DriverWalletScreen = ({ navigation }: any) => {
                     
                     {summary?.payoutMethods?.upiId && (
                         <View style={styles.methodRow}>
-                            <View style={[styles.methodIcon, { backgroundColor: '#141414' }]}>
+                            <View style={[styles.methodIcon, { backgroundColor: G.glass2 }]}>
                                 <Icon name="cellphone" size={18} color="#C9A84C" />
                             </View>
                             <View style={styles.methodInfo}>
@@ -208,7 +214,7 @@ const DriverWalletScreen = ({ navigation }: any) => {
 
                     {summary?.payoutMethods?.bank && (
                         <View style={[styles.methodRow, { marginTop: summary?.payoutMethods?.upiId ? 8 : 0 }]}>
-                            <View style={[styles.methodIcon, { backgroundColor: '#141414' }]}>
+                            <View style={[styles.methodIcon, { backgroundColor: G.glass2 }]}>
                                 <Icon name="bank" size={18} color="#C9A84C" />
                             </View>
                             <View style={styles.methodInfo}>
@@ -236,7 +242,7 @@ const DriverWalletScreen = ({ navigation }: any) => {
 
                     {!summary?.payoutMethods?.bank && !summary?.payoutMethods?.upiId && (
                         <View style={styles.methodRow}>
-                            <View style={[styles.methodIcon, { backgroundColor: '#141414' }]}>
+                            <View style={[styles.methodIcon, { backgroundColor: G.glass2 }]}>
                                 <Icon name="alert-circle-outline" size={18} color="#fbbf24" />
                             </View>
                             <Text style={styles.methodTitle}>No payout method set</Text>
@@ -396,17 +402,17 @@ const DriverWalletScreen = ({ navigation }: any) => {
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#111111' },
+    container: { flex: 1, backgroundColor: G.bgAlt },
     header: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
         paddingHorizontal: 16, paddingVertical: 12,
-        backgroundColor: '#0A0A0A', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.3)',
+        backgroundColor: G.bg, borderBottomWidth: 1, borderBottomColor: G.border3,
     },
     backBtn: {
-        width: 40, height: 40, borderRadius: 12, backgroundColor: '#141414',
+        width: 40, height: 40, borderRadius: 12, backgroundColor: G.glass2,
         alignItems: 'center', justifyContent: 'center',
     },
-    headerTitle: { fontSize: 17, fontWeight: '800', color: '#FFFFFF' },
+    headerTitle: { fontSize: 17, fontWeight: '800', color: G.textPrimary },
     content: { padding: 16, paddingBottom: 40 },
 
     // Balance Card
@@ -414,13 +420,13 @@ const styles = StyleSheet.create({
         backgroundColor: '#065f46', borderRadius: 20, padding: 24, marginBottom: 16,
     },
     balanceLabel: { fontSize: 13, color: 'rgba(255,255,255,0.6)', fontWeight: '600' },
-    balanceValue: { fontSize: 36, fontWeight: '900', color: '#ffffff', marginTop: 4 },
+    balanceValue: { fontSize: 36, fontWeight: '900', color: G.textPrimary, marginTop: 4 },
     balanceDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.3)', marginVertical: 16 },
     balanceStatsRow: { flexDirection: 'row', justifyContent: 'space-between' },
     balanceStat: { flex: 1, alignItems: 'center' },
     balanceStatSep: { width: 1, backgroundColor: 'rgba(255,255,255,0.3)' },
     statLabel: { fontSize: 11, color: 'rgba(255,255,255,0.5)', fontWeight: '600' },
-    statValue: { fontSize: 15, fontWeight: '800', color: '#ffffff', marginTop: 4 },
+    statValue: { fontSize: 15, fontWeight: '800', color: G.textPrimary, marginTop: 4 },
 
     // Withdraw button
     withdrawBtn: {
@@ -428,50 +434,50 @@ const styles = StyleSheet.create({
         backgroundColor: '#10b981', borderRadius: 14, paddingVertical: 14, gap: 8,
         marginBottom: 16,
     },
-    withdrawBtnDisabled: { backgroundColor: '#666666' },
-    withdrawBtnText: { fontSize: 16, fontWeight: '800', color: '#ffffff' },
+    withdrawBtnDisabled: { backgroundColor: G.textMuted },
+    withdrawBtnText: { fontSize: 16, fontWeight: '800', color: G.textPrimary },
 
     // Payout Methods
     methodsCard: {
-        backgroundColor: '#0A0A0A', borderRadius: 16, padding: 16,
-        borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', marginBottom: 20,
+        backgroundColor: G.bg, borderRadius: 16, padding: 16,
+        borderWidth: 1, borderColor: G.border3, marginBottom: 20,
     },
-    sectionTitle: { fontSize: 16, fontWeight: '800', color: '#FFFFFF', marginBottom: 12 },
+    sectionTitle: { fontSize: 16, fontWeight: '800', color: G.textPrimary, marginBottom: 12 },
     methodRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
     methodIcon: {
         width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
     },
     methodInfo: { flex: 1, marginLeft: 12 },
-    methodTitle: { fontSize: 14, fontWeight: '700', color: '#FFFFFF', marginLeft: 12 },
-    methodSub: { fontSize: 12, color: '#8A8A8A', marginTop: 1 },
+    methodTitle: { fontSize: 14, fontWeight: '700', color: G.textPrimary, marginLeft: 12 },
+    methodSub: { fontSize: 12, color: G.textSecondary, marginTop: 1 },
     editBtn: {
         paddingHorizontal: 12, paddingVertical: 6,
         backgroundColor: 'rgba(201,168,76,0.15)', borderRadius: 8,
-        borderWidth: 1, borderColor: 'rgba(201,168,76,0.4)',
+        borderWidth: 1, borderColor: G.borderAccent,
     },
-    editBtnText: { fontSize: 12, fontWeight: '700', color: '#C9A84C' },
+    editBtnText: { fontSize: 12, fontWeight: '700', color: G.accent },
 
     // Empty & Transactions
     emptyCard: {
-        backgroundColor: '#0A0A0A', borderRadius: 16, padding: 32, alignItems: 'center',
-        borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
+        backgroundColor: G.bg, borderRadius: 16, padding: 32, alignItems: 'center',
+        borderWidth: 1, borderColor: G.border3,
     },
     emptyText: { fontSize: 15, fontWeight: '700', color: '#CCCCCC', marginTop: 12 },
-    emptyHint: { fontSize: 13, color: '#666666', marginTop: 4 },
+    emptyHint: { fontSize: 13, color: G.textMuted, marginTop: 4 },
     txRow: {
-        flexDirection: 'row', alignItems: 'center', backgroundColor: '#0A0A0A',
-        borderRadius: 12, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
+        flexDirection: 'row', alignItems: 'center', backgroundColor: G.bg,
+        borderRadius: 12, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: G.border3,
     },
     txIcon: {
         width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
     },
     txInfo: { flex: 1, marginLeft: 12 },
-    txDesc: { fontSize: 13, fontWeight: '600', color: '#FFFFFF' },
-    txSub: { fontSize: 11, color: '#666666', marginTop: 1 },
-    txDate: { fontSize: 11, color: '#666666', marginTop: 2 },
+    txDesc: { fontSize: 13, fontWeight: '600', color: G.textPrimary },
+    txSub: { fontSize: 11, color: G.textMuted, marginTop: 1 },
+    txDate: { fontSize: 11, color: G.textMuted, marginTop: 2 },
     txAmount: { fontSize: 15, fontWeight: '800' },
     txPlus: { color: '#10b981' },
-    txMinus: { color: '#C9A84C' },
+    txMinus: { color: G.accent },
 
     // Payout Modal
     modalOverlay: {
@@ -479,37 +485,37 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
     },
     modalCard: {
-        backgroundColor: '#0A0A0A', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+        backgroundColor: G.bg, borderTopLeftRadius: 24, borderTopRightRadius: 24,
         padding: 24, paddingBottom: 40,
     },
-    modalTitle: { fontSize: 20, fontWeight: '900', color: '#FFFFFF', marginBottom: 4 },
-    modalHint: { fontSize: 13, color: '#8A8A8A', marginBottom: 16 },
+    modalTitle: { fontSize: 20, fontWeight: '900', color: G.textPrimary, marginBottom: 4 },
+    modalHint: { fontSize: 13, color: G.textSecondary, marginBottom: 16 },
     modalInput: {
-        borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)', borderRadius: 12,
+        borderWidth: 1.5, borderColor: G.border3, borderRadius: 12,
         paddingHorizontal: 16, paddingVertical: 14, fontSize: 18, fontWeight: '700',
-        color: '#FFFFFF', marginBottom: 16,
+        color: G.textPrimary, marginBottom: 16,
     },
     methodLabel: { fontSize: 13, fontWeight: '700', color: '#CCCCCC', marginBottom: 8 },
     methodToggleRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
     methodToggle: {
         flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
         gap: 8, paddingVertical: 12, borderRadius: 12,
-        borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)', backgroundColor: '#111111',
+        borderWidth: 1.5, borderColor: G.border3, backgroundColor: G.bgAlt,
     },
     methodToggleActive: { backgroundColor: '#10b981', borderColor: '#10b981' },
     methodToggleText: { fontSize: 14, fontWeight: '700', color: '#CCCCCC' },
-    methodToggleTextActive: { color: '#ffffff' },
+    methodToggleTextActive: { color: G.textPrimary },
     modalActions: { flexDirection: 'row', gap: 10 },
     modalCancelBtn: {
         flex: 1, paddingVertical: 14, borderRadius: 12,
-        backgroundColor: '#141414', alignItems: 'center',
+        backgroundColor: G.glass2, alignItems: 'center',
     },
     modalCancelText: { fontSize: 15, fontWeight: '800', color: '#CCCCCC' },
     modalConfirmBtn: {
         flex: 1, paddingVertical: 14, borderRadius: 12,
         backgroundColor: '#10b981', alignItems: 'center',
     },
-    modalConfirmText: { fontSize: 15, fontWeight: '800', color: '#ffffff' },
+    modalConfirmText: { fontSize: 15, fontWeight: '800', color: G.textPrimary },
 });
 
 export default DriverWalletScreen;

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Easing, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { G } from '../../constants/glassStyles';
 
 interface Props {
     pickupAddress?: string;
@@ -134,7 +135,7 @@ const SearchingForDriverCard = ({ pickupAddress, dropAddress, fare, vehicleType,
 
 const styles = StyleSheet.create({
     container: {
-        backgroundColor: '#0A0A0A',
+        backgroundColor: G.bg,
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         paddingHorizontal: 20,
@@ -162,17 +163,17 @@ const styles = StyleSheet.create({
         height: 60,
         borderRadius: 30,
         borderWidth: 2,
-        borderColor: '#C9A84C',
+        borderColor: G.accent,
     },
     radarCenter: {
         width: 52,
         height: 52,
         borderRadius: 26,
-        backgroundColor: '#C9A84C',
+        backgroundColor: G.accent,
         alignItems: 'center',
         justifyContent: 'center',
         elevation: 4,
-        shadowcolor: '#C9A84C',
+        shadowColor: G.accent,
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.3,
         shadowRadius: 8,
@@ -181,7 +182,7 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 18,
         fontWeight: '900',
-        color: '#FFFFFF',
+        color: G.textPrimary,
         marginBottom: 4,
     },
     subtitle: {
@@ -194,7 +195,7 @@ const styles = StyleSheet.create({
     // Route card
     routeCard: {
         width: '100%',
-        backgroundColor: '#111111',
+        backgroundColor: G.bgAlt,
         borderRadius: 14,
         padding: 14,
         marginBottom: 14,
@@ -219,7 +220,7 @@ const styles = StyleSheet.create({
     routeLine: {
         width: 2,
         height: 16,
-        backgroundColor: '#1E1E1E',
+        backgroundColor: G.glass3,
         marginLeft: 4,
         marginVertical: 2,
     },
@@ -242,7 +243,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
-        backgroundColor: '#141414',
+        backgroundColor: G.glass2,
         borderRadius: 20,
         paddingHorizontal: 10,
         paddingVertical: 5,
@@ -284,4 +285,4 @@ const styles = StyleSheet.create({
     },
 });
 
-export default SearchingForDriverCard;
+export default React.memo(SearchingForDriverCard);

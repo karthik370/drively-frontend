@@ -1,11 +1,27 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 
 import { getBookingDetails } from '../../services/api';
 import { useAppSelector } from '../../redux/store';
+import { showAlert } from '../../components/common/CustomAlert';
+import { G, glass, gText } from '../../constants/glassStyles';
 
+/* ───────────── helpers ─────────────────────────────── */
+const fmt = (v: number) => `₹${Number(v || 0).toFixed(0)}`;
+const fmtKm = (m: number) => `${(m / 1000).toFixed(1)} km`;
+const fmtMin = (s: number) => `${Math.round(s / 60)} min`;
+
+const statusColor = (s: string) => {
+  const l = s?.toLowerCase() || '';
+  if (l === 'completed') return G.success;
+  if (l === 'cancelled' || l === 'failed') return G.error;
+  if (l.includes('progress') || l.includes('started')) return '#3b82f6';
+  return G.accent;
+};
+
+/* ───────────── component ──────────────────────────── */
 const BookingDetailsScreen = ({ navigation, route }: any) => {
   const user = useAppSelector((s) => s.auth.user);
   const effectiveBookingId = String(route?.params?.bookingId || '');
@@ -20,471 +36,563 @@ const BookingDetailsScreen = ({ navigation, route }: any) => {
       const b = await getBookingDetails(effectiveBookingId);
       setBooking(b);
     } catch (e: any) {
-      Alert.alert('Booking', e?.message || 'Failed to load booking');
+      showAlert('Error', e?.message || 'Failed to load booking');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    void load();
-  }, [effectiveBookingId]);
+  useEffect(() => { void load(); }, [effectiveBookingId]);
 
+  /* derived data */
   const isViewingAsDriver = useMemo(() => {
     const userId = String((user as any)?.id || '');
-    const driverId = String((booking as any)?.driver?.id || (booking as any)?.driverId || '');
+    const driverId = String(booking?.driver?.id || booking?.driverId || '');
     if (userId && driverId) return userId === driverId;
     return String(user?.userType) === 'DRIVER';
   }, [booking, user]);
 
-  const driverName = useMemo(() => {
-    if (!booking?.driver) return '—';
-    return `${String(booking.driver.firstName || '')} ${String(booking.driver.lastName || '')}`.trim() || '—';
-  }, [booking?.driver]);
+  const personInfo = useMemo(() => {
+    const d = booking?.driver;
+    const c = booking?.customer;
+    const target = isViewingAsDriver ? c : d;
+    const first = String(target?.firstName || '').trim();
+    const last = String(target?.lastName || '').trim();
+    const name = `${first} ${last}`.trim() || '—';
+    const initials = `${first[0] || (isViewingAsDriver ? 'C' : 'D')}${last[0] || ''}`.toUpperCase();
+    const phone = String(target?.phoneNumber || '').trim();
+    const rating = !isViewingAsDriver && d?.rating ? Number(d.rating).toFixed(1) : null;
+    return { name, initials, phone, rating, label: isViewingAsDriver ? 'Customer' : 'Driver' };
+  }, [booking, isViewingAsDriver]);
 
-  const driverInitials = useMemo(() => {
-    const a = String(booking?.driver?.firstName || '').trim()[0] || 'D';
-    const b = String(booking?.driver?.lastName || '').trim()[0] || '';
-    return `${a}${b}`.toUpperCase();
-  }, [booking?.driver]);
+  /* pricing breakdown — uses the actual pricingBreakdown fields from backend */
+  const breakdown = useMemo(() => {
+    const pb = booking?.pricingBreakdown;
+    const rows: { label: string; value: string; accent?: boolean; muted?: boolean; negative?: boolean }[] = [];
 
-  const customerName = useMemo(() => {
-    if (!booking?.customer) return '—';
-    return `${String(booking.customer.firstName || '')} ${String(booking.customer.lastName || '')}`.trim() || '—';
-  }, [booking?.customer]);
+    if (!pb && !booking?.totalAmount) return rows;
 
-  const customerInitials = useMemo(() => {
-    const a = String(booking?.customer?.firstName || '').trim()[0] || 'C';
-    const b = String(booking?.customer?.lastName || '').trim()[0] || '';
-    return `${a}${b}`.toUpperCase();
-  }, [booking?.customer]);
+    // Package / Base fare
+    const packagePrice = Number(pb?.packagePrice || pb?.baseAmount || pb?.baseFare || 0);
+    const pkgHours = Number(pb?.packageHours || 0);
+    if (packagePrice > 0) {
+      rows.push({ label: pkgHours > 0 ? `Base package (${pkgHours} hr)` : 'Base fare', value: fmt(packagePrice) });
+    }
+
+    // One-way charge
+    const oneWayCharge = Number(pb?.oneWayCharge || 0);
+    if (oneWayCharge > 0) rows.push({ label: 'One-way charge', value: fmt(oneWayCharge) });
+
+    // Extra km
+    const extraKmCharge = Number(pb?.extraKmCharge || pb?.excessDistanceCharge || 0);
+    const extraKm = Number(pb?.extraKm || 0);
+    if (extraKmCharge > 0) rows.push({
+      label: extraKm > 0 ? `Extra km (${extraKm.toFixed(1)} km)` : 'Extra km charges',
+      value: fmt(extraKmCharge), accent: true,
+    });
+
+    // Extra time / minutes
+    const extraMinuteCharge = Number(pb?.extraMinuteCharge || pb?.extraTimeCharge || pb?.excessTimeCharge || 0);
+    const extraMinutes = Number(pb?.extraMinutes || 0);
+    if (extraMinuteCharge > 0) rows.push({
+      label: extraMinutes > 0 ? `Extra time (${extraMinutes} min)` : 'Extra time charges',
+      value: fmt(extraMinuteCharge), accent: true,
+    });
+
+    // Extra hours (outstation)
+    const extraHourCharge = Number(pb?.extraHourCharge || 0);
+    const extraHours = Number(pb?.extraHours || 0);
+    if (extraHourCharge > 0) rows.push({
+      label: extraHours > 0 ? `Extra hours (${extraHours} hr)` : 'Extra hour charges',
+      value: fmt(extraHourCharge), accent: true,
+    });
+
+    // Return km (round trip)
+    const extraReturnKmCharge = Number(pb?.extraReturnKmCharge || pb?.returnFare || pb?.returnTripCharge || 0);
+    if (extraReturnKmCharge > 0) rows.push({ label: 'Return distance charge', value: fmt(extraReturnKmCharge) });
+
+    // Night charge
+    const nightCharge = Number(pb?.nightCharge || pb?.nightSurcharge || 0);
+    if (nightCharge > 0) rows.push({ label: 'Night charge (10PM–6AM)', value: fmt(nightCharge), accent: true });
+
+    // Experienced driver fee
+    const experiencedFee = Number(booking?.experiencedDriverFee || pb?.experiencedDriverFee || 0);
+    if (experiencedFee > 0) rows.push({ label: 'Experienced driver fee', value: fmt(experiencedFee) });
+
+    // Surge
+    const surge = Number(pb?.surgeCharge || pb?.surgeAmount || 0);
+    if (surge > 0) rows.push({ label: 'Surge pricing', value: fmt(surge), accent: true });
+
+    // Taxes & fees
+    const taxesFee = Number(pb?.taxesFee || pb?.convenienceFee || pb?.taxes || 0);
+    if (taxesFee > 0) rows.push({ label: 'Taxes & convenience fee', value: fmt(taxesFee) });
+
+    // Fallback: if nothing parsed, show trip fare
+    if (rows.length === 0) {
+      const fallback = Number(pb?.subtotal || booking?.fare || booking?.totalAmount || 0);
+      if (fallback > 0) rows.push({ label: 'Trip Fare', value: fmt(fallback) });
+    }
+
+    // Discounts
+    const promoDiscount = Number(pb?.discounts?.promoDiscount || booking?.discountAmount || 0);
+    if (promoDiscount > 0) rows.push({ label: 'Promo discount', value: `-${fmt(promoDiscount)}`, negative: true });
+
+    const membershipDiscount = Number(pb?.discounts?.membershipDiscount || pb?.membershipDiscount || 0);
+    if (membershipDiscount > 0) rows.push({ label: 'Membership discount', value: `-${fmt(membershipDiscount)}`, negative: true });
+
+    const streakDiscount = Number(pb?.discounts?.streakDiscount || 0);
+    if (streakDiscount > 0) rows.push({ label: 'Streak discount', value: `-${fmt(streakDiscount)}`, negative: true });
+
+    const walletUsed = Number(pb?.walletDeduction || booking?.walletAmountUsed || 0);
+    if (walletUsed > 0) rows.push({ label: 'Wallet applied', value: `-${fmt(walletUsed)}`, negative: true });
+
+    return rows;
+  }, [booking]);
+
+  const totalAmount = Number(booking?.totalAmount || 0);
+  const isCompleted = String(booking?.status || '').toUpperCase() === 'COMPLETED';
+
+  /* ─── render ──────────────────────────────────────── */
+  if (loading && !booking) {
+    return (
+      <SafeAreaView style={s.screen}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={G.accent} />
+          <Text style={[gText.body, { marginTop: 12 }]}>Loading…</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Icon name="arrow-left" size={24} color="#C9A84C" />
+    <SafeAreaView style={s.screen}>
+      {/* Header */}
+      <View style={s.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Icon name="arrow-left" size={24} color={G.accent} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Booking Details</Text>
+        <Text style={gText.h3}>Booking Details</Text>
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView style={styles.content}>
-        {loading ? (
-          <View style={{ padding: 24, alignItems: 'center' }}>
-            <ActivityIndicator size="small" color="#C9A84C" />
-            <Text style={{ marginTop: 10, color: '#FFFFFF', fontWeight: '600' }}>Loading…</Text>
-          </View>
-        ) : null}
-
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+        {/* Status Card */}
         {booking ? (
-          <View style={styles.statusCard}>
-            <View style={styles.statusBadge}>
-              <Text style={styles.statusText}>{String(booking.status)}</Text>
+          <View style={s.statusCard}>
+            <View style={[s.statusBadge, { backgroundColor: statusColor(booking.status) + '20' }]}>
+              <View style={[s.statusDot, { backgroundColor: statusColor(booking.status) }]} />
+              <Text style={[s.statusText, { color: statusColor(booking.status) }]}>{String(booking.status)}</Text>
             </View>
-            <Text style={styles.bookingNumber}>#{String(booking.bookingNumber || '').slice(0, 12)}</Text>
-            <Text style={styles.bookingDate}>
+            <Text style={s.bookingNumber}>#{String(booking.bookingNumber || '').slice(0, 12)}</Text>
+            <Text style={s.bookingDate}>
               {booking?.createdAt ? new Date(booking.createdAt).toLocaleString() : ''}
             </Text>
-            <Text style={styles.bookingDate}>
-              Payment: {String(booking.paymentMethod)} ({String(booking.paymentStatus)})
-            </Text>
           </View>
         ) : null}
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Trip Details</Text>
-          <View style={styles.locationContainer}>
-            <View style={styles.locationRow}>
-              <Icon name="circle" size={12} color="#10b981" />
-              <View style={styles.locationInfo}>
-                <Text style={styles.locationLabel}>Pickup</Text>
-                <Text style={styles.locationAddress}>{String(booking?.pickupAddress || '')}</Text>
+        {/* Trip Details */}
+        <View style={s.glassCard}>
+          <View style={s.sectionHeader}>
+            <Icon name="map-marker-path" size={18} color={G.accent} />
+            <Text style={s.sectionTitle}>Trip Details</Text>
+          </View>
+
+          <View style={s.locationContainer}>
+            <View style={s.locationRow}>
+              <View style={[s.locationDot, { backgroundColor: G.success }]} />
+              <View style={s.locationInfo}>
+                <Text style={gText.caption}>PICKUP</Text>
+                <Text style={gText.value}>{String(booking?.pickupAddress || '—')}</Text>
               </View>
             </View>
-            <View style={styles.connector} />
-            <View style={styles.locationRow}>
-              <Icon name="map-marker" size={12} color="#ef4444" />
-              <View style={styles.locationInfo}>
-                <Text style={styles.locationLabel}>Drop</Text>
-                <Text style={styles.locationAddress}>{String(booking?.dropAddress || '')}</Text>
+            <View style={s.connector} />
+            <View style={s.locationRow}>
+              <View style={[s.locationDot, { backgroundColor: G.error }]} />
+              <View style={s.locationInfo}>
+                <Text style={gText.caption}>DROP</Text>
+                <Text style={gText.value}>{String(booking?.dropAddress || '—')}</Text>
               </View>
             </View>
           </View>
 
-          <View style={styles.metaGrid}>
-            <View style={styles.metaItem}>
-              <Text style={styles.metaLabel}>Car Type</Text>
-              <Text style={styles.metaValue}>{String(booking?.vehicleType || 'CAR')}</Text>
-            </View>
-            <View style={styles.metaItem}>
-              <Text style={styles.metaLabel}>Transmission</Text>
-              <Text style={styles.metaValue}>{String(booking?.transmissionType || 'MANUAL')}</Text>
-            </View>
-            <View style={styles.metaItem}>
-              <Text style={styles.metaLabel}>Trip Type</Text>
-              <Text style={styles.metaValue}>{String(booking?.tripType || 'ONE_WAY')}</Text>
-            </View>
-            {booking?.scheduledTime ? (
-              <View style={styles.metaItem}>
-                <Text style={styles.metaLabel}>Scheduled Time</Text>
-                <Text style={styles.metaValue}>{new Date(booking.scheduledTime).toLocaleString()}</Text>
-              </View>
-            ) : null}
-            {booking?.otp ? (
-              <View style={styles.metaItem}>
-                <Text style={styles.metaLabel}>Trip OTP</Text>
-                <Text style={styles.metaValue}>{String(booking.otp)}</Text>
-              </View>
-            ) : null}
+          <View style={s.metaRow}>
             {typeof booking?.distanceMeters === 'number' ? (
-              <View style={styles.metaItem}>
-                <Text style={styles.metaLabel}>Distance</Text>
-                <Text style={styles.metaValue}>{(booking.distanceMeters / 1000).toFixed(1)} km</Text>
+              <View style={s.metaPill}>
+                <Icon name="map-marker-distance" size={14} color={G.accent} />
+                <Text style={s.metaPillText}>{fmtKm(booking.distanceMeters)}</Text>
               </View>
             ) : null}
             {typeof booking?.durationSeconds === 'number' ? (
-              <View style={styles.metaItem}>
-                <Text style={styles.metaLabel}>Duration</Text>
-                <Text style={styles.metaValue}>{Math.round(booking.durationSeconds / 60)} min</Text>
+              <View style={s.metaPill}>
+                <Icon name="clock-outline" size={14} color={G.accent} />
+                <Text style={s.metaPillText}>{fmtMin(booking.durationSeconds)}</Text>
               </View>
+            ) : null}
+            <View style={s.metaPill}>
+              <Icon name="car" size={14} color={G.accent} />
+              <Text style={s.metaPillText}>{String(booking?.vehicleType || 'CAR')}</Text>
+            </View>
+            <View style={s.metaPill}>
+              <Icon name="cog" size={14} color={G.accent} />
+              <Text style={s.metaPillText}>{String(booking?.transmissionType || 'MANUAL')}</Text>
+            </View>
+          </View>
+
+          {booking?.scheduledTime ? (
+            <View style={[s.metaPill, { marginTop: 8 }]}>
+              <Icon name="calendar-clock" size={14} color={G.warning} />
+              <Text style={s.metaPillText}>{new Date(booking.scheduledTime).toLocaleString()}</Text>
+            </View>
+          ) : null}
+
+          {booking?.otp ? (
+            <View style={s.otpContainer}>
+              <Text style={gText.caption}>TRIP OTP</Text>
+              <Text style={s.otpText}>{String(booking.otp)}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        {/* Person Details */}
+        <View style={s.glassCard}>
+          <View style={s.sectionHeader}>
+            <Icon name="account" size={18} color={G.accent} />
+            <Text style={s.sectionTitle}>{personInfo.label} Details</Text>
+          </View>
+          <View style={s.personRow}>
+            <View style={s.avatar}>
+              <Text style={s.avatarText}>{personInfo.initials}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={gText.h4}>{personInfo.name}</Text>
+              {personInfo.rating ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                  <Icon name="star" size={14} color="#f59e0b" />
+                  <Text style={gText.bodySm}>{personInfo.rating}</Text>
+                </View>
+              ) : null}
+            </View>
+            {personInfo.phone ? (
+              <TouchableOpacity
+                style={s.callBtn}
+                onPress={() => {
+                  const Linking = require('react-native').Linking;
+                  Linking.openURL(`tel:${personInfo.phone}`);
+                }}
+              >
+                <Icon name="phone" size={18} color={G.accent} />
+              </TouchableOpacity>
             ) : null}
           </View>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{isViewingAsDriver ? 'Customer Details' : 'Driver Details'}</Text>
-          <View style={styles.driverCard}>
-            <View style={styles.driverAvatar}>
-              <Text style={styles.driverAvatarText}>{isViewingAsDriver ? customerInitials : driverInitials}</Text>
-            </View>
-            <View style={styles.driverInfo}>
-              <Text style={styles.driverName}>{isViewingAsDriver ? customerName : driverName}</Text>
-              {isViewingAsDriver ? null : (
-                <View style={styles.ratingRow}>
-                  <Icon name="star" size={14} color="#f59e0b" />
-                  <Text style={styles.ratingText}>
-                    {booking?.driver?.rating ? Number(booking.driver.rating).toFixed(1) : '0.0'}
-                  </Text>
-                </View>
-              )}
-
-              {isViewingAsDriver ? (
-                booking?.customer?.phoneNumber ? (
-                  <TouchableOpacity
-                    style={styles.contactRow}
-                    onPress={() => {
-                      const phone = String(booking.customer.phoneNumber).trim();
-                      if (phone) {
-                        const Linking = require('react-native').Linking;
-                        Linking.openURL(`tel:${phone}`);
-                      }
-                    }}
-                  >
-                    <Icon name="phone" size={16} color="#C9A84C" />
-                    <Text style={styles.contactText}>{String(booking.customer.phoneNumber).trim()}</Text>
-                  </TouchableOpacity>
-                ) : null
-              ) : booking?.driver?.phoneNumber ? (
-                <TouchableOpacity
-                  style={styles.contactRow}
-                  onPress={() => {
-                    const phone = String(booking.driver.phoneNumber).trim();
-                    if (phone) {
-                      const Linking = require('react-native').Linking;
-                      Linking.openURL(`tel:${phone}`);
-                    }
-                  }}
-                >
-                  <Icon name="phone" size={16} color="#C9A84C" />
-                  <Text style={styles.contactText}>{String(booking.driver.phoneNumber).trim()}</Text>
-                </TouchableOpacity>
-              ) : null}
-            </View>
+        {/* ─── Fare Breakdown ─────────────────────────── */}
+        <View style={s.glassCard}>
+          <View style={s.sectionHeader}>
+            <Icon name="receipt" size={18} color={G.accent} />
+            <Text style={s.sectionTitle}>Fare Breakdown</Text>
           </View>
-        </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Fare Breakdown</Text>
-          {booking?.discountAmount ? (
-            <View style={styles.fareRow}>
-              <Text style={styles.fareLabel}>Discount</Text>
-              <Text style={styles.fareValue}>-₹{Number(booking.discountAmount || 0).toFixed(0)}</Text>
+          {breakdown.map((row, i) => (
+            <View key={i} style={s.fareRow}>
+              <Text style={[gText.label, row.negative && { color: G.success }, row.accent && { color: G.warning }]}>
+                {row.label}
+              </Text>
+              <Text style={[gText.value, row.negative && { color: G.success }, row.accent && { color: G.warning }]}>
+                {row.value}
+              </Text>
             </View>
+          ))}
+
+          {breakdown.length === 0 ? (
+            <Text style={[gText.bodySm, { textAlign: 'center', paddingVertical: 8 }]}>No breakdown available</Text>
           ) : null}
-          <View style={[styles.fareRow, styles.totalRow]}>
-            <Text style={styles.totalLabel}>Total Amount</Text>
-            <Text style={styles.totalValue}>₹{Number(booking?.totalAmount || 0).toFixed(0)}</Text>
+
+          {/* Total */}
+          <View style={s.totalRow}>
+            <Text style={s.totalLabel}>Total Amount</Text>
+            <Text style={s.totalValue}>{fmt(totalAmount)}</Text>
           </View>
-          <View style={styles.paymentMethod}>
-            <Icon name="cash" size={20} color="#10b981" />
-            <Text style={styles.paymentMethodText}>
-              Pay driver in cash
+
+          {/* Payment method */}
+          <View style={s.payRow}>
+            <Icon
+              name={
+                String(booking?.paymentMethod || '').toUpperCase() === 'CASH'
+                  ? 'cash'
+                  : String(booking?.paymentMethod || '').toUpperCase() === 'WALLET'
+                    ? 'wallet'
+                    : 'credit-card-outline'
+              }
+              size={18}
+              color={G.success}
+            />
+            <Text style={gText.bodySm}>
+              {String(booking?.paymentMethod || 'CASH')} • {String(booking?.paymentStatus || 'PENDING')}
             </Text>
           </View>
-          {booking?.status === 'COMPLETED' ? (
+
+          {/* View receipt button */}
+          {isCompleted ? (
             <TouchableOpacity
-              style={{
-                marginTop: 16,
-                paddingVertical: 12,
-                backgroundColor: '#1E1E1E',
-                borderRadius: 8,
-                alignItems: 'center',
-                flexDirection: 'row',
-                justifyContent: 'center',
-                gap: 8,
-              }}
-              onPress={() => {
-                navigation.navigate('RideReceipt', { booking });
-              }}
+              style={[glass.buttonGhost, { marginTop: 14, flexDirection: 'row', gap: 8 }]}
+              onPress={() => navigation.navigate('RideReceipt', { booking })}
             >
-              <Icon name="receipt" size={18} color="#FFFFFF" />
-              <Text style={{ color: '#FFFFFF', fontWeight: '600' }}>View Receipt</Text>
+              <Icon name="file-document-outline" size={18} color={G.textPrimary} />
+              <Text style={gText.btnGhost}>View Receipt</Text>
             </TouchableOpacity>
           ) : null}
         </View>
 
+        {/* Support */}
         <TouchableOpacity
-          style={styles.supportButton}
+          style={s.supportBtn}
           onPress={() => {
             if (!effectiveBookingId) return;
-            try {
-              navigation.navigate('SupportChat', { bookingId: effectiveBookingId });
-            } catch {
-            }
+            try { navigation.navigate('SupportChat', { bookingId: effectiveBookingId }); } catch {}
           }}
         >
-          <Icon name="headphones" size={20} color="#C9A84C" />
-          <Text style={styles.supportText}>Need Help?</Text>
+          <Icon name="headphones" size={20} color={G.accent} />
+          <Text style={[gText.btnGhost, { color: G.accent }]}>Need Help?</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
+/* ───────────── styles ─────────────────────────────── */
+const s = StyleSheet.create({
+  screen: {
     flex: 1,
-    backgroundColor: '#111111',
+    backgroundColor: G.bg,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
-    backgroundColor: '#0A0A0A',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: G.glass2,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.3)',
+    borderBottomColor: G.border2,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  content: {
-    flex: 1,
-  },
+
+  /* Status card */
   statusCard: {
-    backgroundColor: '#0A0A0A',
-    padding: 24,
+    ...glass.cardAccent as any,
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.3)',
+    marginBottom: 14,
   },
   statusBadge: {
-    backgroundColor: '#d1fae5',
-    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
     paddingVertical: 6,
-    borderRadius: 16,
-    marginBottom: 12,
+    borderRadius: 20,
+    gap: 8,
+    marginBottom: 10,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#065f46',
+    fontSize: 13,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
   },
   bookingNumber: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 4,
+    fontSize: 20,
+    fontWeight: '800',
+    color: G.textPrimary,
+    letterSpacing: 1,
   },
   bookingDate: {
-    fontSize: 14,
-    color: '#8A8A8A',
+    fontSize: 13,
+    color: G.textMuted,
+    marginTop: 4,
   },
-  section: {
-    backgroundColor: '#0A0A0A',
-    padding: 20,
-    marginTop: 12,
+
+  /* Glass card */
+  glassCard: {
+    backgroundColor: G.glass2,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: G.border2,
+    padding: 18,
+    marginBottom: 14,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 14 },
+      android: { elevation: 8 },
+    }),
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 14,
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginBottom: 16,
+    fontWeight: '700',
+    color: G.textPrimary,
   },
+
+  /* Location */
   locationContainer: {
-    paddingLeft: 8,
+    paddingLeft: 4,
+    marginBottom: 14,
   },
   locationRow: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: 12,
+  },
+  locationDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginTop: 5,
   },
   locationInfo: {
     flex: 1,
-  },
-  locationLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#8A8A8A',
-    marginBottom: 4,
-  },
-  locationAddress: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    marginBottom: 2,
-  },
-  locationTime: {
-    fontSize: 12,
-    color: '#666666',
+    gap: 2,
   },
   connector: {
     width: 2,
     height: 24,
-    backgroundColor: '#1E1E1E',
-    marginLeft: 5,
-    marginVertical: 8,
+    backgroundColor: G.border2,
+    marginLeft: 4,
+    marginVertical: 4,
   },
-  metaGrid: {
+
+  /* Meta */
+  metaRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: 16,
-    marginHorizontal: -4,
+    gap: 8,
   },
-  metaItem: {
-    width: '50%',
-    padding: 12,
-    borderRadius: 8,
-    backgroundColor: '#111111',
-    marginHorizontal: 4,
-    marginBottom: 8,
-  },
-  metaLabel: {
-    fontSize: 12,
-    color: '#8A8A8A',
-    marginBottom: 4,
-  },
-  metaValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  contactRow: {
+  metaPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 6,
+    backgroundColor: G.glass3,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: G.border1,
   },
-  contactText: {
-    fontSize: 14,
-    color: '#C9A84C',
-    fontWeight: '500',
+  metaPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: G.textSecondary,
   },
-  driverCard: {
+
+  /* OTP */
+  otpContainer: {
+    marginTop: 14,
+    alignItems: 'center',
+    backgroundColor: G.glass3,
+    borderRadius: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: G.borderAccent,
+  },
+  otpText: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: G.accent,
+    letterSpacing: 6,
+    marginTop: 4,
+  },
+
+  /* Person */
+  personRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
   },
-  driverAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#C9A84C',
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: G.accentSoft,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: G.borderAccent,
   },
-  driverAvatarText: {
-    fontSize: 20,
+  avatarText: {
+    fontSize: 18,
     fontWeight: '700',
-    color: '#ffffff',
+    color: G.accent,
   },
-  driverInfo: {
-    flex: 1,
-  },
-  driverName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  ratingRow: {
-    flexDirection: 'row',
+  callBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: G.glass3,
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 4,
+    borderWidth: 1,
+    borderColor: G.border3,
   },
-  ratingText: {
-    fontSize: 14,
-    color: '#8A8A8A',
-  },
+
+  /* Fare */
   fareRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 8,
-  },
-  fareLabel: {
-    fontSize: 14,
-    color: '#8A8A8A',
-  },
-  fareValue: {
-    fontSize: 14,
-    color: '#FFFFFF',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: G.border1,
   },
   totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 14,
+    marginTop: 6,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.3)',
-    marginTop: 8,
-    paddingTop: 16,
+    borderTopColor: G.borderAccent,
   },
   totalLabel: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: '700',
+    color: G.textPrimary,
   },
   totalValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: '800',
+    color: G.accent,
   },
-  paymentMethod: {
+  payRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: '#141414',
-    borderRadius: 8,
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: G.glass1,
+    borderRadius: 10,
   },
-  paymentMethodText: {
-    fontSize: 14,
-    color: '#CCCCCC',
-  },
-  supportButton: {
+
+  /* Support */
+  supportBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    margin: 16,
-    padding: 16,
-    backgroundColor: '#0A0A0A',
-    borderRadius: 12,
+    paddingVertical: 16,
+    borderRadius: 16,
+    backgroundColor: G.glass2,
     borderWidth: 1,
-    borderColor: '#C9A84C',
-  },
-  supportText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#C9A84C',
+    borderColor: G.borderAccent,
+    marginTop: 4,
+    marginBottom: 16,
   },
 });
 

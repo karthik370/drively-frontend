@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { G } from '../../constants/glassStyles';
 
 import { getWalletBalance } from '../../services/api';
+import { showAlert } from '../../components/common/CustomAlert';
 
 const CustomerWalletScreen = ({ navigation }: any) => {
   const [balance, setBalance] = useState<number>(0);
@@ -17,7 +19,7 @@ const CustomerWalletScreen = ({ navigation }: any) => {
       })
       .catch((e: any) => {
         if (!alive) return;
-        Alert.alert('Wallet', e?.message || 'Failed to load wallet balance');
+        showAlert('Wallet', e?.message || 'Failed to load wallet balance');
       });
     return () => {
       alive = false;
@@ -74,7 +76,7 @@ const CustomerWalletScreen = ({ navigation }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111111',
+    backgroundColor: G.bgAlt,
   },
   content: {
     padding: 16,
@@ -88,29 +90,29 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   balanceCard: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderRadius: 16,
     padding: 20,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
   },
   balanceLabel: {
     fontSize: 14,
-    color: '#8A8A8A',
+    color: G.textSecondary,
   },
   balanceValue: {
     fontSize: 40,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: G.textPrimary,
     marginTop: 8,
   },
   balanceHint: {
     fontSize: 12,
-    color: '#8A8A8A',
+    color: G.textSecondary,
     marginTop: 8,
   },
   actionsRow: {
@@ -124,16 +126,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderRadius: 12,
     paddingVertical: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
   },
   actionText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   section: {
     marginTop: 8,
@@ -141,15 +143,15 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: G.textPrimary,
     marginBottom: 10,
   },
   card: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
   },
   row: {
     flexDirection: 'row',
@@ -159,7 +161,7 @@ const styles = StyleSheet.create({
   },
   rowText: {
     fontSize: 14,
-    color: '#FFFFFF',
+    color: G.textPrimary,
     fontWeight: '500',
   },
 });

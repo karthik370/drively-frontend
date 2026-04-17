@@ -43,11 +43,9 @@ export const openCashfreeCheckout = (params: CashfreeCheckoutParams): Promise<Ca
       // 1. Register callbacks BEFORE starting the payment
       CFPaymentGatewayService.setCallback({
         onVerify: (orderIdResult: string) => {
-          console.log('[Cashfree] Payment verified, orderId:', orderIdResult);
           resolve({ orderId: orderIdResult || params.orderId });
         },
         onError: (error: any, orderIdResult: string) => {
-          console.log('[Cashfree] Payment error:', JSON.stringify(error), 'orderId:', orderIdResult);
           const msg =
             error?.getMessage?.() ||
             error?.message ||
@@ -60,20 +58,12 @@ export const openCashfreeCheckout = (params: CashfreeCheckoutParams): Promise<Ca
       // 2. Build session & checkout payment objects
       const env = CASHFREE_ENV === 'PRODUCTION' ? CFEnvironment.PRODUCTION : CFEnvironment.SANDBOX;
 
-      console.log('[Cashfree] Opening checkout:', {
-        orderId: params.orderId,
-        env: CASHFREE_ENV,
-        paymentSessionId: params.paymentSessionId,
-        sessionIdLength: params.paymentSessionId?.length,
-      });
-
       const session = new CFSession(params.paymentSessionId, params.orderId, env);
       const checkoutPayment = new CFDropCheckoutPayment(session, null, null);
 
       // 3. Start payment
       CFPaymentGatewayService.doPayment(checkoutPayment);
     } catch (error: any) {
-      console.error('[Cashfree] SDK error:', error);
       reject(new Error(error?.message || 'Failed to open Cashfree checkout'));
     }
   });

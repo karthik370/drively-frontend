@@ -5,6 +5,8 @@ import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useAppDispatch, useAppSelector } from '../../redux/store';
 import { setDriverOnline } from '../../redux/slices/driverSlice';
 import { goOffline, goOnline } from '../../services/api';
+import { showAlert } from '../../components/common/CustomAlert';
+import { G } from '../../constants/glassStyles';
 
 const DriverHomeScreen = () => {
   const dispatch = useAppDispatch();
@@ -36,7 +38,7 @@ const DriverHomeScreen = () => {
                   }
                   dispatch(setDriverOnline(Boolean(v)));
                 } catch (e: any) {
-                  Alert.alert('Status', e?.message || 'Failed to update online status');
+                  showAlert('Status', e?.message || 'Failed to update online status');
                 }
               }}
               trackColor={{ false: '#d1d5db', true: '#10b981' }}
@@ -73,7 +75,7 @@ const DriverHomeScreen = () => {
                   }
                   dispatch(setDriverOnline(Boolean(v)));
                 } catch (e: any) {
-                  Alert.alert('Status', e?.message || 'Failed to update online status');
+                  showAlert('Status', e?.message || 'Failed to update online status');
                 }
               }}
               trackColor={{ false: '#d1d5db', true: '#10b981' }}
@@ -101,11 +103,11 @@ const StatCard = ({ icon, label, value, color }: any) => (
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111111',
+    backgroundColor: G.bgAlt,
   },
   header: {
     padding: 24,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
   },
   headerTopRow: {
     flexDirection: 'row',
@@ -117,7 +119,7 @@ const styles = StyleSheet.create({
   greeting: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   statusInfo: {
     flexDirection: 'row',
@@ -127,17 +129,17 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   toggleCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     marginBottom: 16,
   },
   toggleCardCenter: {
@@ -145,10 +147,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     width: '100%',
     maxWidth: 360,
   },
@@ -157,7 +159,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   searchingCard: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderRadius: 16,
     padding: 32,
     alignItems: 'center',
@@ -166,13 +168,13 @@ const styles = StyleSheet.create({
   searchingTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: G.textPrimary,
     marginTop: 16,
     marginBottom: 8,
   },
   searchingSubtitle: {
     fontSize: 14,
-    color: '#8A8A8A',
+    color: G.textSecondary,
     textAlign: 'center',
   },
   statsGrid: {
@@ -181,7 +183,7 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderRadius: 12,
     padding: 16,
     elevation: 1,
@@ -192,7 +194,7 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: 12,
-    color: '#8A8A8A',
+    color: G.textSecondary,
     marginTop: 8,
   },
   statValue: {
@@ -209,13 +211,13 @@ const styles = StyleSheet.create({
   offlineTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: G.textPrimary,
     marginTop: 16,
     marginBottom: 8,
   },
   offlineSubtitle: {
     fontSize: 16,
-    color: '#8A8A8A',
+    color: G.textSecondary,
     textAlign: 'center',
   },
 });

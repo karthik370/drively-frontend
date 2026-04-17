@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { G } from '../../constants/glassStyles';
 
 type Lang = {
   key: string;
@@ -55,7 +56,7 @@ const LanguageSelectionScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111111',
+    backgroundColor: G.bgAlt,
   },
   content: {
     padding: 16,
@@ -69,31 +70,31 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   card: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     overflow: 'hidden',
   },
   row: {
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.3)',
+    borderBottomColor: G.border3,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   rowSelected: {
-    backgroundColor: '#141414',
+    backgroundColor: G.glass2,
   },
   rowText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   rowTextSelected: {
     color: '#1d4ed8',

@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { G } from '../../constants/glassStyles';
 
 interface Props {
     navigation: any;
@@ -11,7 +12,7 @@ const DriverTiersScreen = ({ navigation }: Props) => {
     const tiers = [
         {
             name: 'Classic',
-            color: '#8A8A8A',
+            color: G.textSecondary,
             bg: '#f9fafb',
             border: '#e5e7eb',
             icon: 'car',
@@ -25,7 +26,7 @@ const DriverTiersScreen = ({ navigation }: Props) => {
         },
         {
             name: 'Plus',
-            color: '#C9A84C',
+            color: G.accent,
             bg: '#eff6ff',
             border: '#bfdbfe',
             icon: 'car-sports',
@@ -91,7 +92,7 @@ const DriverTiersScreen = ({ navigation }: Props) => {
                                 <Text style={[styles.tierName, { color: tier.color }]}>{tier.name}</Text>
                                 <Text style={styles.tierReq}>{tier.requirement}</Text>
                             </View>
-                            <View style={[styles.earningsBadge, { backgroundColor: '#141414' }]}>
+                            <View style={[styles.earningsBadge, { backgroundColor: G.glass2 }]}>
                                 <Text style={styles.earningsText}>100%</Text>
                                 <Text style={styles.earningsLabel}>yours</Text>
                             </View>
@@ -125,24 +126,24 @@ const DriverTiersScreen = ({ navigation }: Props) => {
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#111111' },
+    container: { flex: 1, backgroundColor: G.bgAlt },
     header: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-        paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#0A0A0A',
-        borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.3)',
+        paddingHorizontal: 16, paddingVertical: 12, backgroundColor: G.bg,
+        borderBottomWidth: 1, borderBottomColor: G.border3,
     },
-    backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#141414', alignItems: 'center', justifyContent: 'center' },
-    headerTitle: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
+    backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: G.glass2, alignItems: 'center', justifyContent: 'center' },
+    headerTitle: { fontSize: 16, fontWeight: '800', color: G.textPrimary },
     content: { padding: 16, paddingBottom: 32 },
 
     zeroBadge: {
         flexDirection: 'row', alignItems: 'center', gap: 8,
-        backgroundColor: '#141414', borderRadius: 12, padding: 12, marginBottom: 12,
+        backgroundColor: G.glass2, borderRadius: 12, padding: 12, marginBottom: 12,
         borderWidth: 1, borderColor: '#bbf7d0',
     },
     zeroBadgeText: { flex: 1, fontSize: 13, fontWeight: '800', color: '#16a34a' },
 
-    heroText: { fontSize: 14, color: '#8A8A8A', fontWeight: '600', lineHeight: 22, marginBottom: 16, textAlign: 'center' },
+    heroText: { fontSize: 14, color: G.textSecondary, fontWeight: '600', lineHeight: 22, marginBottom: 16, textAlign: 'center' },
 
     tierCard: {
         borderRadius: 16, padding: 16, marginBottom: 12,
@@ -153,7 +154,7 @@ const styles = StyleSheet.create({
         width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
     },
     tierName: { fontSize: 18, fontWeight: '900' },
-    tierReq: { fontSize: 11, color: '#8A8A8A', fontWeight: '600', marginTop: 2 },
+    tierReq: { fontSize: 11, color: G.textSecondary, fontWeight: '600', marginTop: 2 },
     earningsBadge: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, alignItems: 'center' },
     earningsText: { fontSize: 18, fontWeight: '900', color: '#16a34a' },
     earningsLabel: { fontSize: 9, fontWeight: '700', color: '#16a34a' },

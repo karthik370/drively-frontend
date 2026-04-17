@@ -3,6 +3,7 @@ import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'r
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { APP_CONFIG } from '../../constants/config';
+import { G } from '../../constants/glassStyles';
 
 const SupportScreen = () => {
   return (
@@ -47,7 +48,7 @@ const SupportScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111111',
+    backgroundColor: G.bgAlt,
   },
   content: {
     padding: 16,
@@ -61,24 +62,24 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   card: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     padding: 16,
   },
   cardTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   cardSub: {
     marginTop: 6,
     fontSize: 13,
-    color: '#8A8A8A',
+    color: G.textSecondary,
     lineHeight: 18,
   },
   actions: {
@@ -92,7 +93,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 12,
-    backgroundColor: '#141414',
+    backgroundColor: G.glass2,
     borderWidth: 1,
     borderColor: '#dbeafe',
   },

@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions, FlatList, Animated } from 'react-native';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { G } from '../../constants/glassStyles';
 
 const { width } = Dimensions.get('window');
 
@@ -16,7 +17,7 @@ interface OnboardingSlide {
 const SLIDES: OnboardingSlide[] = [
     {
         icon: 'car-connected',
-        iconcolor: '#C9A84C',
+        iconColor: G.accent,
         iconBg: '#eff6ff',
         title: 'Book a Driver',
         description: 'Need a driver for your car? Book a professional, verified driver in seconds. One-way, round trips, or outstation.',
@@ -103,6 +104,10 @@ const OnboardingScreen = ({ onComplete }: Props) => {
 
             {/* Slides */}
             <FlatList
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={8}
+          windowSize={5}
+          initialNumToRender={8}
                 ref={flatListRef}
                 data={SLIDES}
                 keyExtractor={(_, i) => String(i)}
@@ -154,7 +159,7 @@ export const hasCompletedOnboarding = async (): Promise<boolean> => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0A0A0A',
+        backgroundColor: G.bg,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -167,7 +172,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 8,
     },
-    skipText: { fontSize: 14, fontWeight: '700', color: '#8A8A8A' },
+    skipText: { fontSize: 14, fontWeight: '700', color: G.textSecondary },
 
     slide: {
         alignItems: 'center',
@@ -185,14 +190,14 @@ const styles = StyleSheet.create({
     slideTitle: {
         fontSize: 24,
         fontWeight: '900',
-        color: '#FFFFFF',
+        color: G.textPrimary,
         textAlign: 'center',
         marginBottom: 12,
     },
     slideDesc: {
         fontSize: 15,
         fontWeight: '500',
-        color: '#8A8A8A',
+        color: G.textSecondary,
         textAlign: 'center',
         lineHeight: 22,
     },
@@ -207,7 +212,7 @@ const styles = StyleSheet.create({
     dot: {
         height: 8,
         borderRadius: 4,
-        backgroundColor: '#C9A84C',
+        backgroundColor: G.accent,
     },
 
     nextBtn: {
@@ -215,7 +220,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         gap: 8,
-        backgroundColor: '#C9A84C',
+        backgroundColor: G.accent,
         borderRadius: 16,
         paddingVertical: 16,
         paddingHorizontal: 40,
@@ -223,12 +228,12 @@ const styles = StyleSheet.create({
         marginHorizontal: 20,
         alignSelf: 'stretch',
         elevation: 4,
-        shadowcolor: '#C9A84C',
+        shadowColor: G.accent,
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.3,
         shadowRadius: 6,
     },
-    nextBtnText: { fontSize: 16, fontWeight: '900', color: '#ffffff' },
+    nextBtnText: { fontSize: 16, fontWeight: '900', color: G.textPrimary },
 });
 
 export default OnboardingScreen;

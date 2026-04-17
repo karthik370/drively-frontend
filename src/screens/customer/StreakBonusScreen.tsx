@@ -1,61 +1,39 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getDiscountPreview, type DiscountPreview } from '../../services/api';
+import { G } from '../../constants/glassStyles';
 
-const STORAGE_KEY = '@dmate_streaks';
-
-interface StreakData {
-    currentStreak: number;
-    weeklyRides: number;
-    lastRideDate: string;
-    rewards: StreakReward[];
-}
-
-interface StreakReward {
-    target: number;
-    label: string;
-    discount: number;
-    unlocked: boolean;
-}
-
-const DEFAULT_REWARDS: StreakReward[] = [
-    { target: 3, label: '3 rides this week', discount: 5, unlocked: false },
-    { target: 5, label: '5 rides this week', discount: 10, unlocked: false },
-    { target: 8, label: '8 rides this week', discount: 15, unlocked: false },
-    { target: 12, label: '12 rides this week', discount: 20, unlocked: false },
+const STREAK_TIERS = [
+    { rides: 3, pct: 2, label: '3 rides in 7 days', color: '#3b82f6' },
+    { rides: 5, pct: 5, label: '5 rides in 7 days', color: '#8b5cf6' },
+    { rides: 8, pct: 7, label: '8 rides in 7 days', color: '#f59e0b' },
+    { rides: 12, pct: 10, label: '12 rides in 7 days', color: '#ef4444' },
 ];
 
 const StreakBonusScreen = ({ navigation }: any) => {
-    const [streak, setStreak] = useState<StreakData>({
-        currentStreak: 0,
-        weeklyRides: 0,
-        lastRideDate: '',
-        rewards: DEFAULT_REWARDS,
-    });
+    const [preview, setPreview] = useState<DiscountPreview | null>(null);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        void loadStreak();
+        let alive = true;
+        const fetch = async () => {
+            try {
+                const data = await getDiscountPreview(1000); // sample ₹1000 fare
+                if (alive) setPreview(data);
+            } catch { } finally {
+                if (alive) setLoading(false);
+            }
+        };
+        void fetch();
+        return () => { alive = false; };
     }, []);
 
-    const loadStreak = async () => {
-        try {
-            const raw = await AsyncStorage.getItem(STORAGE_KEY);
-            if (raw) {
-                const data = JSON.parse(raw);
-                // Update rewards unlock status
-                const rewards = DEFAULT_REWARDS.map((r) => ({
-                    ...r,
-                    unlocked: (data.weeklyRides || 0) >= r.target,
-                }));
-                setStreak({ ...data, rewards });
-            }
-        } catch { }
-    };
-
-    const nextReward = streak.rewards.find((r) => !r.unlocked);
-    const ridesNeeded = nextReward ? nextReward.target - streak.weeklyRides : 0;
+    const streakRides = preview?.streakRides ?? 0;
+    const currentPct = preview?.streakPct ?? 0;
+    const nextTier = preview?.nextStreakTier ?? null;
+    const ridesNeeded = nextTier ? Math.max(0, nextTier.rides - streakRides) : 0;
 
     return (
         <SafeAreaView style={styles.container}>
@@ -67,167 +45,154 @@ const StreakBonusScreen = ({ navigation }: any) => {
                 <View style={{ width: 40 }} />
             </View>
 
-            <ScrollView contentContainerStyle={styles.content}>
-                {/* Streak card */}
-                <View style={styles.streakCard}>
-                    <View style={styles.streakIconWrap}>
-                        <Icon name="fire" size={36} color="#f59e0b" />
-                    </View>
-                    <Text style={styles.streakCount}>{streak.weeklyRides}</Text>
-                    <Text style={styles.streakLabel}>rides this week</Text>
-                    {nextReward ? (
-                        <View style={styles.nextRewardChip}>
-                            <Icon name="gift" size={14} color="#6366f1" />
-                            <Text style={styles.nextRewardText}>
-                                {ridesNeeded} more ride{ridesNeeded !== 1 ? 's' : ''} for {nextReward.discount}% off!
-                            </Text>
-                        </View>
-                    ) : (
-                        <View style={[styles.nextRewardChip, { backgroundColor: '#141414' }]}>
-                            <Icon name="check-circle" size={14} color="#16a34a" />
-                            <Text style={[styles.nextRewardText, { color: '#16a34a' }]}>All bonuses unlocked! 🎉</Text>
-                        </View>
-                    )}
+            {loading ? (
+                <View style={styles.emptyWrap}>
+                    <ActivityIndicator size="small" color="#C9A84C" />
                 </View>
-
-                {/* Rewards tiers */}
-                <Text style={styles.sectionTitle}>Weekly Rewards</Text>
-                {streak.rewards.map((reward, i) => (
-                    <View key={i} style={[styles.rewardRow, reward.unlocked && styles.rewardRowUnlocked]}>
-                        <View style={[styles.rewardDot, reward.unlocked && styles.rewardDotUnlocked]}>
-                            <Icon
-                                name={reward.unlocked ? 'check' : 'lock'}
-                                size={14}
-                                color={reward.unlocked ? '#ffffff' : '#9ca3af'}
-                            />
+            ) : (
+                <ScrollView contentContainerStyle={styles.content}>
+                    {/* Current streak */}
+                    <View style={styles.streakCard}>
+                        <View style={styles.streakIconWrap}>
+                            <Icon name="fire" size={36} color="#f59e0b" />
                         </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={[styles.rewardLabel, reward.unlocked && styles.rewardLabelUnlocked]}>
-                                {reward.label}
-                            </Text>
-                            <Text style={styles.rewardDiscount}>{reward.discount}% discount on next ride</Text>
-                        </View>
-                        {reward.unlocked ? (
-                            <View style={styles.unlockedBadge}>
-                                <Text style={styles.unlockedBadgeText}>Unlocked</Text>
+                        <Text style={styles.streakCount}>{streakRides}</Text>
+                        <Text style={styles.streakLabel}>rides in last 7 days</Text>
+                        {currentPct > 0 ? (
+                            <View style={[styles.activeChip, { backgroundColor: 'rgba(16,185,129,0.15)' }]}>
+                                <Icon name="check-circle" size={14} color="#10b981" />
+                                <Text style={[styles.activeChipText, { color: '#10b981' }]}>
+                                    {currentPct}% discount active on all rides!
+                                </Text>
                             </View>
-                        ) : (
-                            <Text style={styles.targetText}>{reward.target - streak.weeklyRides} more</Text>
-                        )}
+                        ) : null}
+                        {nextTier && ridesNeeded > 0 ? (
+                            <View style={styles.nextRewardChip}>
+                                <Icon name="gift" size={14} color="#C9A84C" />
+                                <Text style={styles.nextRewardText}>
+                                    {ridesNeeded} more ride{ridesNeeded !== 1 ? 's' : ''} for {nextTier.pct}% off!
+                                </Text>
+                            </View>
+                        ) : currentPct >= 10 ? (
+                            <View style={[styles.nextRewardChip, { backgroundColor: 'rgba(16,185,129,0.1)' }]}>
+                                <Icon name="trophy" size={14} color="#10b981" />
+                                <Text style={[styles.nextRewardText, { color: '#10b981' }]}>Max streak unlocked! 🏆</Text>
+                            </View>
+                        ) : null}
                     </View>
-                ))}
 
-                {/* How it works */}
-                <View style={styles.infoCard}>
-                    <Text style={styles.infoTitle}>How Streaks Work</Text>
-                    <View style={styles.infoRow}>
-                        <Icon name="numeric-1-circle" size={20} color="#6366f1" />
-                        <Text style={styles.infoText}>Complete rides to build your weekly streak</Text>
+                    {/* Tiers */}
+                    <Text style={styles.sectionTitle}>Discount Tiers</Text>
+                    {STREAK_TIERS.map((tier, i) => {
+                        const unlocked = streakRides >= tier.rides;
+                        const isCurrent = currentPct === tier.pct && currentPct > 0;
+                        return (
+                            <View key={i} style={[styles.rewardRow, unlocked && styles.rewardRowUnlocked, isCurrent && { borderColor: tier.color }]}>
+                                <View style={[styles.rewardDot, unlocked ? { backgroundColor: tier.color } : null]}>
+                                    <Icon
+                                        name={unlocked ? 'check' : 'lock'}
+                                        size={14}
+                                        color={unlocked ? '#ffffff' : '#666666'}
+                                    />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={[styles.rewardLabel, unlocked && { color: G.textPrimary }]}>{tier.label}</Text>
+                                    <Text style={styles.rewardDiscount}>{tier.pct}% discount on every ride</Text>
+                                </View>
+                                {unlocked ? (
+                                    <View style={[styles.unlockedBadge, { backgroundColor: `${tier.color}20` }]}>
+                                        <Text style={[styles.unlockedBadgeText, { color: tier.color }]}>
+                                            {isCurrent ? 'Active' : 'Unlocked'}
+                                        </Text>
+                                    </View>
+                                ) : (
+                                    <Text style={styles.targetText}>{tier.rides - streakRides} more</Text>
+                                )}
+                            </View>
+                        );
+                    })}
+
+                    {/* How it works */}
+                    <View style={styles.infoCard}>
+                        <Text style={styles.infoTitle}>How Streaks Work</Text>
+                        <View style={styles.infoRow}>
+                            <Icon name="numeric-1-circle" size={20} color="#C9A84C" />
+                            <Text style={styles.infoText}>Complete rides to build your 7-day streak</Text>
+                        </View>
+                        <View style={styles.infoRow}>
+                            <Icon name="numeric-2-circle" size={20} color="#C9A84C" />
+                            <Text style={styles.infoText}>Reach milestones to unlock higher discount tiers</Text>
+                        </View>
+                        <View style={styles.infoRow}>
+                            <Icon name="numeric-3-circle" size={20} color="#C9A84C" />
+                            <Text style={styles.infoText}>Discounts auto-apply on your next booking — shown in fare breakdown</Text>
+                        </View>
+                        <View style={styles.infoRow}>
+                            <Icon name="calendar-clock" size={20} color="#8A8A8A" />
+                            <Text style={styles.infoText}>Streak counts rides completed in the last 7 days (rolling window)</Text>
+                        </View>
                     </View>
-                    <View style={styles.infoRow}>
-                        <Icon name="numeric-2-circle" size={20} color="#6366f1" />
-                        <Text style={styles.infoText}>Unlock discount tiers as you reach milestones</Text>
-                    </View>
-                    <View style={styles.infoRow}>
-                        <Icon name="numeric-3-circle" size={20} color="#6366f1" />
-                        <Text style={styles.infoText}>Discounts auto-apply to your next booking</Text>
-                    </View>
-                    <View style={styles.infoRow}>
-                        <Icon name="refresh" size={20} color="#9ca3af" />
-                        <Text style={styles.infoText}>Streak resets every Monday at 12:00 AM</Text>
-                    </View>
-                </View>
-            </ScrollView>
+                </ScrollView>
+            )}
         </SafeAreaView>
     );
 };
 
-// Helper: call after ride completion to increment streak
-export const incrementStreakRide = async () => {
-    try {
-        const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        const data = raw ? JSON.parse(raw) : { currentStreak: 0, weeklyRides: 0, lastRideDate: '' };
-        const today = new Date().toISOString().split('T')[0];
-        const lastDate = data.lastRideDate || '';
-
-        // Check if we need to reset (Monday reset logic)
-        const now = new Date();
-        const dayOfWeek = now.getDay();
-        const lastRideDate = lastDate ? new Date(lastDate) : null;
-        const lastDayOfWeek = lastRideDate ? lastRideDate.getDay() : -1;
-
-        // Simple week reset: if last ride was before this week's Monday
-        const mondayThisWeek = new Date(now);
-        mondayThisWeek.setDate(now.getDate() - ((dayOfWeek + 6) % 7));
-        mondayThisWeek.setHours(0, 0, 0, 0);
-
-        const shouldReset = !lastRideDate || lastRideDate < mondayThisWeek;
-
-        const updated = {
-            currentStreak: shouldReset ? 1 : data.currentStreak + 1,
-            weeklyRides: shouldReset ? 1 : data.weeklyRides + 1,
-            lastRideDate: today,
-        };
-
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-        return updated;
-    } catch {
-        return null;
-    }
-};
-
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#111111' },
+    container: { flex: 1, backgroundColor: G.bgAlt },
     header: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-        paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#0A0A0A',
-        borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.3)',
+        paddingHorizontal: 16, paddingVertical: 12, backgroundColor: G.bg,
+        borderBottomWidth: 1, borderBottomColor: G.border3,
     },
-    backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#141414', alignItems: 'center', justifyContent: 'center' },
-    headerTitle: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
+    backBtn: {
+        width: 40, height: 40, borderRadius: 12, backgroundColor: G.glass2,
+        alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: G.border3,
+    },
+    headerTitle: { fontSize: 16, fontWeight: '800', color: G.textPrimary },
     content: { padding: 16, paddingBottom: 32 },
-
+    emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     streakCard: {
-        backgroundColor: '#0A0A0A', borderRadius: 16, padding: 24, alignItems: 'center', marginBottom: 20,
-        elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 6,
+        backgroundColor: G.bg, borderRadius: 16, padding: 24, alignItems: 'center', marginBottom: 20,
+        borderWidth: 1, borderColor: G.border3,
     },
     streakIconWrap: {
-        width: 60, height: 60, borderRadius: 30, backgroundColor: '#1A1708',
+        width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(245,158,11,0.1)',
         alignItems: 'center', justifyContent: 'center', marginBottom: 8,
     },
-    streakCount: { fontSize: 40, fontWeight: '900', color: '#FFFFFF' },
-    streakLabel: { fontSize: 14, fontWeight: '600', color: '#8A8A8A', marginBottom: 12 },
+    streakCount: { fontSize: 44, fontWeight: '900', color: G.textPrimary },
+    streakLabel: { fontSize: 14, fontWeight: '600', color: G.textSecondary, marginBottom: 12 },
+    activeChip: {
+        flexDirection: 'row', alignItems: 'center', gap: 6,
+        paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginBottom: 8,
+    },
+    activeChipText: { fontSize: 13, fontWeight: '700' },
     nextRewardChip: {
         flexDirection: 'row', alignItems: 'center', gap: 6,
-        backgroundColor: 'rgba(139,92,246,0.1)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+        backgroundColor: 'rgba(201,168,76,0.1)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
     },
-    nextRewardText: { fontSize: 13, fontWeight: '700', color: '#6366f1' },
-
-    sectionTitle: { fontSize: 16, fontWeight: '900', color: '#FFFFFF', marginBottom: 12 },
-
+    nextRewardText: { fontSize: 13, fontWeight: '700', color: G.accent },
+    sectionTitle: { fontSize: 16, fontWeight: '900', color: G.textPrimary, marginBottom: 12 },
     rewardRow: {
         flexDirection: 'row', alignItems: 'center', gap: 12,
-        backgroundColor: '#0A0A0A', borderRadius: 12, padding: 14, marginBottom: 8,
-        borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
+        backgroundColor: G.bg, borderRadius: 12, padding: 14, marginBottom: 8,
+        borderWidth: 1, borderColor: G.border3,
     },
-    rewardRowUnlocked: { borderColor: '#bbf7d0', backgroundColor: '#141414' },
+    rewardRowUnlocked: { borderColor: 'rgba(16,185,129,0.4)' },
     rewardDot: {
-        width: 30, height: 30, borderRadius: 15, backgroundColor: '#141414',
+        width: 30, height: 30, borderRadius: 15, backgroundColor: G.glass3,
         alignItems: 'center', justifyContent: 'center',
     },
-    rewardDotUnlocked: { backgroundColor: '#16a34a' },
-    rewardLabel: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
-    rewardLabelUnlocked: { color: '#065f46' },
-    rewardDiscount: { fontSize: 11, color: '#8A8A8A', marginTop: 2 },
-    unlockedBadge: { backgroundColor: '#141414', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-    unlockedBadgeText: { fontSize: 10, fontWeight: '800', color: '#16a34a' },
-    targetText: { fontSize: 12, fontWeight: '700', color: '#666666' },
-
+    rewardLabel: { fontSize: 13, fontWeight: '700', color: '#CCCCCC' },
+    rewardDiscount: { fontSize: 11, color: G.textSecondary, marginTop: 2 },
+    unlockedBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+    unlockedBadgeText: { fontSize: 10, fontWeight: '800' },
+    targetText: { fontSize: 12, fontWeight: '700', color: G.textMuted },
     infoCard: {
-        backgroundColor: '#0A0A0A', borderRadius: 14, padding: 16, marginTop: 12,
-        borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
+        backgroundColor: G.bg, borderRadius: 14, padding: 16, marginTop: 12,
+        borderWidth: 1, borderColor: G.border3,
     },
-    infoTitle: { fontSize: 14, fontWeight: '800', color: '#FFFFFF', marginBottom: 12 },
+    infoTitle: { fontSize: 14, fontWeight: '800', color: G.textPrimary, marginBottom: 12 },
     infoRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
     infoText: { flex: 1, fontSize: 13, color: '#CCCCCC', fontWeight: '600' },
 });

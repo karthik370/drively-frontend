@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { deleteSavedAddress, getSavedAddresses, type SavedAddress } from '../../services/api';
+import { showAlert } from '../../components/common/CustomAlert';
+import { G } from '../../constants/glassStyles';
 
 const SavedAddressesScreen = ({ navigation }: any) => {
   const [items, setItems] = useState<SavedAddress[]>([]);
@@ -46,7 +48,7 @@ const SavedAddressesScreen = ({ navigation }: any) => {
   }, [navigation]);
 
   const confirmDelete = (id: string) => {
-    Alert.alert('Delete address?', 'Remove this saved address?', [
+    showAlert('Delete address?', 'Remove this saved address?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -58,7 +60,7 @@ const SavedAddressesScreen = ({ navigation }: any) => {
               const next = await deleteSavedAddress(id);
               setItems(Array.isArray(next) ? next : []);
             } catch (e: any) {
-              Alert.alert('Failed', e?.message || 'Please try again');
+              showAlert('Failed', e?.message || 'Please try again');
             } finally {
               setIsMutating(false);
             }
@@ -125,7 +127,7 @@ const SavedAddressesScreen = ({ navigation }: any) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0A0A0A' },
+  container: { flex: 1, backgroundColor: G.bg },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -133,41 +135,41 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.3)',
+    borderBottomColor: G.border3,
   },
   backBtn: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#141414',
+    backgroundColor: G.glass2,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
   },
-  headerTitle: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
+  headerTitle: { fontSize: 16, fontWeight: '800', color: G.textPrimary },
   addBtn: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#C9A84C',
+    backgroundColor: G.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   content: { padding: 16, paddingBottom: 24 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   empty: { padding: 24, alignItems: 'center' },
-  emptyTitle: { fontWeight: '900', color: '#FFFFFF', fontSize: 16 },
-  emptyText: { marginTop: 6, color: '#8A8A8A', fontWeight: '700' },
+  emptyTitle: { fontWeight: '900', color: G.textPrimary, fontSize: 16 },
+  emptyText: { marginTop: 6, color: G.textSecondary, fontWeight: '700' },
   card: {
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     borderRadius: 14,
     padding: 14,
     marginBottom: 12,
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  label: { fontWeight: '900', color: '#FFFFFF' },
+  label: { fontWeight: '900', color: G.textPrimary },
   address: { marginTop: 6, color: '#CCCCCC', fontWeight: '700' },
   delBtn: {
     width: 42,

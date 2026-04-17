@@ -3,6 +3,8 @@ import { Alert, StyleSheet, Vibration, View } from 'react-native';
 import { Button, Card, Text, useTheme } from 'react-native-paper';
 import * as Haptics from 'expo-haptics';
 import * as Notifications from 'expo-notifications';
+import { showAlert } from '../common/CustomAlert';
+import { G } from '../../constants/glassStyles';
 
 export type BookingRequest = {
   id: string;
@@ -156,7 +158,7 @@ const BookingRequestCard = ({
     } catch {
     }
 
-    Alert.alert('Reject booking?', 'Do you want to reject this booking request?', [
+    showAlert('Reject booking?', 'Do you want to reject this booking request?', [
       { text: 'No', style: 'cancel' },
       {
         text: 'Reject',

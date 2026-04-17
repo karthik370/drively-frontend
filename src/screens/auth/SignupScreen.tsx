@@ -14,6 +14,8 @@ import { StatusBar } from 'expo-status-bar';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useAppDispatch } from '../../redux/store';
 import { signup } from '../../redux/slices/authSlice';
+import { showAlert } from '../../components/common/CustomAlert';
+import { G } from '../../constants/glassStyles';
 
 const SignupScreen = ({ route, navigation }: any) => {
   const { phoneNumber, userType, msg91AccessToken, otpSignupToken } = route.params;
@@ -28,7 +30,19 @@ const SignupScreen = ({ route, navigation }: any) => {
 
   const handleSignup = async () => {
     if (!formData.firstName.trim() || !formData.lastName.trim()) {
-      Alert.alert('Error', 'Please fill in all required fields');
+      showAlert('Error', 'Please fill in all required fields');
+      return;
+    }
+
+    const email = formData.email.trim();
+    if (!email) {
+      showAlert('Email Required', 'Please enter your email address. It is used for payment receipts and notifications.');
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      showAlert('Invalid Email', 'Please enter a valid email address.');
       return;
     }
 
@@ -47,14 +61,12 @@ const SignupScreen = ({ route, navigation }: any) => {
 
 
 
-      const email = formData.email.trim();
-      if (email) {
-        payload.email = email;
-      }
+      const emailVal = formData.email.trim().toLowerCase();
+      payload.email = emailVal;
 
       await dispatch(signup(payload)).unwrap();
     } catch (err: any) {
-      Alert.alert('Error', err || 'Signup failed');
+      showAlert('Error', err || 'Signup failed');
     } finally {
       setIsLoading(false);
     }
@@ -102,15 +114,17 @@ const SignupScreen = ({ route, navigation }: any) => {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email (Optional)</Text>
+            <Text style={styles.label}>Email *</Text>
             <TextInput
               style={styles.input}
               placeholder="Enter your email"
+              placeholderTextColor="#555"
               value={formData.email}
               onChangeText={(text) => setFormData({ ...formData, email: text })}
               keyboardType="email-address"
               autoCapitalize="none"
             />
+            <Text style={styles.emailHint}>Used for payment receipts and notifications</Text>
           </View>
 
           <View style={styles.inputGroup}>
@@ -144,7 +158,7 @@ const SignupScreen = ({ route, navigation }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
   },
   header: {
     paddingHorizontal: 16,
@@ -165,12 +179,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: G.textPrimary,
     marginBottom: 12,
   },
   subtitle: {
     fontSize: 16,
-    color: '#8A8A8A',
+    color: G.textSecondary,
   },
   formContainer: {
     marginBottom: 32,
@@ -186,19 +200,25 @@ const styles = StyleSheet.create({
   },
   input: {
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   disabledInput: {
-    backgroundColor: '#141414',
-    color: '#8A8A8A',
+    backgroundColor: G.glass2,
+    color: G.textSecondary,
+  },
+  emailHint: {
+    fontSize: 11,
+    color: G.textSecondary,
+    marginTop: 6,
+    fontWeight: '500',
   },
   signupButton: {
-    backgroundColor: '#C9A84C',
+    backgroundColor: G.accent,
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
@@ -208,7 +228,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   signupButtonText: {
-    color: '#ffffff',
+    color: G.textPrimary,
     fontSize: 16,
     fontWeight: '600',
   },

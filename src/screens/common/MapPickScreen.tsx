@@ -13,6 +13,8 @@ import MapView, { PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useAppSelector } from '../../redux/store';
 import { addSavedAddress, reverseGeocodeLocation } from '../../services/api';
+import { showAlert } from '../../components/common/CustomAlert';
+import { G } from '../../constants/glassStyles';
 
 type Mode = 'save-address' | 'pick-only';
 
@@ -76,7 +78,7 @@ const MapPickScreen = ({ navigation, route }: any) => {
 
     const address = formatted.trim();
     if (!address) {
-      Alert.alert('Address not ready', 'Please wait for address to load.');
+      showAlert('Address not ready', 'Please wait for address to load.');
       return;
     }
 
@@ -90,7 +92,7 @@ const MapPickScreen = ({ navigation, route }: any) => {
       });
       navigation.goBack();
     } catch (e: any) {
-      Alert.alert('Failed', e?.message || 'Please try again');
+      showAlert('Failed', e?.message || 'Please try again');
     } finally {
       setIsSaving(false);
     }
@@ -152,7 +154,7 @@ const MapPickScreen = ({ navigation, route }: any) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0A0A0A' },
+  container: { flex: 1, backgroundColor: G.bg },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -160,19 +162,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.3)',
+    borderBottomColor: G.border3,
   },
   backBtn: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#141414',
+    backgroundColor: G.glass2,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
   },
-  headerTitle: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
+  headerTitle: { fontSize: 16, fontWeight: '800', color: G.textPrimary },
   mapWrap: { flex: 1 },
   pinWrap: {
     position: 'absolute',
@@ -186,29 +188,29 @@ const styles = StyleSheet.create({
     padding: 14,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.3)',
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
   },
-  label: { color: '#8A8A8A', fontWeight: '800' },
-  value: { marginTop: 6, color: '#FFFFFF', fontWeight: '800' },
+  label: { color: G.textSecondary, fontWeight: '800' },
+  value: { marginTop: 6, color: G.textPrimary, fontWeight: '800' },
   input: {
     marginTop: 6,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#FFFFFF',
-    backgroundColor: '#111111',
+    color: G.textPrimary,
+    backgroundColor: G.bgAlt,
   },
   saveBtn: {
     marginTop: 12,
-    backgroundColor: '#C9A84C',
+    backgroundColor: G.accent,
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
   },
-  saveText: { color: '#ffffff', fontWeight: '900', fontSize: 16 },
+  saveText: { color: G.textPrimary, fontWeight: '900', fontSize: 16 },
   disabled: { opacity: 0.6 },
 });
 

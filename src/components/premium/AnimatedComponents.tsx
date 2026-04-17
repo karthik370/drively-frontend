@@ -1,7 +1,7 @@
 /**
  * Premium Animation Components
  * ─────────────────────────────
- * Reusable animation wrappers for the DriveMate dark theme.
+ * Reusable animation wrappers for the Drively dark theme.
  * Uses only React Native built-in Animated API (no native deps).
  */
 import React, { useEffect, useRef } from 'react';

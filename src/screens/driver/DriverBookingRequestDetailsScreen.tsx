@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Animated, Easing, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
@@ -10,6 +10,8 @@ import socketService from '../../services/socketService';
 import { acceptBooking, calculateRoute, getBookingDetails } from '../../services/api';
 import { BookingStatus, PaymentMethod, VehicleType } from '../../types';
 import type { BookingRequest } from '../../components/driver/BookingRequestCard';
+import { showAlert } from '../../components/common/CustomAlert';
+import { G } from '../../constants/glassStyles';
 
 const getInitialRegion = (lat: number, lng: number): Region => ({
   latitude: lat,
@@ -53,6 +55,18 @@ const DriverBookingRequestDetailsScreen = ({ navigation, route }: any) => {
   const [pickupEtaMin, setPickupEtaMin] = useState<number | null>(null);
   const [pickupDistanceKm, setPickupDistanceKm] = useState<number | null>(null);
   const pickupRouteKeyRef = useRef<string>('');
+
+  // Cache coords in refs so markers persist even after Redux clears the request
+  const cachedPickupRef = useRef<{ latitude: number; longitude: number } | null>(null);
+  const cachedDropRef = useRef<{ latitude: number; longitude: number } | null>(null);
+  if (Number.isFinite(pickupLat) && Number.isFinite(pickupLng)) {
+    cachedPickupRef.current = { latitude: pickupLat, longitude: pickupLng };
+  }
+  if (Number.isFinite(dropLat) && Number.isFinite(dropLng)) {
+    cachedDropRef.current = { latitude: dropLat, longitude: dropLng };
+  }
+  const stablePickup = cachedPickupRef.current;
+  const stableDrop = cachedDropRef.current;
 
   // Countdown timer
   const [countdown, setCountdown] = useState(ACCEPT_TIMEOUT);
@@ -202,20 +216,10 @@ const DriverBookingRequestDetailsScreen = ({ navigation, route }: any) => {
         updatedAt: (raw as any)?.updatedAt ? String((raw as any).updatedAt) : now,
       }));
 
-      const scheduledRaw = (raw as any)?.scheduledTime ? String((raw as any).scheduledTime) : null;
-      const scheduledAt = scheduledRaw ? new Date(scheduledRaw) : null;
-      const isFutureScheduled = Boolean(scheduledAt && Number.isFinite(scheduledAt.getTime()) && scheduledAt.getTime() > Date.now());
-
-      if (isFutureScheduled) {
-        Alert.alert('Scheduled booking accepted', 'This booking will start at the scheduled time.', [
-          { text: 'View', onPress: () => { try { navigation.navigate('Schedule'); } catch { } } },
-          { text: 'OK' },
-        ]);
-        return;
-      }
-      navigation.navigate('Tracking');
+      // Navigate to Tracking IMMEDIATELY for ALL bookings (including scheduled)
+      navigation.navigate('Tracking', { bookingId });
     } catch (e: any) {
-      Alert.alert('Accept booking', e?.message || 'Failed to accept booking');
+      showAlert('Accept booking', e?.message || 'Failed to accept booking');
     } finally {
       setAccepting(false);
     }
@@ -223,7 +227,7 @@ const DriverBookingRequestDetailsScreen = ({ navigation, route }: any) => {
 
   const onReject = () => {
     if (!bookingId) return;
-    Alert.alert('Reject booking?', 'Do you want to reject this booking request?', [
+    showAlert('Reject booking?', 'Do you want to reject this booking request?', [
       { text: 'No', style: 'cancel' },
       {
         text: 'Reject',
@@ -234,7 +238,7 @@ const DriverBookingRequestDetailsScreen = ({ navigation, route }: any) => {
             dispatch(removeBookingRequest(bookingId));
             navigation.goBack();
           } catch {
-            Alert.alert('Error', 'Failed to reject booking');
+            showAlert('Error', 'Failed to reject booking');
           }
         },
       },
@@ -276,23 +280,23 @@ const DriverBookingRequestDetailsScreen = ({ navigation, route }: any) => {
           style={StyleSheet.absoluteFill}
           initialRegion={initialRegion}
         >
-          {/* Pickup marker with custom view */}
-          {Number.isFinite(pickupLat) && Number.isFinite(pickupLng) ? (
-            <Marker coordinate={{ latitude: pickupLat, longitude: pickupLng }} title="Pickup">
+          {/* Pickup marker with cached coords */}
+          {stablePickup ? (
+            <Marker coordinate={stablePickup} tracksViewChanges={true} zIndex={5} title="Pickup">
               <View style={styles.markerWrap}>
                 <View style={[styles.markerDot, { backgroundColor: '#10b981' }]}>
-                  <Icon name="account" size={14} color="#ffffff" />
+                  <Icon name="account" size={18} color="#ffffff" />
                 </View>
                 <View style={[styles.markerTriangle, { borderTopColor: '#10b981' }]} />
               </View>
             </Marker>
           ) : null}
-          {/* Drop marker */}
-          {Number.isFinite(dropLat) && Number.isFinite(dropLng) ? (
-            <Marker coordinate={{ latitude: dropLat, longitude: dropLng }} title="Drop">
+          {/* Drop marker with cached coords */}
+          {stableDrop ? (
+            <Marker coordinate={stableDrop} tracksViewChanges={true} zIndex={5} title="Drop">
               <View style={styles.markerWrap}>
                 <View style={[styles.markerDot, { backgroundColor: '#ef4444' }]}>
-                  <Icon name="flag-checkered" size={14} color="#ffffff" />
+                  <Icon name="flag-checkered" size={18} color="#ffffff" />
                 </View>
                 <View style={[styles.markerTriangle, { borderTopColor: '#ef4444' }]} />
               </View>
@@ -300,7 +304,7 @@ const DriverBookingRequestDetailsScreen = ({ navigation, route }: any) => {
           ) : null}
           {/* Driver location marker */}
           {driverLocation && Number.isFinite(driverLocation.latitude) && Number.isFinite(driverLocation.longitude) ? (
-            <Marker coordinate={{ latitude: driverLocation.latitude, longitude: driverLocation.longitude }} title="You">
+            <Marker coordinate={{ latitude: driverLocation.latitude, longitude: driverLocation.longitude }} tracksViewChanges={true} zIndex={10} title="You">
               <View style={styles.driverMarker}>
                 <Icon name="navigation-variant" size={20} color="#ffffff" />
               </View>
@@ -406,41 +410,50 @@ const DriverBookingRequestDetailsScreen = ({ navigation, route }: any) => {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Full-screen accepting overlay */}
+      {accepting ? (
+        <View style={styles.acceptingOverlay}>
+          <ActivityIndicator size="large" color="#C9A84C" />
+          <Text style={styles.acceptingText}>Accepting Ride...</Text>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0A0A0A' },
+  container: { flex: 1, backgroundColor: G.bg },
 
   // Header
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingTop: 8, paddingBottom: 10, backgroundColor: '#0A0A0A',
+    paddingHorizontal: 16, paddingTop: 8, paddingBottom: 10, backgroundColor: G.bg,
   },
   backBtn: {
     width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#141414',
+    backgroundColor: G.glass2,
   },
-  headerTitle: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
+  headerTitle: { fontSize: 16, fontWeight: '800', color: G.textPrimary },
 
   // Map
-  mapWrap: { flex: 1, backgroundColor: '#141414' },
+  mapWrap: { flex: 1, backgroundColor: G.glass2 },
 
   // Custom markers
   markerWrap: { alignItems: 'center' },
   markerDot: {
-    width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
-    elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4,
+    width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 3, borderColor: '#ffffff',
+    elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 6,
   },
   markerTriangle: {
-    width: 0, height: 0, borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 8,
+    width: 0, height: 0, borderLeftWidth: 7, borderRightWidth: 7, borderTopWidth: 10,
     borderLeftColor: 'transparent', borderRightColor: 'transparent', marginTop: -2,
   },
   driverMarker: {
-    width: 34, height: 34, borderRadius: 17, backgroundColor: '#C9A84C',
+    width: 34, height: 34, borderRadius: 17, backgroundColor: G.accent,
     alignItems: 'center', justifyContent: 'center',
-    elevation: 6, shadowcolor: '#C9A84C', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 6,
+    elevation: 6, shadowColor: G.accent, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 6,
   },
 
   // Timer
@@ -450,16 +463,16 @@ const styles = StyleSheet.create({
   },
   timerBar: { height: '100%', borderRadius: 2 },
   countdownBadge: {
-    position: 'absolute', top: 12, right: 12, backgroundColor: '#0A0A0A',
+    position: 'absolute', top: 12, right: 12, backgroundColor: G.bg,
     borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6,
     elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 6,
   },
-  countdownText: { fontSize: 16, fontWeight: '900', color: '#FFFFFF' },
+  countdownText: { fontSize: 16, fontWeight: '900', color: G.textPrimary },
 
   // Details
   detailsWrap: {
     padding: 16, borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.3)', backgroundColor: '#0A0A0A',
+    borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.3)', backgroundColor: G.bg,
     marginTop: -16,
     elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.08, shadowRadius: 12,
   },
@@ -468,13 +481,13 @@ const styles = StyleSheet.create({
   fareRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
   fareChip: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: '#141414', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8,
+    backgroundColor: G.glass2, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8,
   },
   fareValue: { fontSize: 22, fontWeight: '900', color: '#16a34a' },
   tripChip: {
-    backgroundColor: '#141414', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6,
+    backgroundColor: G.glass2, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6,
   },
-  tripChipText: { fontSize: 11, fontWeight: '800', color: '#C9A84C' },
+  tripChipText: { fontSize: 11, fontWeight: '800', color: G.accent },
   hourChip: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: 'rgba(139,92,246,0.1)', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6,
@@ -483,7 +496,7 @@ const styles = StyleSheet.create({
 
   // Route card
   routeCard: {
-    backgroundColor: '#111111', borderRadius: 14, padding: 14, marginBottom: 14,
+    backgroundColor: G.bgAlt, borderRadius: 14, padding: 14, marginBottom: 14,
   },
   routeRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   routeDotGreen: {
@@ -493,19 +506,19 @@ const styles = StyleSheet.create({
     width: 10, height: 10, borderRadius: 5, backgroundColor: '#ef4444', marginTop: 4,
   },
   routeLineVert: {
-    width: 2, height: 14, backgroundColor: '#1E1E1E', marginLeft: 4, marginVertical: 2,
+    width: 2, height: 14, backgroundColor: G.glass3, marginLeft: 4, marginVertical: 2,
   },
   routeText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#CCCCCC' },
 
   // Metrics
   metricsRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: '#111111', borderRadius: 14, padding: 14, marginBottom: 14,
+    backgroundColor: G.bgAlt, borderRadius: 14, padding: 14, marginBottom: 14,
   },
   metricItem: { flex: 1, alignItems: 'center' },
-  metricSep: { width: 1, height: 30, backgroundColor: '#1E1E1E' },
-  metricValue: { fontSize: 14, fontWeight: '800', color: '#FFFFFF', marginTop: 4 },
-  metricLabel: { fontSize: 10, fontWeight: '600', color: '#666666', marginTop: 2 },
+  metricSep: { width: 1, height: 30, backgroundColor: G.glass3 },
+  metricValue: { fontSize: 14, fontWeight: '800', color: G.textPrimary, marginTop: 4 },
+  metricLabel: { fontSize: 10, fontWeight: '600', color: G.textMuted, marginTop: 2 },
 
   // Actions
   actionsRow: { flexDirection: 'row', gap: 10 },
@@ -520,12 +533,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     elevation: 4, shadowColor: '#16a34a', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 6,
   },
-  acceptText: { color: '#ffffff', fontWeight: '900', fontSize: 15 },
+  acceptText: { color: G.textPrimary, fontWeight: '900', fontSize: 15 },
   btnDisabled: { opacity: 0.7 },
 
   // Empty
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  emptyTitle: { color: '#8A8A8A', fontWeight: '800', fontSize: 16 },
+  emptyTitle: { color: G.textSecondary, fontWeight: '800', fontSize: 16 },
+
+  // Accepting overlay
+  acceptingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    zIndex: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  acceptingText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#ffffff',
+    marginTop: 14,
+  },
 });
 
 export default DriverBookingRequestDetailsScreen;

@@ -1,5 +1,5 @@
 /**
- * DriveMate Premium Dark Mode Design System
+ * Drively Premium Dark Mode Design System
  * ─────────────────────────────────────────
  * Luxury dark theme with gold accents.
  */

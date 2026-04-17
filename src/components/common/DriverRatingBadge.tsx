@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { G } from '../../constants/glassStyles';
 
 interface Props {
     rating: number | null | undefined;
@@ -14,7 +15,7 @@ const DriverRatingBadge = ({ rating, totalRides, size = 'small' }: Props) => {
 
     if (!numRating) {
         return (
-            <View style={[styles.badge, isLarge && styles.badgeLarge, { backgroundColor: '#141414' }]}>
+            <View style={[styles.badge, isLarge && styles.badgeLarge, { backgroundColor: G.glass2 }]}>
                 <Icon name="star-outline" size={isLarge ? 16 : 12} color="#9ca3af" />
                 <Text style={[styles.text, isLarge && styles.textLarge, { color: '#666666' }]}>New</Text>
             </View>

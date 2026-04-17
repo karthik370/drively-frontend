@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { InteractionManager } from 'react-native';
 import {
   ActivityIndicator,
   Alert,
@@ -15,8 +16,9 @@ import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import * as Location from 'expo-location';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { G } from '../../constants/glassStyles';
 
-import api, { getWalletBalance } from '../../services/api';
+import api, { getWalletBalance, getDiscountPreview, type DiscountPreview } from '../../services/api';
 import PaymentMethodSelector, { type PaymentOption } from '../../components/customer/PaymentMethodSelector';
 import { useAppDispatch, useAppSelector } from '../../redux/store';
 import { BookingStatus, PaymentMethod, TransmissionType, TripType, VehicleType } from '../../types';
@@ -30,6 +32,7 @@ import {
   setPickupLocation,
   setUserLocation,
 } from '../../redux/slices/locationSlice';
+import { showAlert } from '../../components/common/CustomAlert';
 
 type Props = {
   navigation: any;
@@ -108,6 +111,15 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
 
   const LOCAL_PACKAGES = useMemo(() => [1, 2, 3, 4, 5, 6, 7, 8], []);
 
+  // ── Screen-ready gate: defer heavy work until navigation transition completes ──
+  const [screenReady, setScreenReady] = useState(false);
+  useEffect(() => {
+    const handle = InteractionManager.runAfterInteractions(() => {
+      setScreenReady(true);
+    });
+    return () => handle.cancel();
+  }, []);
+
   const [isLoadingRoute, setIsLoadingRoute] = useState(false);
   const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(null);
   const [tripType, setTripType] = useState<TripType | null>(null);
@@ -127,6 +139,8 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentOption>('CASH');
   const [walletBalance, setWalletBalance] = useState<number>(0);
+
+  const [discountPreview, setDiscountPreview] = useState<DiscountPreview | null>(null);
 
   const [timingMode, setTimingMode] = useState<'NOW' | 'SCHEDULED'>('NOW');
   const [scheduledTime, setScheduledTime] = useState<Date | null>(null);
@@ -199,7 +213,8 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
   }, [minScheduledTime, pendingScheduleTime, scheduledTime]);
 
   const isScheduleSelectionValid = useMemo(() => {
-    return schedulePickerDate.getTime() >= minScheduledTime.getTime();
+    // 60s tolerance to prevent race condition when modal opens and minScheduledTime recalculates
+    return schedulePickerDate.getTime() >= minScheduledTime.getTime() - 60_000;
   }, [minScheduledTime, schedulePickerDate]);
 
   const formatScheduleButtonTime = useCallback((d: Date) => {
@@ -281,7 +296,7 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
 
     if ((pickupLocation && !pickupInsideServiceArea) || (dropLocation && !dropInsideServiceArea)) {
       lastServiceAlertKeyRef.current = alertKey;
-      Alert.alert('Not serviceable area', 'We will be available soon. Please choose locations within Hyderabad (ORR).');
+      showAlert('Not serviceable area', 'We will be available soon. Please choose locations within Hyderabad (ORR).');
     }
   }, [dropInsideServiceArea, dropLocation, pickupInsideServiceArea, pickupLocation, tripType]);
 
@@ -291,6 +306,36 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
       setTripType(initial);
     }
   }, [route?.params?.serviceType]);
+
+  // ── Airport transfer handling ──
+  useEffect(() => {
+    const at = route?.params?.airportTransfer;
+    if (!at) return;
+
+    // Airport GPS coordinates
+    const AIRPORT_COORDS: Record<string, { latitude: number; longitude: number }> = {
+      HYD: { latitude: 17.2403, longitude: 78.4294 },
+      BLR: { latitude: 13.1986, longitude: 77.7066 },
+      DEL: { latitude: 28.5562, longitude: 77.1000 },
+      BOM: { latitude: 19.0896, longitude: 72.8656 },
+      MAA: { latitude: 12.9941, longitude: 80.1709 },
+    };
+
+    const coords = AIRPORT_COORDS[at.airportCode] || AIRPORT_COORDS.HYD;
+    const label = at.addressLabel || `${at.airportCode} Airport`;
+
+    setTripType(TripType.ONE_WAY);
+
+    if (at.type === 'PICKUP') {
+      // Airport pickup  → airport is pickup, user selects drop
+      dispatch(setPickupLocation(coords));
+      dispatch(setPickupAddress(label));
+    } else {
+      // Airport drop → user selects pickup, airport is drop
+      dispatch(setDropLocation(coords));
+      dispatch(setDropAddress(label));
+    }
+  }, [route?.params?.airportTransfer, dispatch]);
 
   useEffect(() => {
     if (!tripType) return;
@@ -429,7 +474,7 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
           longitude: coordinate.longitude,
         });
       } catch {
-        Alert.alert('Map', 'Could not fetch address for that point.');
+        showAlert('Map', 'Could not fetch address for that point.');
       } finally {
         setIsPicking(false);
       }
@@ -443,7 +488,7 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
     try {
       const servicesEnabled = await Location.hasServicesEnabledAsync();
       if (!servicesEnabled) {
-        Alert.alert('Location services', 'Turn on GPS/location services to detect your current location');
+        showAlert('Location services', 'Turn on GPS/location services to detect your current location');
         return;
       }
 
@@ -455,7 +500,7 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
       }
 
       if (status !== 'granted') {
-        Alert.alert('Location permission', 'Enable location permission to detect your current location');
+        showAlert('Location permission', 'Enable location permission to detect your current location');
         return;
       }
 
@@ -490,7 +535,7 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
       const target = isSingleLocationRoundTrip ? 'pickup' : mapSelectTarget;
       await setTargetFromCoords(target, coords);
     } catch {
-      Alert.alert('Location', 'Could not detect current location.');
+      showAlert('Location', 'Could not detect current location.');
     } finally {
       setIsPicking(false);
     }
@@ -740,6 +785,32 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
     setPromoInfo(null);
   }, [estimate.total, promoInfo]);
 
+  // Fetch discount preview when fare changes
+  useEffect(() => {
+    if (!estimate.total || estimate.total <= 0) {
+      setDiscountPreview(null);
+      return;
+    }
+
+    let alive = true;
+    const fetchDiscounts = async () => {
+      try {
+        const preview = await getDiscountPreview(estimate.total);
+        if (!alive) return;
+        setDiscountPreview(preview);
+        // Auto-enable experienced driver for Premium members
+        if (preview.isPremium && preview.requireExperienced) {
+          setRequireExperienced(true);
+        }
+      } catch {
+        if (alive) setDiscountPreview(null);
+      }
+    };
+
+    void fetchDiscounts();
+    return () => { alive = false; };
+  }, [estimate.total]);
+
   useEffect(() => {
     let alive = true;
 
@@ -799,22 +870,22 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
 
   const requestDriver = async () => {
     if (!user) {
-      Alert.alert('Error', 'User not loaded');
+      showAlert('Error', 'User not loaded');
       return;
     }
 
     if (!pickupLocation) {
-      Alert.alert('Missing pickup', 'Please select pickup location');
+      showAlert('Missing pickup', 'Please select pickup location');
       return;
     }
 
     if (!isSingleLocationRoundTrip && !dropLocation) {
-      Alert.alert('Missing destination', 'Please select destination');
+      showAlert('Missing destination', 'Please select destination');
       return;
     }
 
     if (!tripType) {
-      Alert.alert('Select trip type', 'Please select One Way, Round Trip or Outstation');
+      showAlert('Select trip type', 'Please select One Way, Round Trip or Outstation');
       return;
     }
 
@@ -822,24 +893,24 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
       const pickupInside = isPointInPolygon(pickupLocation.latitude, pickupLocation.longitude, HYDERABAD_ORR_POLYGON);
       const dropInside = isPointInPolygon(dropLocation.latitude, dropLocation.longitude, HYDERABAD_ORR_POLYGON);
       if (!pickupInside || !dropInside) {
-        Alert.alert('Not serviceable area', 'We will be available soon. Please choose locations within Hyderabad (ORR).');
+        showAlert('Not serviceable area', 'We will be available soon. Please choose locations within Hyderabad (ORR).');
         return;
       }
     }
 
     if (timingMode === 'SCHEDULED') {
       if (!scheduledTime) {
-        Alert.alert('Schedule time', 'Please select a scheduled time');
+        showAlert('Schedule time', 'Please select a scheduled time');
         return;
       }
       if (scheduledTime.getTime() < Date.now() + 90 * 60 * 1000) {
-        Alert.alert('Schedule time', 'Scheduled time must be at least 1 hour 30 minutes from now');
+        showAlert('Schedule time', 'Scheduled time must be at least 1 hour 30 minutes from now');
         return;
       }
     }
 
     if (paymentMethod === 'WALLET' && walletBalance < estimate.total) {
-      Alert.alert(
+      showAlert(
         'Insufficient Wallet Balance',
         `Your wallet balance (₹${walletBalance.toFixed(0)}) is less than the estimated fare (₹${estimate.total}). Please top up your wallet or choose a different payment method.`,
       );
@@ -914,7 +985,7 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
 
       navigation.navigate('Tracking', { bookingId });
     } catch (e: any) {
-      Alert.alert('Booking', e?.response?.data?.message || e?.message || 'Failed to create booking');
+      showAlert('Booking', e?.response?.data?.message || e?.message || 'Failed to create booking');
     } finally {
       setIsSubmitting(false);
     }
@@ -939,6 +1010,25 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
     };
   }, [pickupLocation, dropLocation]);
 
+  // Show minimal loading UI during navigation transition
+  if (!screenReady) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+            <Icon name="arrow-left" size={22} color="#C9A84C" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Confirm Ride</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color="#C9A84C" />
+          <Text style={{ color: '#8A8A8A', marginTop: 12, fontSize: 14, fontWeight: '600' }}>Loading…</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -958,7 +1048,7 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
             <Marker coordinate={effectiveDropLocation} pinColor="#ef4444" title="Drop" zIndex={10} />
           ) : null}
           {routeInfo?.polyline?.length ? (
-            <Polyline coordinates={routeInfo.polyline} strokecolor="#C9A84C" strokeWidth={4} />
+            <Polyline coordinates={routeInfo.polyline} strokeColor="#C9A84C" strokeWidth={4} />
           ) : null}
           {nearbyDrivers.map((d) => {
             const lat = Number((d as any)?.location?.latitude);
@@ -1018,7 +1108,57 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
 
       <View style={styles.sheetWrap}>
         <ScrollView style={styles.sheet} contentContainerStyle={styles.sheetContent} keyboardShouldPersistTaps="handled">
-          <Text style={styles.sectionTitle}>When</Text>
+          {/* ── Pickup & Drop locations (top for easy access) ── */}
+          <View style={styles.addressCard}>
+            <TouchableOpacity
+              style={styles.addressRow}
+              onPress={() => {
+                setMapSelectTarget('pickup');
+                navigation.navigate('LocationSearch', { target: 'pickup', initialValue: pickupAddress ?? '' });
+              }}
+            >
+              <Icon name="circle" size={12} color="#10b981" />
+              <Text style={styles.addressText} numberOfLines={1}>
+                {pickupAddress ?? 'Search pickup location'}
+              </Text>
+              <Icon name="magnify" size={18} color={G.accent} />
+            </TouchableOpacity>
+            {!isSingleLocationRoundTrip ? (
+              <>
+                <View style={styles.addressDivider} />
+                <TouchableOpacity
+                  style={styles.addressRow}
+                  onPress={() => {
+                    setMapSelectTarget('drop');
+                    navigation.navigate('LocationSearch', { target: 'drop', initialValue: dropAddress ?? '' });
+                  }}
+                >
+                  <Icon name="map-marker" size={12} color="#ef4444" />
+                  <Text style={[styles.addressText, !dropAddress && { color: G.accent }]} numberOfLines={1}>
+                    {dropAddress ?? 'Search drop location'}
+                  </Text>
+                  <Icon name="magnify" size={18} color={G.accent} />
+                </TouchableOpacity>
+              </>
+            ) : null}
+          </View>
+
+          <View style={styles.metaRow}>
+            <View style={styles.metaItem}>
+              <Icon name="map-marker-distance" size={18} color="#8A8A8A" />
+              <Text style={styles.metaText}>{routeInfo ? `${estimate.distanceKm.toFixed(1)} km` : '—'}</Text>
+            </View>
+            <View style={[styles.metaItem, styles.metaItemMid]}>
+              <Icon name="clock-outline" size={18} color="#8A8A8A" />
+              <Text style={styles.metaText}>{routeInfo ? `${Math.round(estimate.durationMin)} min` : '—'}</Text>
+            </View>
+            <View style={styles.metaItem}>
+              <Icon name="cash" size={18} color="#8A8A8A" />
+              <Text style={styles.metaText}>₹{estimate.total}</Text>
+            </View>
+          </View>
+
+          <Text style={[styles.sectionTitle, { marginTop: 16 }]}>When</Text>
           <View style={styles.tripRow}>
             <TouchableOpacity
               onPress={() => setTimingMode('NOW')}
@@ -1053,7 +1193,7 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
             </TouchableOpacity>
           ) : null}
 
-          <Text style={styles.sectionTitle}>Promo</Text>
+          <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Promo</Text>
           <View style={styles.promoRow}>
             <TouchableOpacity
               style={styles.promoBtn}
@@ -1074,16 +1214,16 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
               onPress={async () => {
                 const code = promoCode.trim();
                 if (!code) {
-                  Alert.alert('Promo', 'Select a promo code first');
+                  showAlert('Promo', 'Select a promo code first');
                   return;
                 }
                 try {
                   const res = await validatePromoCode(code, estimate.total);
                   setPromoInfo({ code: res.code, discountAmount: res.discountAmount, finalAmount: res.finalAmount });
-                  Alert.alert('Promo', `Applied. Discount: ₹${res.discountAmount}`);
+                  showAlert('Promo', `Applied. Discount: ₹${res.discountAmount}`);
                 } catch (e: any) {
                   setPromoInfo(null);
-                  Alert.alert('Promo', e?.message || 'Invalid promo code');
+                  showAlert('Promo', e?.message || 'Invalid promo code');
                 }
               }}
             >
@@ -1097,55 +1237,6 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
               <Text style={styles.promoInfoText}>Payable: ₹{promoInfo.finalAmount.toFixed(0)}</Text>
             </View>
           ) : null}
-
-          <View style={styles.addressCard}>
-            <TouchableOpacity
-              style={styles.addressRow}
-              onPress={() => {
-                setMapSelectTarget('pickup');
-                navigation.navigate('LocationSearch', { target: 'pickup', initialValue: pickupAddress ?? '' });
-              }}
-            >
-              <Icon name="circle" size={12} color="#10b981" />
-              <Text style={styles.addressText} numberOfLines={1}>
-                {pickupAddress ?? 'Pickup location'}
-              </Text>
-              <Icon name="pencil" size={16} color="#8A8A8A" />
-            </TouchableOpacity>
-            {!isSingleLocationRoundTrip ? (
-              <>
-                <View style={styles.addressDivider} />
-                <TouchableOpacity
-                  style={styles.addressRow}
-                  onPress={() => {
-                    setMapSelectTarget('drop');
-                    navigation.navigate('LocationSearch', { target: 'drop', initialValue: dropAddress ?? '' });
-                  }}
-                >
-                  <Icon name="map-marker" size={12} color="#ef4444" />
-                  <Text style={styles.addressText} numberOfLines={1}>
-                    {dropAddress ?? 'Select destination'}
-                  </Text>
-                  <Icon name="pencil" size={16} color="#8A8A8A" />
-                </TouchableOpacity>
-              </>
-            ) : null}
-          </View>
-
-          <View style={styles.metaRow}>
-            <View style={styles.metaItem}>
-              <Icon name="map-marker-distance" size={18} color="#8A8A8A" />
-              <Text style={styles.metaText}>{routeInfo ? `${estimate.distanceKm.toFixed(1)} km` : '—'}</Text>
-            </View>
-            <View style={[styles.metaItem, styles.metaItemMid]}>
-              <Icon name="clock-outline" size={18} color="#8A8A8A" />
-              <Text style={styles.metaText}>{routeInfo ? `${Math.round(estimate.durationMin)} min` : '—'}</Text>
-            </View>
-            <View style={styles.metaItem}>
-              <Icon name="cash" size={18} color="#8A8A8A" />
-              <Text style={styles.metaText}>₹{estimate.total}</Text>
-            </View>
-          </View>
 
           <Text style={styles.sectionTitle}>Car Type</Text>
           <View style={styles.tripRow}>
@@ -1321,17 +1412,17 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
             <TouchableOpacity
               onPress={() => {
                 if (outstationTripType === 'ROUND_TRIP') {
-                  Alert.alert('Outstation Charges', 'Extra time is charged at ₹60/hr only if trip exceeds the selected package hours.');
+                  showAlert('Outstation Charges', 'Extra time is charged at ₹60/hr only if trip exceeds the selected package hours.');
                   return;
                 }
-                Alert.alert(
+                showAlert(
                   'Outstation Charges',
                   'One-way charge applies only after 200 km from pickup: ₹6/km above 200 km. Extra time is charged at ₹99/hr only if trip exceeds the selected package hours.'
                 );
               }}
               style={{ marginTop: 8 }}
             >
-              <Text style={[styles.promoBtnText, { color: '#C9A84C', fontWeight: '700' }]}>View charges details</Text>
+              <Text style={[styles.promoBtnText, { color: G.accent, fontWeight: '700' }]}>View charges details</Text>
             </TouchableOpacity>
           ) : null}
 
@@ -1360,12 +1451,27 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
               <View>
                 <Text style={styles.fareHeaderLabel}>Estimated Fare</Text>
                 <Text style={styles.fareHeaderTotal}>
-                  ₹{promoInfo ? promoInfo.finalAmount.toFixed(0) : estimate.total}
+                  ₹{(() => {
+                    let total = estimate.total;
+                    if (promoInfo) total = promoInfo.finalAmount;
+                    if (discountPreview && discountPreview.totalDiscount > 0) {
+                      total = Math.max(0, total - discountPreview.totalDiscount);
+                    }
+                    return Math.round(total);
+                  })()}
                 </Text>
               </View>
-              <View style={styles.fareHeaderBadge}>
-                <Icon name="shield-check" size={14} color="#10b981" />
-                <Text style={styles.fareHeaderBadgeText}>No surge pricing</Text>
+              <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                <View style={styles.fareHeaderBadge}>
+                  <Icon name="shield-check" size={14} color="#10b981" />
+                  <Text style={styles.fareHeaderBadgeText}>No surge pricing</Text>
+                </View>
+                {discountPreview?.isPremium ? (
+                  <View style={[styles.fareHeaderBadge, { backgroundColor: 'rgba(201,168,76,0.15)', borderColor: G.accent }]}>
+                    <Icon name="star" size={14} color="#C9A84C" />
+                    <Text style={[styles.fareHeaderBadgeText, { color: G.accent }]}>Premium Member</Text>
+                  </View>
+                ) : null}
               </View>
             </View>
 
@@ -1458,12 +1564,46 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
               {promoInfo ? (
                 <View style={styles.fareRow}>
                   <Text style={styles.fareLabel}>Promo Discount</Text>
-                  <Text style={styles.fareValue}>-₹{promoInfo.discountAmount.toFixed(0)}</Text>
+                  <Text style={[styles.fareValue, { color: '#10b981' }]}>-₹{promoInfo.discountAmount.toFixed(0)}</Text>
+                </View>
+              ) : null}
+              {discountPreview && discountPreview.membershipDiscount > 0 ? (
+                <View style={styles.fareRow}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
+                    <Icon name="crown" size={14} color="#C9A84C" />
+                    <Text style={styles.fareLabel}>{discountPreview.membershipLabel}</Text>
+                  </View>
+                  <Text style={[styles.fareValue, { color: '#10b981' }]}>-₹{discountPreview.membershipDiscount}</Text>
+                </View>
+              ) : null}
+              {discountPreview && discountPreview.streakDiscount > 0 ? (
+                <View style={styles.fareRow}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
+                    <Icon name="fire" size={14} color="#f59e0b" />
+                    <Text style={styles.fareLabel}>{discountPreview.streakLabel}</Text>
+                  </View>
+                  <Text style={[styles.fareValue, { color: '#10b981' }]}>-₹{discountPreview.streakDiscount}</Text>
+                </View>
+              ) : null}
+              {discountPreview?.isPremium && requireExperienced ? (
+                <View style={[styles.fareRow, { backgroundColor: 'rgba(201,168,76,0.08)', borderRadius: 8, padding: 8, marginVertical: 4 }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
+                    <Icon name="star-circle" size={14} color="#C9A84C" />
+                    <Text style={[styles.fareLabel, { color: G.accent, fontWeight: '700' }]}>Experienced driver included</Text>
+                  </View>
+                  <Text style={[styles.fareValue, { color: G.accent }]}>FREE</Text>
                 </View>
               ) : null}
               <View style={[styles.fareRow, styles.fareRowTotal]}>
                 <Text style={styles.fareTotalLabel}>Total</Text>
-                <Text style={styles.fareTotalValue}>₹{promoInfo ? promoInfo.finalAmount.toFixed(0) : estimate.total}</Text>
+                <Text style={styles.fareTotalValue}>₹{(() => {
+                    let total = estimate.total;
+                    if (promoInfo) total = promoInfo.finalAmount;
+                    if (discountPreview && discountPreview.totalDiscount > 0) {
+                      total = Math.max(0, total - discountPreview.totalDiscount);
+                    }
+                    return Math.round(total);
+                  })()}</Text>
               </View>
             </View>
           </View>
@@ -1507,24 +1647,31 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
                   }}
                   mode="datetime"
                   display="spinner"
+                  minimumDate={minScheduledTime}
                   minuteInterval={5}
+                  themeVariant="dark"
+                  textColor="#FFFFFF"
                 />
               ) : (
                 <>
                   <View style={styles.scheduleAndroidRow}>
                     <TouchableOpacity
                       style={styles.scheduleAndroidBtn}
-                      onPress={() => setAndroidPickerMode('date')}
+                      onPress={() => setAndroidPickerMode(androidPickerMode === 'date' ? null : 'date')}
                     >
                       <Icon name="calendar" size={18} color="#C9A84C" />
-                      <Text style={styles.scheduleAndroidBtnText}>Select Date</Text>
+                      <Text style={styles.scheduleAndroidBtnText}>
+                        {schedulePickerDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.scheduleAndroidBtn}
-                      onPress={() => setAndroidPickerMode('time')}
+                      onPress={() => setAndroidPickerMode(androidPickerMode === 'time' ? null : 'time')}
                     >
                       <Icon name="clock-outline" size={18} color="#C9A84C" />
-                      <Text style={styles.scheduleAndroidBtnText}>Select Time</Text>
+                      <Text style={styles.scheduleAndroidBtnText}>
+                        {schedulePickerDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                      </Text>
                     </TouchableOpacity>
                   </View>
 
@@ -1532,9 +1679,11 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
                     <DateTimePicker
                       value={schedulePickerDate}
                       mode={androidPickerMode}
-                      display="default"
+                      display="spinner"
+                      minimumDate={minScheduledTime}
                       minuteInterval={5}
                       is24Hour={false}
+                      themeVariant="dark"
                       onChange={(event: DateTimePickerEvent, date?: Date) => {
                         if ((event as any)?.type === 'dismissed') {
                           setAndroidPickerMode(null);
@@ -1588,29 +1737,29 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#111111' },
+  container: { flex: 1, backgroundColor: G.bg },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.glass1,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.3)',
+    borderBottomColor: G.border2,
   },
   backBtn: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#141414',
+    backgroundColor: G.glass2,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
   },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
-  mapWrap: { height: 260, backgroundColor: '#141414' },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: G.textPrimary },
+  mapWrap: { height: 260, backgroundColor: G.glass2 },
   nearbyDriverMarker: {
     width: 32,
     height: 32,
@@ -1619,7 +1768,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
   },
   mapTopBar: {
     position: 'absolute',
@@ -1635,7 +1784,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 12,
-    color: '#FFFFFF',
+    color: G.textPrimary,
     fontWeight: '700',
   },
   mapLocateIcon: {
@@ -1662,9 +1811,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   mapSelectChipLeft: { marginRight: 8 },
-  mapSelectChipActive: { backgroundColor: '#1E1E1E' },
-  mapSelectChipText: { color: '#FFFFFF', fontWeight: '800' },
-  mapSelectChipTextActive: { color: '#ffffff' },
+  mapSelectChipActive: { backgroundColor: G.accent, borderColor: G.accent },
+  mapSelectChipText: { color: G.textPrimary, fontWeight: '800' },
+  mapSelectChipTextActive: { color: G.textOnAccent },
   mapLoading: {
     position: 'absolute',
     top: 12,
@@ -1676,7 +1825,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  mapLoadingText: { marginLeft: 8, color: '#FFFFFF', fontWeight: '600' },
+  mapLoadingText: { marginLeft: 8, color: G.textPrimary, fontWeight: '600' },
   sheet: {
     flex: 1,
     paddingHorizontal: 16,
@@ -1692,57 +1841,62 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 16,
-    backgroundColor: '#111111',
+    backgroundColor: G.glass1,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.3)',
+    borderTopColor: G.border2,
   },
   addressCard: {
-    backgroundColor: '#0A0A0A',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-    padding: 14,
+    backgroundColor: G.glass3,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: G.border3,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 8,
   },
-  addressRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 2 },
-  addressText: { flex: 1, marginLeft: 10, color: '#FFFFFF', fontWeight: '600' },
-  addressDivider: { height: 1, backgroundColor: '#141414', marginVertical: 12 },
-  metaRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  addressRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6 },
+  addressText: { flex: 1, marginLeft: 10, color: G.textPrimary, fontWeight: '600', fontSize: 14 },
+  addressDivider: { height: 1, backgroundColor: G.border2, marginVertical: 12 },
+  metaRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16, marginBottom: 8 },
   metaItem: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    backgroundColor: '#0A0A0A',
-    borderRadius: 12,
+    backgroundColor: G.glass2,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border2,
   },
   metaItemMid: { marginHorizontal: 10 },
-  metaText: { marginLeft: 8, color: '#FFFFFF', fontWeight: '700' },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
-  tripRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 10 },
+  metaText: { marginLeft: 8, color: G.textPrimary, fontWeight: '700' },
+  sectionTitle: { fontSize: 14, fontWeight: '700', color: G.textPrimary, marginLeft: 4 },
+  tripRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 12 },
   tripPill: {
     paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     borderRadius: 999,
     borderWidth: 1,
     marginRight: 10,
-    marginBottom: 10,
+    marginBottom: 12,
   },
-  tripPillActive: { backgroundColor: '#1E1E1E', bordercolor: '#FFFFFF' },
-  tripPillInactive: { backgroundColor: '#0A0A0A', borderColor: 'rgba(255,255,255,0.3)' },
+  tripPillActive: { backgroundColor: G.glass3, borderColor: G.borderAccent },
+  tripPillInactive: { backgroundColor: G.glass1, borderColor: G.border2 },
   tripText: { fontWeight: '700', fontSize: 12 },
-  tripTextActive: { color: '#ffffff' },
-  tripTextInactive: { color: '#FFFFFF' },
+  tripTextActive: { color: G.accent },
+  tripTextInactive: { color: G.textSecondary },
   cta: {
-    backgroundColor: '#C9A84C',
+    backgroundColor: G.accent,
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
   },
   ctaDisabled: { opacity: 0.5 },
-  ctaText: { color: '#ffffff', fontWeight: '800', fontSize: 16 },
-  promoRow: { flexDirection: 'row', gap: 10, marginTop: 10, marginBottom: 10 },
+  ctaText: { color: G.textPrimary, fontWeight: '800', fontSize: 16 },
+  promoRow: { flexDirection: 'row', gap: 10, marginTop: 12, marginBottom: 12 },
   promoBtn: {
     flex: 1,
     flexDirection: 'row',
@@ -1752,55 +1906,55 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-    backgroundColor: '#0A0A0A',
+    borderColor: G.border3,
+    backgroundColor: G.bg,
   },
-  promoBtnText: { color: '#FFFFFF', fontWeight: '800' },
+  promoBtnText: { color: G.textPrimary, fontWeight: '800' },
   promoApply: {
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 12,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: G.glass3,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  promoApplyText: { color: '#ffffff', fontWeight: '900' },
+  promoApplyText: { color: G.textPrimary, fontWeight: '900' },
   promoInfoCard: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: 'rgba(16,185,129,0.1)',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-    padding: 12,
-    marginBottom: 10,
+    borderColor: 'rgba(16,185,129,0.3)',
+    padding: 14,
+    marginBottom: 12,
   },
-  promoInfoText: { color: '#FFFFFF', fontWeight: '700' },
+  promoInfoText: { color: '#10b981', fontWeight: '700' },
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 14,
-    backgroundColor: '#0A0A0A',
-    borderRadius: 12,
+    backgroundColor: G.glass1,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border2,
     marginTop: 12,
-    marginBottom: 8,
+    marginBottom: 12,
   },
   toggleRowActive: {
-    borderColor: '#FFFFFF',
-    backgroundColor: '#111111',
+    borderColor: G.borderAccent,
+    backgroundColor: G.glass2,
   },
   toggleTextCol: {
     flex: 1,
     marginRight: 10,
   },
   toggleMainText: {
-    color: '#FFFFFF',
+    color: G.textPrimary,
     fontWeight: '800',
     fontSize: 15,
   },
   toggleSubText: {
-    color: '#8A8A8A',
+    color: G.textSecondary,
     fontSize: 12,
     marginTop: 2,
   },
@@ -1809,14 +1963,14 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
   },
   checkboxActive: {
-    backgroundColor: '#1E1E1E',
-    borderColor: '#FFFFFF',
+    backgroundColor: G.glass3,
+    borderColor: G.textPrimary,
   },
 
   scheduleOverlay: {
@@ -1828,31 +1982,31 @@ const styles = StyleSheet.create({
   },
   scheduleModal: {
     width: '100%',
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderRadius: 16,
     padding: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
   },
   scheduleHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  scheduleTitle: { fontSize: 16, fontWeight: '900', color: '#FFFFFF' },
+  scheduleTitle: { fontSize: 16, fontWeight: '900', color: G.textPrimary },
   scheduleClose: {
     width: 34,
     height: 34,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#141414',
+    backgroundColor: G.glass2,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
   },
   schedulePickupTime: {
     marginTop: 10,
-    color: '#8A8A8A',
+    color: G.textSecondary,
     fontWeight: '800',
     textAlign: 'center',
   },
@@ -1860,10 +2014,10 @@ const styles = StyleSheet.create({
     marginTop: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     paddingVertical: 6,
   },
   scheduleAndroidRow: {
@@ -1882,12 +2036,12 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 12,
     borderRadius: 12,
-    backgroundColor: '#141414',
+    backgroundColor: G.glass2,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
   },
   scheduleAndroidBtnText: {
-    color: '#FFFFFF',
+    color: G.textPrimary,
     fontWeight: '900',
   },
   scheduleError: {
@@ -1903,36 +2057,36 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: 10,
     marginBottom: 10,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     padding: 10,
   },
   hoursBtn: {
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: G.glass3,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  hoursBtnText: { color: '#ffffff', fontWeight: '900', fontSize: 18 },
+  hoursBtnText: { color: G.textPrimary, fontWeight: '900', fontSize: 18 },
   hoursValue: { flex: 1, alignItems: 'center' },
-  hoursValueText: { color: '#FFFFFF', fontWeight: '900', fontSize: 16 },
-  hoursHintText: { marginTop: 2, color: '#8A8A8A', fontWeight: '700', fontSize: 12 },
+  hoursValueText: { color: G.textPrimary, fontWeight: '900', fontSize: 16 },
+  hoursHintText: { marginTop: 2, color: G.textSecondary, fontWeight: '700', fontSize: 12 },
 
   fareCardPro: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     marginTop: 12,
     marginBottom: 10,
     overflow: 'hidden',
   },
   fareHeaderPro: {
-    backgroundColor: '#1E1E1E',
+    backgroundColor: G.glass3,
     paddingHorizontal: 16,
     paddingVertical: 16,
     flexDirection: 'row',
@@ -1947,7 +2101,7 @@ const styles = StyleSheet.create({
   fareHeaderTotal: {
     fontSize: 28,
     fontWeight: '900',
-    color: '#ffffff',
+    color: G.textPrimary,
     marginTop: 2,
   },
   fareHeaderBadge: {
@@ -1968,19 +2122,19 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   fareCard: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     padding: 12,
     marginBottom: 10,
   },
   fareRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 5 },
   fareRowTotal: { paddingTop: 12, marginTop: 8, borderTopWidth: 1.5, borderTopColor: 'rgba(255,255,255,0.3)' },
-  fareLabel: { color: '#8A8A8A', fontWeight: '600', fontSize: 13 },
-  fareValue: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
-  fareTotalLabel: { color: '#FFFFFF', fontWeight: '800', fontSize: 15 },
-  fareTotalValue: { color: '#C9A84C', fontWeight: '900', fontSize: 18 },
+  fareLabel: { color: G.textSecondary, fontWeight: '600', fontSize: 13 },
+  fareValue: { color: G.textPrimary, fontWeight: '700', fontSize: 13 },
+  fareTotalLabel: { color: G.textPrimary, fontWeight: '800', fontSize: 15 },
+  fareTotalValue: { color: G.accent, fontWeight: '900', fontSize: 18 },
 });
 
 export default RideConfirmScreen;

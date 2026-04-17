@@ -111,6 +111,7 @@ const DrawerNavigator = () => {
         drawerActiveBackgroundColor: drawerTheme.activeBackground,
         drawerStyle: { backgroundColor: drawerTheme.background },
         drawerLabelStyle: { fontWeight: '700' },
+        swipeEnabled: false,
       }}
       drawerContent={(props) => <CustomDrawerContent {...props} />}
     >

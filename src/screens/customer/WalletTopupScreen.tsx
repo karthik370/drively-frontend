@@ -2,10 +2,12 @@ import React, { useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { G } from '../../constants/glassStyles';
 
 import { createWalletTopupOrder, getWalletBalance, verifyWalletTopup } from '../../services/api';
 import { openCashfreeCheckout } from '../../services/cashfreeService';
 import { useAppSelector } from '../../redux/store';
+import { showAlert } from '../../components/common/CustomAlert';
 
 const WalletTopupScreen = ({ navigation }: any) => {
   const user = useAppSelector((s) => s.auth.user);
@@ -22,7 +24,7 @@ const WalletTopupScreen = ({ navigation }: any) => {
     if (isPaying) return;
 
     if (!Number.isFinite(amount) || amount <= 0) {
-      Alert.alert('Wallet', 'Enter a valid amount');
+      showAlert('Wallet', 'Enter a valid amount');
       return;
     }
 
@@ -36,10 +38,10 @@ const WalletTopupScreen = ({ navigation }: any) => {
 
       await verifyWalletTopup({ cf_order_id: success.orderId });
       const bal = await getWalletBalance();
-      Alert.alert('Wallet', `Top-up successful. New balance: ₹${bal.balance.toFixed(2)}`);
+      showAlert('Wallet', `Top-up successful. New balance: ₹${bal.balance.toFixed(2)}`);
       navigation.goBack();
     } catch (e: any) {
-      Alert.alert('Wallet topup', e?.message || 'Payment failed');
+      showAlert('Wallet topup', e?.message || 'Payment failed');
     } finally {
       setIsPaying(false);
     }
@@ -87,45 +89,45 @@ const WalletTopupScreen = ({ navigation }: any) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#111111' },
+  container: { flex: 1, backgroundColor: G.bgAlt },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.3)',
+    borderBottomColor: G.border3,
   },
   backBtn: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#141414',
+    backgroundColor: G.glass2,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
   },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: G.textPrimary },
   content: { padding: 16 },
   card: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
   },
-  label: { color: '#8A8A8A', fontWeight: '700' },
+  label: { color: G.textSecondary, fontWeight: '700' },
   input: {
     marginTop: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 12,
-    color: '#FFFFFF',
+    color: G.textPrimary,
     fontWeight: '800',
     fontSize: 18,
   },
@@ -135,20 +137,20 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-    backgroundColor: '#111111',
+    borderColor: G.border3,
+    backgroundColor: G.bgAlt,
   },
-  quickText: { color: '#FFFFFF', fontWeight: '800' },
+  quickText: { color: G.textPrimary, fontWeight: '800' },
   cta: {
     marginTop: 16,
-    backgroundColor: '#C9A84C',
+    backgroundColor: G.accent,
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
   },
   ctaDisabled: { opacity: 0.6 },
-  ctaText: { color: '#ffffff', fontWeight: '900' },
-  hint: { marginTop: 12, color: '#8A8A8A', fontWeight: '600', fontSize: 12 },
+  ctaText: { color: G.textPrimary, fontWeight: '900' },
+  hint: { marginTop: 12, color: G.textSecondary, fontWeight: '600', fontSize: 12 },
 });
 
 export default WalletTopupScreen;

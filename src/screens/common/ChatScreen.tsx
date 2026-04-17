@@ -14,6 +14,7 @@ import { Text } from 'react-native-paper';
 import socketService from '../../services/socketService';
 import { useAppDispatch, useAppSelector } from '../../redux/store';
 import { addChatMessage } from '../../redux/slices/bookingSlice';
+import { G } from '../../constants/glassStyles';
 
 type ChatMessage = {
   id: string;
@@ -165,6 +166,10 @@ const ChatScreen = ({ navigation, route }: any) => {
       >
         <View style={styles.listWrap}>
           <FlatList
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={8}
+          windowSize={5}
+          initialNumToRender={8}
             ref={(r) => {
               listRef.current = r;
             }}
@@ -207,7 +212,7 @@ const ChatScreen = ({ navigation, route }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111111',
+    backgroundColor: G.bgAlt,
   },
   header: {
     flexDirection: 'row',
@@ -215,9 +220,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 12,
     paddingVertical: 12,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.3)',
+    borderBottomColor: G.border3,
   },
   headerBtn: {
     width: 40,
@@ -229,7 +234,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   body: {
     flex: 1,
@@ -248,7 +253,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     marginTop: 12,
-    color: '#8A8A8A',
+    color: G.textSecondary,
     textAlign: 'center',
   },
   bubbleRow: {
@@ -261,23 +266,23 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   bubbleMine: {
-    backgroundColor: '#C9A84C',
+    backgroundColor: G.accent,
   },
   bubbleOther: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
   },
   bubbleText: {
     fontSize: 14,
     lineHeight: 18,
   },
   bubbleTextMine: {
-    color: '#ffffff',
+    color: G.textPrimary,
     fontWeight: '600',
   },
   bubbleTextOther: {
-    color: '#FFFFFF',
+    color: G.textPrimary,
     fontWeight: '600',
   },
   timeText: {
@@ -291,25 +296,25 @@ const styles = StyleSheet.create({
     padding: 12,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.3)',
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
   },
   input: {
     flex: 1,
     minHeight: 44,
     maxHeight: 120,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   sendBtn: {
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: '#C9A84C',
+    backgroundColor: G.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -15,6 +15,8 @@ import useRealTimeLocation from '../../hooks/useRealTimeLocation';
 import { BookingStatus, PaymentMethod, VehicleType } from '../../types';
 import SubscriptionGate from '../../components/driver/SubscriptionGate';
 import { getDriverSubscriptionStatus } from '../../services/api';
+import { showAlert } from '../../components/common/CustomAlert';
+import { G } from '../../constants/glassStyles';
 
 const DriverOnlineScreen = ({ navigation }: any) => {
   const dispatch = useAppDispatch();
@@ -66,19 +68,22 @@ const DriverOnlineScreen = ({ navigation }: any) => {
     async (nextOnline: boolean) => {
       if (onlineToggleInFlightRef.current) return;
       onlineToggleInFlightRef.current = true;
+      // Optimistic: flip the switch IMMEDIATELY so it feels instant
+      dispatch(setDriverOnline(nextOnline));
       try {
         if (nextOnline) {
           await goOnline();
         } else {
           await goOffline();
         }
-        dispatch(setDriverOnline(nextOnline));
       } catch (e: any) {
+        // Revert on failure
+        dispatch(setDriverOnline(!nextOnline));
         if (e?.message?.includes('Active subscription required') || e?.response?.status === 403) {
           setHasSubscription(false);
-          Alert.alert('Subscription Required', 'You need an active subscription to go online.');
+          showAlert('Subscription Required', 'You need an active subscription to go online.');
         } else {
-          Alert.alert('Status', e?.message || 'Failed to update online status');
+          showAlert('Status', e?.message || 'Failed to update online status');
         }
       } finally {
         onlineToggleInFlightRef.current = false;
@@ -153,7 +158,7 @@ const DriverOnlineScreen = ({ navigation }: any) => {
     }
 
     if (trackingError) {
-      Alert.alert('Location', trackingError);
+      showAlert('Location', trackingError);
       void setOnlineState(false);
       return;
     }
@@ -438,92 +443,90 @@ const DriverOnlineScreen = ({ navigation }: any) => {
 
   const handleAccept = async (id: string) => {
     try {
-      if (acceptingRef.current === id) {
-        return;
-      }
+      if (acceptingRef.current === id) return;
       acceptingRef.current = id;
+
+      // Accept booking on server
       await acceptBooking(id, '');
 
-      try {
-        socketService.joinBooking(id);
-      } catch {
-      }
-
-      const raw = await getBookingDetails(id);
-      const now = new Date().toISOString();
-
+      // Immediately remove from request list and join socket room
       setActiveBookingId(id);
       dispatch(removeBookingRequest(id));
+      try { socketService.joinBooking(id); } catch {}
 
-      const pickupLat = Number((raw as any)?.pickupLocationLat ?? (raw as any)?.pickupLatitude ?? (raw as any)?.pickup?.latitude);
-      const pickupLng = Number((raw as any)?.pickupLocationLng ?? (raw as any)?.pickupLongitude ?? (raw as any)?.pickup?.longitude);
-      if (Number.isFinite(pickupLat) && Number.isFinite(pickupLng)) {
-        dispatch(setPickupLocation({ latitude: pickupLat, longitude: pickupLng }));
-      }
-      dispatch(setPickupAddress(typeof (raw as any)?.pickupAddress === 'string' ? (raw as any).pickupAddress : null));
-
-      const dropLatRaw = (raw as any)?.dropLocationLat ?? (raw as any)?.dropLatitude ?? (raw as any)?.drop?.latitude;
-      const dropLngRaw = (raw as any)?.dropLocationLng ?? (raw as any)?.dropLongitude ?? (raw as any)?.drop?.longitude;
-      const dropLat = dropLatRaw !== undefined ? Number(dropLatRaw) : NaN;
-      const dropLng = dropLngRaw !== undefined ? Number(dropLngRaw) : NaN;
-      if (Number.isFinite(dropLat) && Number.isFinite(dropLng)) {
-        dispatch(setDropLocation({ latitude: dropLat, longitude: dropLng }));
-      }
-      dispatch(setDropAddress(typeof (raw as any)?.dropAddress === 'string' ? (raw as any).dropAddress : null));
-
+      // Set a minimal booking in Redux NOW so TrackingScreen can render
+      const now = new Date().toISOString();
       dispatch(
         setCurrentBooking({
-          id: String((raw as any)?.id ?? id),
-          bookingNumber: String((raw as any)?.bookingNumber ?? ''),
-          status: ((raw as any)?.status ?? BookingStatus.ACCEPTED) as any,
-          customer: (raw as any)?.customer as any,
-          driver: (raw as any)?.driver as any,
-          otp: (raw as any)?.otp ?? null,
-          pickupLocation: {
-            latitude: Number.isFinite(pickupLat) ? pickupLat : 0,
-            longitude: Number.isFinite(pickupLng) ? pickupLng : 0,
-          },
-          pickupAddress: String((raw as any)?.pickupAddress ?? 'Pickup'),
-          dropLocation:
-            Number.isFinite(dropLat) && Number.isFinite(dropLng)
-              ? { latitude: dropLat, longitude: dropLng }
-              : undefined,
-          dropAddress: typeof (raw as any)?.dropAddress === 'string' ? (raw as any).dropAddress : undefined,
-          scheduledTime: (raw as any)?.scheduledTime ? String((raw as any).scheduledTime) : undefined,
-          vehicleType: ((raw as any)?.vehicleType ?? VehicleType.CAR) as any,
-          transmissionType: ((raw as any)?.transmissionType ?? undefined) as any,
-          tripType: (raw as any)?.tripType as any,
-          totalAmount:
-            typeof (raw as any)?.totalAmount === 'number' ? (raw as any).totalAmount : Number((raw as any)?.totalAmount || 0),
-          paymentMethod: ((raw as any)?.paymentMethod ?? PaymentMethod.CASH) as any,
-          createdAt: (raw as any)?.createdAt ? String((raw as any).createdAt) : now,
-          updatedAt: (raw as any)?.updatedAt ? String((raw as any).updatedAt) : now,
+          id,
+          bookingNumber: '',
+          status: BookingStatus.ACCEPTED as any,
+          customer: null as any,
+          driver: null as any,
+          otp: null,
+          pickupLocation: { latitude: 0, longitude: 0 },
+          pickupAddress: 'Loading...',
+          vehicleType: VehicleType.CAR as any,
+          totalAmount: 0,
+          paymentMethod: PaymentMethod.CASH as any,
+          createdAt: now,
+          updatedAt: now,
         })
       );
 
-      const scheduledRaw = (raw as any)?.scheduledTime ? String((raw as any).scheduledTime) : null;
-      const scheduledAt = scheduledRaw ? new Date(scheduledRaw) : null;
-      const isFutureScheduled = Boolean(scheduledAt && Number.isFinite(scheduledAt.getTime()) && scheduledAt.getTime() > Date.now());
+      // Navigate IMMEDIATELY — don't wait for getBookingDetails
+      navigation.navigate('Tracking', { bookingId: id });
 
-      if (isFutureScheduled) {
-        Alert.alert('Scheduled booking accepted', 'This booking will start at the scheduled time. You cannot accept other rides until it is completed.', [
-          {
-            text: 'View',
-            onPress: () => {
-              try {
-                navigation.navigate('Schedule');
-              } catch {
-              }
-            },
-          },
-          { text: 'OK' },
-        ]);
-        return;
-      }
+      // Fetch full details in background and update Redux
+      getBookingDetails(id)
+        .then((raw: any) => {
+          if (!raw) return;
+          const pickupLat = Number(raw?.pickupLocationLat ?? raw?.pickupLatitude ?? raw?.pickup?.latitude);
+          const pickupLng = Number(raw?.pickupLocationLng ?? raw?.pickupLongitude ?? raw?.pickup?.longitude);
+          if (Number.isFinite(pickupLat) && Number.isFinite(pickupLng)) {
+            dispatch(setPickupLocation({ latitude: pickupLat, longitude: pickupLng }));
+          }
+          dispatch(setPickupAddress(typeof raw?.pickupAddress === 'string' ? raw.pickupAddress : null));
 
-      navigation.navigate('Tracking');
+          const dropLatRaw = raw?.dropLocationLat ?? raw?.dropLatitude ?? raw?.drop?.latitude;
+          const dropLngRaw = raw?.dropLocationLng ?? raw?.dropLongitude ?? raw?.drop?.longitude;
+          const dropLat = dropLatRaw !== undefined ? Number(dropLatRaw) : NaN;
+          const dropLng = dropLngRaw !== undefined ? Number(dropLngRaw) : NaN;
+          if (Number.isFinite(dropLat) && Number.isFinite(dropLng)) {
+            dispatch(setDropLocation({ latitude: dropLat, longitude: dropLng }));
+          }
+          dispatch(setDropAddress(typeof raw?.dropAddress === 'string' ? raw.dropAddress : null));
+
+          dispatch(
+            setCurrentBooking({
+              id: String(raw?.id ?? id),
+              bookingNumber: String(raw?.bookingNumber ?? ''),
+              status: (raw?.status ?? BookingStatus.ACCEPTED) as any,
+              customer: raw?.customer as any,
+              driver: raw?.driver as any,
+              otp: raw?.otp ?? null,
+              pickupLocation: {
+                latitude: Number.isFinite(pickupLat) ? pickupLat : 0,
+                longitude: Number.isFinite(pickupLng) ? pickupLng : 0,
+              },
+              pickupAddress: String(raw?.pickupAddress ?? 'Pickup'),
+              dropLocation:
+                Number.isFinite(dropLat) && Number.isFinite(dropLng) ? { latitude: dropLat, longitude: dropLng } : undefined,
+              dropAddress: typeof raw?.dropAddress === 'string' ? raw.dropAddress : undefined,
+              scheduledTime: raw?.scheduledTime ? String(raw.scheduledTime) : undefined,
+              vehicleType: (raw?.vehicleType ?? VehicleType.CAR) as any,
+              transmissionType: (raw?.transmissionType ?? undefined) as any,
+              tripType: raw?.tripType as any,
+              totalAmount: typeof raw?.totalAmount === 'number' ? raw.totalAmount : Number(raw?.totalAmount || 0),
+              paymentMethod: (raw?.paymentMethod ?? PaymentMethod.CASH) as any,
+              createdAt: raw?.createdAt ? String(raw.createdAt) : now,
+              updatedAt: raw?.updatedAt ? String(raw.updatedAt) : now,
+            })
+          );
+        })
+        .catch(() => {});
     } catch (e: any) {
-      Alert.alert('Accept booking', e?.message || 'Failed to accept booking');
+      showAlert('Accept booking', e?.message || 'Failed to accept booking');
     } finally {
       if (acceptingRef.current === id) {
         acceptingRef.current = null;
@@ -536,7 +539,7 @@ const DriverOnlineScreen = ({ navigation }: any) => {
       socketService.emit('booking:reject', { bookingId: id });
       dispatch(removeBookingRequest(id));
     } catch {
-      Alert.alert('Error', 'Failed to reject booking');
+      showAlert('Error', 'Failed to reject booking');
     }
   };
 
@@ -631,6 +634,10 @@ const DriverOnlineScreen = ({ navigation }: any) => {
         </View>
       ) : hasRequests ? (
         <FlatList<BookingRequest>
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={8}
+          windowSize={5}
+          initialNumToRender={8}
           data={filteredRequests}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
@@ -650,7 +657,7 @@ const DriverOnlineScreen = ({ navigation }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111111',
+    backgroundColor: G.bg,
   },
   filterRow: {
     flexDirection: 'row',
@@ -660,9 +667,9 @@ const styles = StyleSheet.create({
   },
   filterPill: {
     flex: 1,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.glass2,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border2,
     paddingVertical: 10,
     borderRadius: 14,
     alignItems: 'center',
@@ -670,88 +677,121 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   filterPillActive: {
-    backgroundColor: '#1E1E1E',
-    borderColor: '#FFFFFF',
+    backgroundColor: G.glass4,
+    borderColor: G.accent,
   },
   filterPillText: {
-    color: '#FFFFFF',
+    color: G.textSecondary,
     fontSize: 12,
     fontWeight: '800',
   },
   filterPillTextActive: {
-    color: '#ffffff',
+    color: G.accent,
   },
   scheduledBanner: {
-    marginHorizontal: 16,
+    marginHorizontal: 12,
+    marginTop: 10,
     marginBottom: 10,
-    backgroundColor: '#141414',
+    backgroundColor: 'rgba(201,168,76,0.08)',
     borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#f59e0b',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderWidth: 1.5,
+    borderColor: G.warning,
+    shadowColor: G.warning,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 5,
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 64,
   },
   scheduledBannerTitle: {
-    color: '#FFFFFF',
+    color: G.textPrimary,
     fontSize: 14,
     fontWeight: '900',
   },
   scheduledBannerSub: {
-    marginTop: 2,
-    color: '#92400e',
+    marginTop: 3,
+    color: G.warning,
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   scheduledBannerBtn: {
     marginLeft: 12,
-    backgroundColor: '#1E1E1E',
-    paddingHorizontal: 14,
+    backgroundColor: G.accent,
+    paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 12,
+    minWidth: 60,
+    alignItems: 'center',
+    shadowColor: G.accent,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
   },
   scheduledBannerBtnText: {
-    color: '#ffffff',
+    color: '#000',
     fontWeight: '900',
+    fontSize: 13,
   },
   activeTripCard: {
-    marginHorizontal: 16,
+    marginHorizontal: 12,
     marginBottom: 10,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: G.glass3,
     borderRadius: 16,
-    padding: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: G.borderAccent,
+    shadowColor: G.accent,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
+    minHeight: 64,
   },
   activeTripTitle: {
-    color: '#ffffff',
+    color: G.textPrimary,
     fontSize: 15,
     fontWeight: '800',
   },
   activeTripSub: {
-    marginTop: 2,
-    color: 'rgba(255,255,255,0.85)',
+    marginTop: 3,
+    color: G.textSecondary,
     fontSize: 12,
     fontWeight: '600',
   },
   activeTripBtn: {
     marginLeft: 12,
-    backgroundColor: '#C9A84C',
-    paddingHorizontal: 14,
+    backgroundColor: G.accent,
+    paddingHorizontal: 18,
     paddingVertical: 10,
     borderRadius: 12,
+    minWidth: 90,
+    alignItems: 'center',
+    shadowColor: G.accent,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 6,
   },
   activeTripBtnText: {
-    color: '#ffffff',
-    fontWeight: '800',
+    color: '#000',
+    fontWeight: '900',
+    fontSize: 14,
   },
   header: {
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 10,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.glass1,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.3)',
+    borderBottomColor: G.border2,
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -787,71 +827,71 @@ const styles = StyleSheet.create({
     gap: 12,
     width: '100%',
     maxWidth: 320,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 16,
-    backgroundColor: '#0A0A0A',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 18,
+    backgroundColor: G.glass2,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border2,
   },
   menuButton: {
     width: 42,
     height: 42,
-    borderRadius: 21,
-    backgroundColor: '#141414',
+    borderRadius: 14,
+    backgroundColor: G.glass3,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
   },
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   statusPill: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
   },
   statusPillOnline: {
-    backgroundColor: '#141414',
-    borderColor: '#a7f3d0',
+    backgroundColor: G.successSoft,
+    borderColor: G.success,
   },
   statusPillOffline: {
-    backgroundColor: '#141414',
-    borderColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: G.glass2,
+    borderColor: G.border3,
   },
   statusPillOfflineDanger: {
-    backgroundColor: '#1A1010',
-    borderColor: '#fecaca',
+    backgroundColor: G.errorSoft,
+    borderColor: G.error,
   },
   onlineLabel: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#8A8A8A',
+    color: G.textSecondary,
   },
   onlineLabelOn: {
-    color: '#047857',
+    color: G.success,
   },
   onlineLabelOff: {
-    color: '#8A8A8A',
+    color: G.textSecondary,
   },
   onlineLabelOffDanger: {
-    color: '#FF4444',
+    color: G.error,
   },
   badge: {
     minWidth: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#10b981',
+    backgroundColor: G.success,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 8,
   },
   badgeText: {
-    color: '#ffffff',
+    color: G.textPrimary,
     fontWeight: '700',
   },
   listContent: {
@@ -868,12 +908,12 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 18,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   emptySub: {
     marginTop: 8,
     fontSize: 14,
-    color: '#8A8A8A',
+    color: G.textSecondary,
     textAlign: 'center',
   },
 });

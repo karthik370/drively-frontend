@@ -1,48 +1,44 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const STORAGE_KEY = '@dmate_favorite_drivers';
-
-interface FavoriteDriver {
-    id: string;
-    firstName: string;
-    lastName: string;
-    phone?: string;
-    rating?: number;
-    profileImage?: string;
-    savedAt: string;
-}
+import { listFavoriteDrivers, removeFavoriteDriver, type FavoriteDriver } from '../../services/api';
+import { showAlert } from '../../components/common/CustomAlert';
+import { G } from '../../constants/glassStyles';
 
 const FavoriteDriversScreen = ({ navigation }: any) => {
-    const [favorites, setFavorites] = useState<FavoriteDriver[]>([]);
+    const [drivers, setDrivers] = useState<FavoriteDriver[]>([]);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        void loadFavorites();
-    }, []);
-
-    const loadFavorites = async () => {
+    const load = useCallback(async () => {
+        setLoading(true);
         try {
-            const raw = await AsyncStorage.getItem(STORAGE_KEY);
-            if (raw) setFavorites(JSON.parse(raw));
-        } catch { } finally {
+            const data = await listFavoriteDrivers();
+            setDrivers(Array.isArray(data) ? data : []);
+        } catch {
+            setDrivers([]);
+        } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
-    const removeFavorite = (id: string) => {
-        Alert.alert('Remove from favorites?', 'This driver will be removed from your favorites list', [
+    useEffect(() => {
+        void load();
+    }, [load]);
+
+    const handleRemove = (id: string, name: string) => {
+        showAlert('Remove from favorites?', `${name} will be removed from your favorites list`, [
             { text: 'Cancel', style: 'cancel' },
             {
                 text: 'Remove',
                 style: 'destructive',
                 onPress: async () => {
-                    const updated = favorites.filter((d) => d.id !== id);
-                    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-                    setFavorites(updated);
+                    try {
+                        await removeFavoriteDriver(id);
+                        setDrivers((prev) => prev.filter((d) => d.id !== id));
+                    } catch (e: any) {
+                        showAlert('Error', e?.message || 'Failed to remove driver');
+                    }
                 },
             },
         ]);
@@ -52,28 +48,32 @@ const FavoriteDriversScreen = ({ navigation }: any) => {
         <View style={styles.driverCard}>
             <View style={styles.avatar}>
                 <Text style={styles.avatarText}>
-                    {(item.firstName?.[0] || '?').toUpperCase()}
+                    {(item.name?.[0] || '?').toUpperCase()}
                 </Text>
             </View>
-            <View style={{ flex: 1 }}>
-                <Text style={styles.driverName}>{`${item.firstName} ${item.lastName}`.trim()}</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                    {item.rating ? (
+            <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.driverName} numberOfLines={1}>{item.name}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                    {item.rating > 0 ? (
                         <View style={styles.ratingChip}>
                             <Icon name="star" size={12} color="#f59e0b" />
                             <Text style={styles.ratingText}>{item.rating.toFixed(1)}</Text>
                         </View>
                     ) : null}
-                    <Text style={styles.savedDate}>
-                        Saved {new Date(item.savedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                    </Text>
+                    <Text style={styles.metaText}>{item.totalTrips} trips</Text>
+                    {item.isExperienced ? (
+                        <View style={styles.expChip}>
+                            <Icon name="shield-check" size={10} color="#10b981" />
+                            <Text style={styles.expText}>Experienced</Text>
+                        </View>
+                    ) : null}
                 </View>
             </View>
-            <TouchableOpacity onPress={() => removeFavorite(item.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <TouchableOpacity onPress={() => handleRemove(item.id, item.name)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                 <Icon name="heart" size={22} color="#ef4444" />
             </TouchableOpacity>
         </View>
-    ), [favorites]);
+    ), []);
 
     return (
         <SafeAreaView style={styles.container}>
@@ -85,15 +85,27 @@ const FavoriteDriversScreen = ({ navigation }: any) => {
                 <View style={{ width: 40 }} />
             </View>
 
-            {favorites.length === 0 ? (
+            {loading ? (
+                <View style={styles.emptyWrap}>
+                    <ActivityIndicator size="small" color="#C9A84C" />
+                    <Text style={styles.emptySubtext}>Loading favorites…</Text>
+                </View>
+            ) : drivers.length === 0 ? (
                 <View style={styles.emptyWrap}>
                     <Icon name="heart-outline" size={48} color="#d1d5db" />
                     <Text style={styles.emptyTitle}>No favorite drivers yet</Text>
-                    <Text style={styles.emptySubtext}>After a ride, you can save your driver to favorites for easy re-booking</Text>
+                    <Text style={styles.emptySubtext}>
+                        After a ride, tap the ★ button next to your driver's name to add them to favorites.
+                        {'\n\n'}Favorite drivers get priority notification when you book a ride!
+                    </Text>
                 </View>
             ) : (
                 <FlatList
-                    data={favorites}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={8}
+          windowSize={5}
+          initialNumToRender={8}
+                    data={drivers}
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={styles.list}
                     renderItem={renderDriver}
@@ -103,49 +115,41 @@ const FavoriteDriversScreen = ({ navigation }: any) => {
     );
 };
 
-// Helper: call from TrackingScreen after rating to save a driver as favorite
-export const saveFavoriteDriver = async (driver: FavoriteDriver) => {
-    try {
-        const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        const existing: FavoriteDriver[] = raw ? JSON.parse(raw) : [];
-        if (existing.find((d) => d.id === driver.id)) return; // already saved
-        const updated = [{ ...driver, savedAt: new Date().toISOString() }, ...existing].slice(0, 20);
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    } catch { }
-};
-
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#111111' },
+    container: { flex: 1, backgroundColor: G.bgAlt },
     header: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-        paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#0A0A0A',
-        borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.3)',
+        paddingHorizontal: 16, paddingVertical: 12, backgroundColor: G.bg,
+        borderBottomWidth: 1, borderBottomColor: G.border3,
     },
-    backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#141414', alignItems: 'center', justifyContent: 'center' },
-    headerTitle: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
-    list: { padding: 16 },
-
+    backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: G.glass2, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: G.border3 },
+    headerTitle: { fontSize: 16, fontWeight: '800', color: G.textPrimary },
+    list: { padding: 16, paddingBottom: 32 },
     driverCard: {
         flexDirection: 'row', alignItems: 'center', gap: 12,
-        backgroundColor: '#0A0A0A', borderRadius: 14, padding: 14, marginBottom: 10,
-        elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4,
+        backgroundColor: G.bg, borderRadius: 14, padding: 14, marginBottom: 10,
+        borderWidth: 1, borderColor: G.border3,
     },
     avatar: {
-        width: 44, height: 44, borderRadius: 22, backgroundColor: '#141414',
-        alignItems: 'center', justifyContent: 'center',
+        width: 48, height: 48, borderRadius: 24, backgroundColor: G.glass2,
+        alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: G.border3,
     },
-    avatarText: { fontSize: 18, fontWeight: '800', color: '#C9A84C' },
-    driverName: { fontSize: 14, fontWeight: '800', color: '#FFFFFF' },
+    avatarText: { fontSize: 18, fontWeight: '900', color: G.accent },
+    driverName: { fontSize: 15, fontWeight: '800', color: G.textPrimary },
     ratingChip: {
         flexDirection: 'row', alignItems: 'center', gap: 3,
-        backgroundColor: '#1A1708', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6,
+        backgroundColor: 'rgba(245,158,11,0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6,
     },
-    ratingText: { fontSize: 11, fontWeight: '700', color: '#b45309' },
-    savedDate: { fontSize: 11, color: '#666666' },
-
+    ratingText: { fontSize: 11, fontWeight: '700', color: '#f59e0b' },
+    expChip: {
+        flexDirection: 'row', alignItems: 'center', gap: 3,
+        backgroundColor: 'rgba(16,185,129,0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6,
+    },
+    expText: { fontSize: 10, fontWeight: '700', color: '#10b981' },
+    metaText: { fontSize: 11, color: G.textSecondary },
     emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40, gap: 8 },
-    emptyTitle: { fontSize: 16, fontWeight: '800', color: '#8A8A8A' },
-    emptySubtext: { fontSize: 13, color: '#666666', textAlign: 'center', lineHeight: 20 },
+    emptyTitle: { fontSize: 16, fontWeight: '800', color: G.textSecondary },
+    emptySubtext: { fontSize: 13, color: G.textMuted, textAlign: 'center', lineHeight: 20 },
 });
 
 export default FavoriteDriversScreen;

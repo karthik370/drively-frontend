@@ -3,6 +3,8 @@ import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, TouchableOpacity,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { getPendingRefunds, markRefundPaid, type PendingRefundItem } from '../../services/api';
+import { showAlert } from '../../components/common/CustomAlert';
+import { G } from '../../constants/glassStyles';
 
 const AdminRefundsScreen = () => {
   const [loading, setLoading] = useState(false);
@@ -15,7 +17,7 @@ const AdminRefundsScreen = () => {
       setItems(Array.isArray(res) ? res : []);
     } catch (e: any) {
       setItems([]);
-      Alert.alert('Refunds', e?.message || 'Failed to load refunds');
+      showAlert('Refunds', e?.message || 'Failed to load refunds');
     } finally {
       setLoading(false);
     }
@@ -45,6 +47,10 @@ const AdminRefundsScreen = () => {
       ) : null}
 
       <FlatList
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={8}
+          windowSize={5}
+          initialNumToRender={8}
         data={items}
         keyExtractor={(it) => it.refundId}
         contentContainerStyle={items.length ? styles.list : styles.listEmpty}
@@ -82,7 +88,7 @@ const AdminRefundsScreen = () => {
             <TouchableOpacity
               style={styles.payBtn}
               onPress={() => {
-                Alert.alert('Mark as paid?', `Confirm refund paid to ${item.upiId}`, [
+                showAlert('Mark as paid?', `Confirm refund paid to ${item.upiId}`, [
                   { text: 'Cancel', style: 'cancel' },
                   {
                     text: 'Paid',
@@ -92,7 +98,7 @@ const AdminRefundsScreen = () => {
                         await markRefundPaid(item.refundId);
                         setItems((prev) => prev.filter((x) => x.refundId !== item.refundId));
                       } catch (e: any) {
-                        Alert.alert('Refund', e?.message || 'Failed to mark paid');
+                        showAlert('Refund', e?.message || 'Failed to mark paid');
                       }
                     },
                   },
@@ -110,7 +116,7 @@ const AdminRefundsScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#111111' },
+  container: { flex: 1, backgroundColor: G.bgAlt },
   headerRow: {
     padding: 16,
     paddingBottom: 10,
@@ -119,23 +125,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  title: { fontSize: 20, fontWeight: '800', color: '#FFFFFF' },
-  refreshBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: '#1E1E1E' },
+  title: { fontSize: 20, fontWeight: '800', color: G.textPrimary },
+  refreshBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: G.glass3 },
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingBottom: 8 },
-  loadingText: { color: '#FFFFFF', fontWeight: '800' },
+  loadingText: { color: G.textPrimary, fontWeight: '800' },
   list: { paddingHorizontal: 16, paddingBottom: 16, gap: 10 },
   listEmpty: { paddingHorizontal: 16, paddingBottom: 16 },
-  emptyCard: { backgroundColor: '#0A0A0A', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', padding: 16 },
-  emptyTitle: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
-  emptySub: { marginTop: 6, fontSize: 13, color: '#8A8A8A', lineHeight: 18 },
-  item: { backgroundColor: '#0A0A0A', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', padding: 14 },
+  emptyCard: { backgroundColor: G.bg, borderRadius: 16, borderWidth: 1, borderColor: G.border3, padding: 16 },
+  emptyTitle: { fontSize: 16, fontWeight: '800', color: G.textPrimary },
+  emptySub: { marginTop: 6, fontSize: 13, color: G.textSecondary, lineHeight: 18 },
+  item: { backgroundColor: G.bg, borderRadius: 16, borderWidth: 1, borderColor: G.border3, padding: 14 },
   itemTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-  itemTitle: { fontSize: 13, fontWeight: '900', color: '#FFFFFF' },
-  itemSub: { marginTop: 4, fontSize: 12, fontWeight: '700', color: '#8A8A8A' },
-  amountPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: '#141414', borderWidth: 1, borderColor: '#dbeafe' },
+  itemTitle: { fontSize: 13, fontWeight: '900', color: G.textPrimary },
+  itemSub: { marginTop: 4, fontSize: 12, fontWeight: '700', color: G.textSecondary },
+  amountPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: G.glass2, borderWidth: 1, borderColor: '#dbeafe' },
   amountText: { fontSize: 12, fontWeight: '900', color: '#1e40af' },
   upiRow: { marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  upiText: { flex: 1, minWidth: 0, fontSize: 13, fontWeight: '800', color: '#FFFFFF' },
+  upiText: { flex: 1, minWidth: 0, fontSize: 13, fontWeight: '800', color: G.textPrimary },
   payBtn: {
     marginTop: 12,
     flexDirection: 'row',
@@ -144,9 +150,9 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 12,
     borderRadius: 12,
-    backgroundColor: '#C9A84C',
+    backgroundColor: G.accent,
   },
-  payBtnText: { color: '#ffffff', fontWeight: '900' },
+  payBtnText: { color: G.textPrimary, fontWeight: '900' },
 });
 
 export default AdminRefundsScreen;

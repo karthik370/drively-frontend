@@ -5,6 +5,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { showAlert } from '../../components/common/CustomAlert';
+import { G } from '../../constants/glassStyles';
 
 const STORAGE_KEY = '@dmate_emergency_contacts';
 
@@ -41,9 +43,9 @@ const EmergencyContactsScreen = ({ navigation }: any) => {
     const addContact = useCallback(() => {
         const name = newName.trim();
         const phone = newPhone.trim().replace(/[^0-9+]/g, '');
-        if (!name) return Alert.alert('Name required', 'Please enter a contact name');
-        if (phone.length < 10) return Alert.alert('Invalid phone', 'Please enter a valid phone number');
-        if (contacts.length >= 5) return Alert.alert('Limit reached', 'Maximum 5 emergency contacts');
+        if (!name) return showAlert('Name required', 'Please enter a contact name');
+        if (phone.length < 10) return showAlert('Invalid phone', 'Please enter a valid phone number');
+        if (contacts.length >= 5) return showAlert('Limit reached', 'Maximum 5 emergency contacts');
 
         const contact: EmergencyContact = { id: Date.now().toString(), name, phone };
         saveContacts([...contacts, contact]);
@@ -53,7 +55,7 @@ const EmergencyContactsScreen = ({ navigation }: any) => {
     }, [contacts, newName, newPhone]);
 
     const removeContact = (id: string) => {
-        Alert.alert('Remove contact?', 'This contact will no longer receive SOS alerts', [
+        showAlert('Remove contact?', 'This contact will no longer receive SOS alerts', [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Remove', style: 'destructive', onPress: () => saveContacts(contacts.filter((c) => c.id !== id)) },
         ]);
@@ -61,20 +63,20 @@ const EmergencyContactsScreen = ({ navigation }: any) => {
 
     const sendSOS = () => {
         if (contacts.length === 0) {
-            return Alert.alert('No contacts', 'Please add at least one emergency contact');
+            return showAlert('No contacts', 'Please add at least one emergency contact');
         }
-        Alert.alert('🚨 Send SOS Alert?', `Emergency SMS will be sent to ${contacts.length} contact(s) with your live location.`, [
+        showAlert('🚨 Send SOS Alert?', `Emergency SMS will be sent to ${contacts.length} contact(s) with your live location.`, [
             { text: 'Cancel', style: 'cancel' },
             {
                 text: 'Send SOS',
                 style: 'destructive',
                 onPress: () => {
-                    const message = 'EMERGENCY: I need help! Track my live DriveMate ride location. Please call me immediately.';
+                    const message = 'EMERGENCY: I need help! Track my live Drively ride location. Please call me immediately.';
                     const phones = contacts.map((c) => c.phone).join(',');
                     const smsUrl = Platform.OS === 'android'
                         ? `sms:${phones}?body=${encodeURIComponent(message)}`
                         : `sms:${phones}&body=${encodeURIComponent(message)}`;
-                    Linking.openURL(smsUrl).catch(() => Alert.alert('SMS failed', 'Could not open messages app'));
+                    Linking.openURL(smsUrl).catch(() => showAlert('SMS failed', 'Could not open messages app'));
                 },
             },
         ]);
@@ -142,6 +144,10 @@ const EmergencyContactsScreen = ({ navigation }: any) => {
                     </View>
                 ) : (
                     <FlatList
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={8}
+          windowSize={5}
+          initialNumToRender={8}
                         data={contacts}
                         keyExtractor={(c) => c.id}
                         scrollEnabled={false}
@@ -175,51 +181,51 @@ const EmergencyContactsScreen = ({ navigation }: any) => {
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#111111' },
+    container: { flex: 1, backgroundColor: G.bgAlt },
     header: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-        paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#0A0A0A',
-        borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.3)',
+        paddingHorizontal: 16, paddingVertical: 12, backgroundColor: G.bg,
+        borderBottomWidth: 1, borderBottomColor: G.border3,
     },
-    backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#141414', alignItems: 'center', justifyContent: 'center' },
-    headerTitle: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
+    backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: G.glass2, alignItems: 'center', justifyContent: 'center' },
+    headerTitle: { fontSize: 16, fontWeight: '800', color: G.textPrimary },
 
     sosBtn: { margin: 16, borderRadius: 16, overflow: 'hidden' },
     sosInner: {
         backgroundColor: '#ef4444', padding: 20, alignItems: 'center',
         elevation: 6, shadowColor: '#ef4444', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8,
     },
-    sosText: { color: '#ffffff', fontSize: 20, fontWeight: '900', marginTop: 8 },
+    sosText: { color: G.textPrimary, fontSize: 20, fontWeight: '900', marginTop: 8 },
     sosSubtext: { color: '#fecaca', fontSize: 12, fontWeight: '600', marginTop: 4 },
 
-    section: { marginHorizontal: 16, backgroundColor: '#0A0A0A', borderRadius: 16, padding: 16, marginBottom: 12 },
+    section: { marginHorizontal: 16, backgroundColor: G.bg, borderRadius: 16, padding: 16, marginBottom: 12 },
     sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-    sectionTitle: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
+    sectionTitle: { fontSize: 15, fontWeight: '800', color: G.textPrimary },
     addChip: {
         flexDirection: 'row', alignItems: 'center', gap: 4,
-        backgroundColor: '#141414', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
+        backgroundColor: G.glass2, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
     },
-    addChipText: { fontSize: 12, fontWeight: '700', color: '#C9A84C' },
+    addChipText: { fontSize: 12, fontWeight: '700', color: G.accent },
 
     addForm: { marginBottom: 12, gap: 8 },
     input: {
-        borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)', borderRadius: 10, padding: 12,
-        fontSize: 14, fontWeight: '600', color: '#FFFFFF',
+        borderWidth: 1.5, borderColor: G.border3, borderRadius: 10, padding: 12,
+        fontSize: 14, fontWeight: '600', color: G.textPrimary,
     },
-    saveBtn: { backgroundColor: '#C9A84C', borderRadius: 10, padding: 12, alignItems: 'center' },
-    saveBtnText: { color: '#ffffff', fontWeight: '800', fontSize: 14 },
+    saveBtn: { backgroundColor: G.accent, borderRadius: 10, padding: 12, alignItems: 'center' },
+    saveBtnText: { color: G.textPrimary, fontWeight: '800', fontSize: 14 },
 
     emptyWrap: { alignItems: 'center', paddingVertical: 24, gap: 8 },
-    emptyText: { fontSize: 14, fontWeight: '700', color: '#8A8A8A' },
-    emptySubtext: { fontSize: 12, color: '#666666' },
+    emptyText: { fontSize: 14, fontWeight: '700', color: G.textSecondary },
+    emptySubtext: { fontSize: 12, color: G.textMuted },
 
-    contactRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.3)' },
+    contactRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: G.border3 },
     contactAvatar: {
-        width: 40, height: 40, borderRadius: 20, backgroundColor: '#141414', alignItems: 'center', justifyContent: 'center',
+        width: 40, height: 40, borderRadius: 20, backgroundColor: G.glass2, alignItems: 'center', justifyContent: 'center',
     },
-    contactInitial: { fontSize: 16, fontWeight: '800', color: '#C9A84C' },
-    contactName: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
-    contactPhone: { fontSize: 12, color: '#8A8A8A', marginTop: 2 },
+    contactInitial: { fontSize: 16, fontWeight: '800', color: G.accent },
+    contactName: { fontSize: 14, fontWeight: '700', color: G.textPrimary },
+    contactPhone: { fontSize: 12, color: G.textSecondary, marginTop: 2 },
 
     infoCard: {
         flexDirection: 'row', alignItems: 'flex-start', gap: 8,

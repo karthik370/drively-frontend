@@ -2,6 +2,7 @@ import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { G } from '../../constants/glassStyles';
 
 const SafetyScreen = ({ navigation }: any) => {
   return (
@@ -18,7 +19,7 @@ const SafetyScreen = ({ navigation }: any) => {
         <View style={styles.card}>
           <Text style={styles.title}>Drive safe. Earn more. Stay protected.</Text>
           <Text style={styles.text}>
-            MateDrive is built for professional drivers. Your safety and the customer’s safety are the top priority.
+            Drively is built for professional drivers. Your safety and the customer's safety are the top priority.
           </Text>
         </View>
 
@@ -48,7 +49,7 @@ const SafetyScreen = ({ navigation }: any) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0A0A0A' },
+  container: { flex: 1, backgroundColor: G.bg },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -56,29 +57,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.3)',
+    borderBottomColor: G.border3,
   },
   backBtn: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#141414',
+    backgroundColor: G.glass2,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
   },
-  headerTitle: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
+  headerTitle: { fontSize: 16, fontWeight: '800', color: G.textPrimary },
   content: { padding: 16, paddingBottom: 24 },
   card: {
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     borderRadius: 14,
     padding: 14,
     marginBottom: 12,
   },
-  title: { fontSize: 18, fontWeight: '900', color: '#FFFFFF' },
-  sectionTitle: { fontSize: 16, fontWeight: '900', color: '#FFFFFF' },
+  title: { fontSize: 18, fontWeight: '900', color: G.textPrimary },
+  sectionTitle: { fontSize: 16, fontWeight: '900', color: G.textPrimary },
   text: { marginTop: 8, color: '#CCCCCC', fontWeight: '700', lineHeight: 20 },
 });
 

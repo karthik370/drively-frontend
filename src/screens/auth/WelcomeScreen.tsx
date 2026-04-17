@@ -5,10 +5,11 @@ import { StatusBar } from 'expo-status-bar';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import PremiumButton from '../../components/premium/PremiumButton';
 import { colors, goldGradient } from '../../theme';
+import { G } from '../../constants/glassStyles';
 
 let LinearGradient: any;
 try { LinearGradient = require('expo-linear-gradient').LinearGradient; }
-catch { LinearGradient = ({ style, children }: any) => <View style={[style, { backgroundColor: '#C9A84C' }]}>{children}</View>; }
+catch { LinearGradient = ({ style, children }: any) => <View style={[style, { backgroundColor: G.accent }]}>{children}</View>; }
 
 const WelcomeScreen = ({ navigation }: any) => {
   return (
@@ -26,7 +27,7 @@ const WelcomeScreen = ({ navigation }: any) => {
               <Text style={styles.logoText}>🚗</Text>
             </View>
           </LinearGradient>
-          <Text style={styles.appName}>DriveMate</Text>
+          <Text style={styles.appName}>Drively</Text>
           <Text style={styles.tagline}>Your Trusted Driver Service</Text>
         </View>
 

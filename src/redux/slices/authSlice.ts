@@ -64,7 +64,6 @@ export const verifyMsg91AccessToken = createAsyncThunk(
               reject(new Error('Invalid JSON response'));
             }
           } else {
-            console.log(`[XHR] Server error ${xhr.status}:`, xhr.responseText);
             reject(new Error(`Server error ${xhr.status}`));
           }
         };
@@ -108,7 +107,6 @@ export const verifyMsg91AccessToken = createAsyncThunk(
       }
 
       try {
-        console.log(`[Auth] Verify attempt ${attempt + 1}/${MAX_ATTEMPTS} (racing fetch + axios + xhr)`);
         const data = await raceCall();
 
         if (data?.accessToken && data?.refreshToken) {
@@ -116,10 +114,8 @@ export const verifyMsg91AccessToken = createAsyncThunk(
           await SecureStore.setItemAsync('refreshToken', data.refreshToken);
         }
 
-        console.log(`[Auth] Verify succeeded on attempt ${attempt + 1}`);
         return data;
       } catch (err: any) {
-        console.log(`[Auth] Attempt ${attempt + 1} failed:`, err?.message);
         lastError = err?.message || 'Request failed';
       }
     }
@@ -158,6 +154,36 @@ export const login = createAsyncThunk(
       return { ...response.data.data };
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || 'Login failed');
+    }
+  }
+);
+
+export const adminLogin = createAsyncThunk(
+  'auth/adminLogin',
+  async (data: { phoneNumber: string; adminSecretKey: string }, { rejectWithValue }) => {
+    try {
+      const { API_URL } = require('../../constants/config');
+      const response = await new Promise<any>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `${API_URL}/auth/admin/login`);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.timeout = 15000;
+        xhr.onload = () => {
+          try {
+            const json = JSON.parse(xhr.responseText);
+            if (xhr.status >= 200 && xhr.status < 300 && json.success) resolve(json.data);
+            else reject(new Error(json?.message || `Server error ${xhr.status}`));
+          } catch { reject(new Error('Invalid JSON response')); }
+        };
+        xhr.onerror = () => reject(new Error('Network error'));
+        xhr.ontimeout = () => reject(new Error('Request timed out'));
+        xhr.send(JSON.stringify(data));
+      });
+      await SecureStore.setItemAsync('accessToken', response.accessToken);
+      await SecureStore.setItemAsync('refreshToken', response.refreshToken);
+      return { ...response };
+    } catch (error: any) {
+      return rejectWithValue(error?.message || 'Admin login failed');
     }
   }
 );
@@ -280,6 +306,21 @@ const authSlice = createSlice({
         state.isAuthenticated = true;
       })
       .addCase(login.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
+      })
+      .addCase(adminLogin.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(adminLogin.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.user = action.payload.user;
+        state.accessToken = action.payload.accessToken;
+        state.refreshToken = action.payload.refreshToken;
+        state.isAuthenticated = true;
+      })
+      .addCase(adminLogin.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload as string;
       })

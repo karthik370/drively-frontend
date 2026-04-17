@@ -13,6 +13,8 @@ import {
 import { Avatar, Button, Divider, Text, useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
+import { showAlert } from '../common/CustomAlert';
+import { G } from '../../constants/glassStyles';
 
 export type DriverInfo = {
   id: string;
@@ -89,14 +91,14 @@ const DriverInfoCard = ({
 
     const phone = typeof driver.phoneNumber === 'string' ? driver.phoneNumber.trim() : '';
     if (!phone) {
-      Alert.alert('Call not available', 'Driver phone number is not available.');
+      showAlert('Call not available', 'Driver phone number is not available.');
       return;
     }
 
     const url = `tel:${phone}`;
     const supported = await Linking.canOpenURL(url);
     if (!supported) {
-      Alert.alert('Call not supported', 'Your device cannot place calls.');
+      showAlert('Call not supported', 'Your device cannot place calls.');
       return;
     }
 
@@ -109,15 +111,15 @@ const DriverInfoCard = ({
     } catch {
     }
 
-    const link = `matedrive://booking/${bookingId}`;
+    const link = `drively://booking/${bookingId}`;
     await Share.share({
-      message: `Track my trip on MateDrive: ${link}`,
+      message: `Track my trip on Drively: ${link}`,
       url: link,
     });
   };
 
   const confirmCancel = () => {
-    Alert.alert('Cancel booking?', 'Are you sure you want to cancel this booking?', [
+    showAlert('Cancel booking?', 'Are you sure you want to cancel this booking?', [
       { text: 'No', style: 'cancel' },
       {
         text: 'Yes, cancel',

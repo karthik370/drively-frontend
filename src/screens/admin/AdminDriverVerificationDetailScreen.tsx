@@ -18,6 +18,8 @@ import {
   DriverVerificationDetails,
   verifyDriverDocuments,
 } from '../../services/api';
+import { showAlert } from '../../components/common/CustomAlert';
+import { G } from '../../constants/glassStyles';
 
 const AdminDriverVerificationDetailScreen = ({ route, navigation }: any) => {
   const driverId = String(route?.params?.driverId || '');
@@ -47,7 +49,7 @@ const AdminDriverVerificationDetailScreen = ({ route, navigation }: any) => {
     if (!driverId) return;
 
     if (!approved) {
-      Alert.alert('Reject driver', 'Are you sure you want to reject this driver?', [
+      showAlert('Reject driver', 'Are you sure you want to reject this driver?', [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Reject',
@@ -61,7 +63,7 @@ const AdminDriverVerificationDetailScreen = ({ route, navigation }: any) => {
                 await load();
                 navigation.goBack();
               } catch (e: any) {
-                Alert.alert('Failed', e?.message || 'Please try again');
+                showAlert('Failed', e?.message || 'Please try again');
               } finally {
                 setIsSubmitting(false);
               }
@@ -78,7 +80,7 @@ const AdminDriverVerificationDetailScreen = ({ route, navigation }: any) => {
       await load();
       navigation.goBack();
     } catch (e: any) {
-      Alert.alert('Failed', e?.message || 'Please try again');
+      showAlert('Failed', e?.message || 'Please try again');
     } finally {
       setIsSubmitting(false);
     }
@@ -197,7 +199,7 @@ const AdminDriverVerificationDetailScreen = ({ route, navigation }: any) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0A0A0A' },
+  container: { flex: 1, backgroundColor: G.bg },
   header: {
     paddingHorizontal: 12,
     paddingTop: 10,
@@ -205,41 +207,41 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.3)',
+    borderBottomColor: G.border3,
   },
   backBtn: { padding: 10 },
-  headerTitle: { flex: 1, textAlign: 'center', fontWeight: '900', color: '#FFFFFF' },
+  headerTitle: { flex: 1, textAlign: 'center', fontWeight: '900', color: G.textPrimary },
   content: { padding: 14, paddingBottom: 24 },
   card: {
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     borderRadius: 14,
     padding: 14,
     marginBottom: 14,
   },
-  title: { fontSize: 16, fontWeight: '900', color: '#FFFFFF' },
+  title: { fontSize: 16, fontWeight: '900', color: G.textPrimary },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
-  sectionTitle: { fontSize: 16, fontWeight: '900', color: '#FFFFFF', marginBottom: 10 },
-  kvTitle: { color: '#8A8A8A', fontWeight: '800' },
-  kvValue: { marginTop: 4, color: '#FFFFFF', fontWeight: '900' },
-  preview: { width: '100%', height: 220, borderRadius: 12, backgroundColor: '#141414', marginTop: 12 },
+  sectionTitle: { fontSize: 16, fontWeight: '900', color: G.textPrimary, marginBottom: 10 },
+  kvTitle: { color: G.textSecondary, fontWeight: '800' },
+  kvValue: { marginTop: 4, color: G.textPrimary, fontWeight: '900' },
+  preview: { width: '100%', height: 220, borderRadius: 12, backgroundColor: G.glass2, marginTop: 12 },
   actions: { flexDirection: 'row', marginTop: 4 },
   reasonWrap: {
     marginTop: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     borderRadius: 14,
     padding: 12,
   },
-  reasonLabel: { color: '#8A8A8A', fontWeight: '800', marginBottom: 8 },
+  reasonLabel: { color: G.textSecondary, fontWeight: '800', marginBottom: 8 },
   reasonInput: {
     minHeight: 44,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: '#FFFFFF',
+    color: G.textPrimary,
     fontWeight: '700',
   },
   approveBtn: {
@@ -258,7 +260,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginLeft: 6,
   },
-  actionText: { color: '#ffffff', fontWeight: '900' },
+  actionText: { color: G.textPrimary, fontWeight: '900' },
   disabled: { opacity: 0.6 },
 });
 

@@ -1,0 +1,36 @@
+# Dependencies - EAS installs these on the build server
+node_modules/
+
+# Native build directories - EAS regenerates these
+android/
+ios/
+
+# Expo cache
+.expo/
+dist/
+web-build/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Env files (secrets loaded via EAS environment variables)
+.env.local
+.env.production
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# TypeScript build output
+*.tsbuildinfo
+
+# Test output
+coverage/

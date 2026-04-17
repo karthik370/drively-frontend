@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, TextInput, TextInputProps, View } from 'react-native';
 import { colors, radius } from '../../theme';
+import { G } from '../../constants/glassStyles';
 
 type PremiumInputProps = TextInputProps & {
     label?: string;
@@ -78,7 +79,7 @@ const inputStyles = StyleSheet.create({
     inputWrap: {
         borderWidth: 1,
         borderRadius: radius.md,
-        backgroundColor: '#141414',
+        backgroundColor: G.glass2,
     },
     input: {
         fontSize: 15,

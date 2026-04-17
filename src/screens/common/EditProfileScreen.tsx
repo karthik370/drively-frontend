@@ -18,6 +18,8 @@ import { useAppDispatch, useAppSelector } from '../../redux/store';
 import { updateUser } from '../../redux/slices/authSlice';
 import { uploadDriverImage, updateMyProfile } from '../../services/api';
 import { UserType } from '../../types';
+import { showAlert } from '../../components/common/CustomAlert';
+import { G } from '../../constants/glassStyles';
 
 type PickedImage = { uri: string; mimeType: string; fileName: string; fileSize?: number };
 
@@ -29,6 +31,7 @@ const EditProfileScreen = ({ navigation }: any) => {
 
   const [firstName, setFirstName] = useState(String(user?.firstName || ''));
   const [lastName, setLastName] = useState(String(user?.lastName || ''));
+  const [email, setEmail] = useState(String(user?.email || ''));
   const [profileImage, setProfileImage] = useState<string | null>(user?.profileImage ? String(user.profileImage) : null);
   const [pickedImage, setPickedImage] = useState<PickedImage | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -38,17 +41,21 @@ const EditProfileScreen = ({ navigation }: any) => {
   const canSave = useMemo(() => {
     const fn = firstName.trim();
     const ln = lastName.trim();
+    const em = email.trim();
     if (!fn || fn.length < 2) return false;
     if (!ln || ln.length < 1) return false;
+    if (!em) return false;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(em)) return false;
     return true;
-  }, [firstName, lastName]);
+  }, [firstName, lastName, email]);
 
   const pickPhoto = async () => {
     if (!canEditPhoto) return;
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert('Permission required', 'Photo library permission is required to select a profile photo.');
+        showAlert('Permission required', 'Photo library permission is required to select a profile photo.');
         return;
       }
 
@@ -64,7 +71,7 @@ const EditProfileScreen = ({ navigation }: any) => {
       const asset = result.assets?.[0];
       const uri = asset?.uri;
       if (!uri) {
-        Alert.alert('Upload failed', 'Could not read image. Please try again.');
+        showAlert('Upload failed', 'Could not read image. Please try again.');
         return;
       }
 
@@ -73,7 +80,7 @@ const EditProfileScreen = ({ navigation }: any) => {
       const fileSize = typeof (asset as any)?.fileSize === 'number' ? (asset as any).fileSize : undefined;
       setPickedImage({ uri, mimeType: mime, fileName, fileSize });
     } catch (e: any) {
-      Alert.alert('Failed', e?.message || 'Please try again');
+      showAlert('Failed', e?.message || 'Please try again');
     }
   };
 
@@ -94,7 +101,7 @@ const EditProfileScreen = ({ navigation }: any) => {
   const onSave = async () => {
     if (!user) return;
     if (!canSave) {
-      Alert.alert('Invalid details', 'Please enter a valid first name and last name.');
+      showAlert('Invalid details', 'Please enter a valid first name and last name.');
       return;
     }
 
@@ -103,6 +110,7 @@ const EditProfileScreen = ({ navigation }: any) => {
       const payload: any = {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
+        email: email.trim().toLowerCase(),
       };
 
       if (canEditPhoto && pickedImage) {
@@ -113,7 +121,7 @@ const EditProfileScreen = ({ navigation }: any) => {
       dispatch(updateUser(updated as any));
       navigation.goBack();
     } catch (e: any) {
-      Alert.alert('Update failed', e?.message || 'Please try again');
+      showAlert('Update failed', e?.message || 'Please try again');
     } finally {
       setIsSaving(false);
     }
@@ -154,10 +162,35 @@ const EditProfileScreen = ({ navigation }: any) => {
           </View>
 
           <Text style={styles.label}>First Name *</Text>
-          <TextInput value={firstName} onChangeText={setFirstName} style={styles.input} placeholder="First name" />
+          <TextInput
+            value={firstName}
+            onChangeText={setFirstName}
+            style={styles.input}
+            placeholder="First name"
+            placeholderTextColor="#555"
+          />
 
           <Text style={[styles.label, { marginTop: 12 }]}>Last Name *</Text>
-          <TextInput value={lastName} onChangeText={setLastName} style={styles.input} placeholder="Last name" />
+          <TextInput
+            value={lastName}
+            onChangeText={setLastName}
+            style={styles.input}
+            placeholder="Last name"
+            placeholderTextColor="#555"
+          />
+
+          <Text style={[styles.label, { marginTop: 12 }]}>Email Address *</Text>
+          <TextInput
+            value={email}
+            onChangeText={setEmail}
+            style={styles.input}
+            placeholder="Enter your email"
+            placeholderTextColor="#555"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <Text style={styles.emailHint}>Used for payment receipts from Cashfree</Text>
         </View>
 
         <TouchableOpacity
@@ -174,7 +207,7 @@ const EditProfileScreen = ({ navigation }: any) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0A0A0A' },
+  container: { flex: 1, backgroundColor: G.bg },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -182,26 +215,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.3)',
+    borderBottomColor: G.border3,
   },
   backBtn: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#141414',
+    backgroundColor: G.glass2,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
   },
-  headerTitle: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
+  headerTitle: { fontSize: 16, fontWeight: '800', color: G.textPrimary },
   content: { padding: 16, paddingBottom: 24 },
   card: {
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     borderRadius: 14,
     padding: 14,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
   },
   avatarRow: { alignItems: 'center', marginBottom: 14 },
   avatarWrap: {
@@ -209,35 +242,35 @@ const styles = StyleSheet.create({
     height: 92,
     borderRadius: 46,
     overflow: 'hidden',
-    backgroundColor: '#141414',
+    backgroundColor: G.glass2,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
   },
   avatarImage: { width: 92, height: 92 },
-  avatarFallback: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#C9A84C' },
-  avatarInitials: { color: '#ffffff', fontWeight: '900', fontSize: 28 },
+  avatarFallback: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: G.accent },
+  avatarInitials: { color: G.textPrimary, fontWeight: '900', fontSize: 28 },
   photoBtn: {
     marginTop: 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#C9A84C',
+    backgroundColor: G.accent,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 12,
   },
-  photoBtnText: { color: '#ffffff', fontWeight: '800' },
-  label: { color: '#8A8A8A', fontWeight: '800', marginTop: 4 },
+  photoBtnText: { color: G.textPrimary, fontWeight: '800' },
+  label: { color: G.textSecondary, fontWeight: '800', marginTop: 4 },
   input: {
     marginTop: 6,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#FFFFFF',
-    backgroundColor: '#111111',
+    color: G.textPrimary,
+    backgroundColor: G.bgAlt,
   },
   saveBtn: {
     marginTop: 14,
@@ -246,8 +279,14 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
   },
-  saveText: { color: '#ffffff', fontWeight: '900', fontSize: 16 },
+  saveText: { color: G.textPrimary, fontWeight: '900', fontSize: 16 },
   disabled: { opacity: 0.6 },
+  emailHint: {
+    fontSize: 11,
+    color: G.textSecondary,
+    marginTop: 5,
+    fontWeight: '500',
+  },
 });
 
 export default EditProfileScreen;

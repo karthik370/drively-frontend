@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DrawerActions } from '@react-navigation/native';
-import { ActivityIndicator, Alert, ScrollView, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, View, Text, StyleSheet, TouchableOpacity, Animated, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import MapView, { Marker } from 'react-native-maps';
@@ -11,6 +11,8 @@ import { BookingStatus } from '../../types';
 import { getNearbyDrivers, type NearbyDriver } from '../../services/api';
 import DriverMarker from '../../components/maps/DriverMarker';
 import { FadeIn, SlideUp, StaggerItem, PressableScale } from '../../components/premium/AnimatedComponents';
+import { showAlert } from '../../components/common/CustomAlert';
+import { G } from '../../constants/glassStyles';
 
 const withTimeout = async <T,>(promise: Promise<T>, ms: number): Promise<T> => {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -39,6 +41,8 @@ const HomeScreen = ({ navigation }: any) => {
   const [isBootstrappingLocation, setIsBootstrappingLocation] = useState(false);
   const [mapSelectTarget, setMapSelectTarget] = useState<'pickup' | 'drop'>('pickup');
   const [isMapPicking, setIsMapPicking] = useState(false);
+  const [scrollHidden, setScrollHidden] = useState(false);
+  const scrollBounce = useRef(new Animated.Value(0)).current;
 
   const [nearbyDrivers, setNearbyDrivers] = useState<NearbyDriver[]>([]);
 
@@ -83,7 +87,7 @@ const HomeScreen = ({ navigation }: any) => {
     try {
       const servicesEnabled = await Location.hasServicesEnabledAsync();
       if (!servicesEnabled) {
-        Alert.alert('Location services', 'Turn on GPS/location services to detect your current location');
+        showAlert('Location services', 'Turn on GPS/location services to detect your current location');
         return null;
       }
 
@@ -95,7 +99,7 @@ const HomeScreen = ({ navigation }: any) => {
       }
 
       if (status !== 'granted') {
-        Alert.alert('Location permission', 'Enable location permission to auto-detect pickup location');
+        showAlert('Location permission', 'Enable location permission to auto-detect pickup location');
         return null;
       }
 
@@ -130,7 +134,7 @@ const HomeScreen = ({ navigation }: any) => {
 
       return coords;
     } catch {
-      Alert.alert('Location', 'Could not detect current location. You can select pickup manually.');
+      showAlert('Location', 'Could not detect current location. You can select pickup manually.');
       return null;
     } finally {
       setIsBootstrappingLocation(false);
@@ -155,7 +159,7 @@ const HomeScreen = ({ navigation }: any) => {
     try {
       await setTargetFromCoords(mapSelectTarget, coords);
     } catch {
-      Alert.alert('Location', 'Could not fetch address for your current location.');
+      showAlert('Location', 'Could not fetch address for your current location.');
     } finally {
       setIsMapPicking(false);
     }
@@ -193,20 +197,13 @@ const HomeScreen = ({ navigation }: any) => {
       } catch (e) {
         if (!mounted) return;
         setNearbyDrivers([]);
-        if (__DEV__) {
-          console.log('Nearby drivers poll failed', {
-            lat: base.latitude,
-            lng: base.longitude,
-            error: String((e as any)?.message || e),
-          });
-        }
       } finally {
         nearbyFetchRef.current.inFlight = false;
       }
     };
 
     run();
-    timer = setInterval(run, 6000);
+    timer = setInterval(run, 12000);
 
     return () => {
       mounted = false;
@@ -279,11 +276,11 @@ const HomeScreen = ({ navigation }: any) => {
   const goToRideConfirm = useCallback(
     (serviceType: 'ONE_WAY' | 'OUTSTATION' | 'ROUND_TRIP' | 'SCHEDULE') => {
       if (hasActiveTrip) {
-        Alert.alert('Trip in progress', 'You already have an active trip. Please complete or cancel it before booking a new ride.');
+        showAlert('Trip in progress', 'You already have an active trip. Please complete or cancel it before booking a new ride.');
         return;
       }
       if (!pickupLocation) {
-        Alert.alert('Select pickup', 'Please select pickup location first (tap the map or use the crosshair).');
+        showAlert('Select pickup', 'Please select pickup location first (tap the map or use the crosshair).');
         return;
       }
       navigation.navigate('RideConfirm', { serviceType });
@@ -302,7 +299,7 @@ const HomeScreen = ({ navigation }: any) => {
 
         await setTargetFromCoords(mapSelectTarget, coords);
       } catch {
-        Alert.alert('Map', 'Could not fetch address for that point.');
+        showAlert('Map', 'Could not fetch address for that point.');
       } finally {
         setIsMapPicking(false);
       }
@@ -310,9 +307,28 @@ const HomeScreen = ({ navigation }: any) => {
     [mapSelectTarget, setTargetFromCoords]
   );
 
+  // Animated scroll indicator bounce
+  useEffect(() => {
+    if (scrollHidden) return;
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scrollBounce, { toValue: 8, duration: 600, useNativeDriver: true }),
+        Animated.timing(scrollBounce, { toValue: 0, duration: 600, useNativeDriver: true }),
+      ])
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [scrollBounce, scrollHidden]);
+
+  const onContentScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (e.nativeEvent.contentOffset.y > 20 && !scrollHidden) {
+      setScrollHidden(true);
+    }
+  }, [scrollHidden]);
+
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={styles.scrollContent} onScroll={onContentScroll} scrollEventThrottle={100}>
         <FadeIn delay={100}>
           <View style={styles.header}>
             <View style={styles.headerRow}>
@@ -458,6 +474,14 @@ const HomeScreen = ({ navigation }: any) => {
         </SlideUp>
         ) : null}
 
+        {/* Animated scroll-down indicator */}
+        {!hasActiveTrip && !scrollHidden ? (
+          <Animated.View style={[styles.scrollIndicator, { transform: [{ translateY: scrollBounce }] }]}>
+            <Icon name="chevron-double-down" size={22} color="#C9A84C" />
+            <Text style={styles.scrollIndicatorText}>Scroll for services</Text>
+          </Animated.View>
+        ) : null}
+
         {!hasActiveTrip ? (
         <View style={styles.servicesContainer}>
           <Text style={styles.sectionTitle}>Our Services</Text>
@@ -488,11 +512,19 @@ const HomeScreen = ({ navigation }: any) => {
               onPress={() => goToRideConfirm('ROUND_TRIP')}
             />
             <ServiceCard
+              icon="airplane"
+              title="Airport"
+              description="Airport transfers"
+              color="#2563eb"
+              index={3}
+              onPress={() => navigation.navigate('AirportTransfer')}
+            />
+            <ServiceCard
               icon="calendar"
               title="Schedule"
               description="Book in advance"
               color="#8b5cf6"
-              index={3}
+              index={4}
               onPress={() => goToRideConfirm('SCHEDULE')}
             />
           </View>
@@ -518,28 +550,31 @@ const ServiceCard = ({ icon, title, description, color, onPress, index }: any) =
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
   },
   scrollContent: {
     paddingBottom: 32,
   },
   header: {
     padding: 16,
-    backgroundColor: '#0A0A0A',
+    paddingBottom: 12,
+    backgroundColor: G.glass1,
+    borderBottomWidth: 1,
+    borderBottomColor: G.border2,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
   },
   menuButton: {
-    width: 40,
-    height: 40,
+    width: 42,
+    height: 42,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 12,
-    backgroundColor: '#141414',
+    borderRadius: 14,
+    backgroundColor: G.glass3,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
   },
   headerTopRow: {
     flex: 1,
@@ -553,52 +588,73 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   greeting: {
-    fontSize: 16,
-    color: '#8A8A8A',
+    fontSize: 17,
+    color: G.textSecondary,
     marginTop: 10,
+    fontWeight: '500',
   },
   activeTripCard: {
-    marginHorizontal: 16,
+    marginHorizontal: 12,
+    marginTop: 12,
     marginBottom: 12,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: G.glass3,
     borderRadius: 16,
-    padding: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: G.borderAccent,
+    shadowColor: G.accent,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 8,
+    minHeight: 64,
   },
   activeTripTitle: {
-    color: '#ffffff',
+    color: G.textPrimary,
     fontSize: 15,
     fontWeight: '800',
   },
   activeTripSub: {
-    marginTop: 2,
-    color: 'rgba(255,255,255,0.85)',
+    marginTop: 3,
+    color: G.textSecondary,
     fontSize: 12,
     fontWeight: '600',
   },
   activeTripBtn: {
     marginLeft: 12,
-    backgroundColor: '#C9A84C',
-    paddingHorizontal: 14,
+    backgroundColor: G.accent,
+    paddingHorizontal: 18,
     paddingVertical: 10,
     borderRadius: 12,
+    minWidth: 90,
+    alignItems: 'center',
+    shadowColor: G.accent,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 6,
   },
   activeTripBtnText: {
-    color: '#ffffff',
-    fontWeight: '800',
+    color: '#000',
+    fontWeight: '900',
+    fontSize: 14,
   },
   title: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   mapContainer: {
     height: 260,
     marginHorizontal: 16,
-    borderRadius: 16,
+    marginTop: 14,
+    borderRadius: 20,
     overflow: 'hidden',
-    backgroundColor: '#141414',
+    borderWidth: 1,
+    borderColor: G.border2,
   },
   mapTopBar: {
     position: 'absolute',
@@ -610,25 +666,26 @@ const styles = StyleSheet.create({
   },
   mapHint: {
     flex: 1,
-    backgroundColor: 'rgba(10,10,10,0.85)',
+    backgroundColor: 'rgba(10,10,10,0.88)',
     paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     borderRadius: 12,
-    color: '#FFFFFF',
+    color: G.textPrimary,
     fontWeight: '700',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
+    overflow: 'hidden',
   },
   mapLocateIcon: {
     marginLeft: 10,
-    backgroundColor: 'rgba(10,10,10,0.85)',
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    backgroundColor: 'rgba(10,10,10,0.88)',
+    width: 42,
+    height: 42,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.borderAccent,
   },
   mapSelectRow: {
     position: 'absolute',
@@ -641,31 +698,31 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 10,
     borderRadius: 12,
-    backgroundColor: 'rgba(10,10,10,0.85)',
+    backgroundColor: 'rgba(10,10,10,0.88)',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
   },
   mapSelectChipLeft: {
     marginRight: 8,
   },
   mapSelectChipActive: {
-    backgroundColor: '#C9A84C',
-    borderColor: '#C9A84C',
+    backgroundColor: G.accent,
+    borderColor: G.accent,
   },
   mapSelectChipText: {
-    color: '#FFFFFF',
+    color: G.textPrimary,
     fontWeight: '800',
   },
   mapSelectChipTextActive: {
-    color: '#0A0A0A',
+    color: G.textOnAccent,
     fontWeight: '800',
   },
   nearbyDriverMarker: {
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.bg,
     borderWidth: 2,
     borderColor: '#93c5fd',
     alignItems: 'center',
@@ -678,77 +735,84 @@ const styles = StyleSheet.create({
     right: 16,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    backgroundColor: '#0A0A0A',
-    borderRadius: 12,
+    backgroundColor: 'rgba(10,10,10,0.92)',
+    borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border2,
   },
   mapLoadingText: {
     marginLeft: 8,
-    color: '#FFFFFF',
+    color: G.textPrimary,
     fontWeight: '600',
   },
+  /* ── Booking card: frosted glass with gold accent ── */
   bookingCard: {
     margin: 16,
-    backgroundColor: '#111111',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: G.glass3,
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1.5,
+    borderColor: G.border3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 18,
+    elevation: 12,
   },
   inputButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 13,
+    paddingHorizontal: 4,
   },
   inputText: {
     marginLeft: 12,
     fontSize: 16,
-    color: '#8A8A8A',
+    color: G.textMuted,
     flex: 1,
   },
   inputTextFilled: {
-    color: '#FFFFFF',
+    color: G.textPrimary,
     fontWeight: '700',
   },
   divider: {
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    marginVertical: 8,
+    backgroundColor: G.border2,
+    marginVertical: 6,
   },
   continueButton: {
-    marginTop: 12,
-    backgroundColor: '#C9A84C',
-    paddingVertical: 14,
-    borderRadius: 12,
+    marginTop: 14,
+    backgroundColor: G.accent,
+    paddingVertical: 16,
+    borderRadius: 14,
     alignItems: 'center',
-    shadowColor: '#C9A84C',
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
+    shadowColor: G.accent,
+    shadowOpacity: 0.45,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 10,
   },
   continueButtonDisabled: {
-    opacity: 0.5,
+    opacity: 0.4,
   },
   continueText: {
-    color: '#0A0A0A',
+    color: G.textOnAccent,
     fontSize: 16,
     fontWeight: '800',
+    letterSpacing: 0.3,
   },
+  /* ── Services section ── */
   servicesContainer: {
     padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.3)',
     marginTop: 4,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: '700',
+    color: G.textPrimary,
     marginBottom: 16,
   },
   serviceGrid: {
@@ -758,33 +822,48 @@ const styles = StyleSheet.create({
   },
   serviceCardWrapper: {
     width: '48%',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   serviceCardInner: {
     width: '100%',
-    backgroundColor: '#111111',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: G.glass2,
+    borderRadius: 18,
+    padding: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 6,
   },
   serviceIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 52,
+    height: 52,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
   },
   serviceTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+    color: G.textPrimary,
     marginBottom: 4,
   },
   serviceDescription: {
     fontSize: 12,
+    color: G.textMuted,
+  },
+  scrollIndicator: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  scrollIndicatorText: {
+    fontSize: 11,
+    fontWeight: '600',
     color: '#8A8A8A',
+    marginTop: 2,
   },
 });
 

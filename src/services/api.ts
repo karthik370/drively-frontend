@@ -517,7 +517,7 @@ export const uploadDriverImage = async (payload: UploadImageRequest): Promise<Up
   const base64 = await FileSystem.readAsStringAsync(payload.uri, {
     encoding: FileSystem.EncodingType.Base64,
   });
-  console.log('[Upload] base64 size:', Math.round(base64.length * 0.75 / 1024), 'KB');
+
 
   const url = `${API_URL}/drivers/uploads/image`;
   const token = await SecureStore.getItemAsync('accessToken');
@@ -538,27 +538,30 @@ export const uploadDriverImage = async (payload: UploadImageRequest): Promise<Up
     }
 
     xhr.onload = () => {
-      console.log('[Upload] XHR status:', xhr.status);
+
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
           const data = JSON.parse(xhr.responseText);
           if (!data.success) {
             reject(new Error(data.message || 'Server returned failure'));
+          } else if (data?.data?.fileUrl) {
+            resolve({ fileUrl: data.data.fileUrl, key: data.data.key || '' });
           } else {
-            console.log('[Upload] Success! URL:', data.data?.fileUrl);
-            resolve(data.data);
+            reject(new Error('Upload success but no fileUrl returned'));
           }
         } catch (e) {
           reject(new Error('Invalid JSON response'));
         }
       } else {
-        console.log('[Upload] Server error:', xhr.status, xhr.responseText?.slice(0, 200));
-        reject(new Error(`Upload failed: ${xhr.status}`));
+        const errorMsg = xhr.responseText
+          ? `Server returned ${xhr.status}: ${xhr.responseText.slice(0, 200)}`
+          : 'Upload failed with no detail (might be 413 Payload Too Large)';
+        reject(new Error(errorMsg));
       }
     };
 
-    xhr.onerror = () => { console.log('[Upload] XHR error'); reject(new Error('Network error')); };
-    xhr.ontimeout = () => { console.log('[Upload] XHR timeout'); reject(new Error('Upload timed out')); };
+    xhr.onerror = () => { reject(new Error('Network error')); };
+    xhr.ontimeout = () => { reject(new Error('Upload timed out')); };
 
     xhr.send(JSON.stringify({ base64, kind: payload.kind, mimeType: payload.mimeType }));
   });
@@ -924,6 +927,22 @@ export const getBookingPaymentStatus = async (bookingId: string): Promise<any> =
   }
 };
 
+export const collectCashPayment = async (bookingId: string): Promise<any> => {
+  try {
+    const res = await api.post<ApiResponse<any>>('/payments/collect-cash', { bookingId });
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+/** Returns the full URL to download the invoice PDF for a completed booking. */
+export const getInvoicePdfUrl = (bookingId: string): string => {
+  const baseURL = api.defaults.baseURL || '';
+  return `${baseURL}/invoices/${bookingId}/pdf`;
+};
+
+
 // WALLET
 export const getWalletBalance = async (): Promise<{ balance: number; currency: string }> => {
   try {
@@ -1039,6 +1058,80 @@ export const verifyMembershipPurchase = async (params: {
 }): Promise<any> => {
   try {
     const res = await api.post<ApiResponse<any>>('/membership/verify', params);
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+// DISCOUNT PREVIEW
+export type DiscountPreview = {
+  membershipType: string;
+  membershipDiscount: number;
+  membershipLabel: string | null;
+  streakRides: number;
+  streakPct: number;
+  streakDiscount: number;
+  streakLabel: string | null;
+  nextStreakTier: { rides: number; pct: number } | null;
+  totalDiscount: number;
+  finalAmount: number;
+  requireExperienced: boolean;
+  isPremium: boolean;
+  favoriteDriverIds: string[];
+};
+
+export const getDiscountPreview = async (amount: number): Promise<DiscountPreview> => {
+  try {
+    const res = await api.get<ApiResponse<DiscountPreview>>('/features/discounts/preview', { params: { amount } });
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+// FAVORITE DRIVERS
+export type FavoriteDriver = {
+  id: string;
+  name: string;
+  phone: string;
+  photo: string | null;
+  rating: number;
+  totalTrips: number;
+  isExperienced: boolean;
+  vehicleTypes: string[];
+};
+
+export const listFavoriteDrivers = async (): Promise<FavoriteDriver[]> => {
+  try {
+    const res = await api.get<ApiResponse<FavoriteDriver[]>>('/features/favorite-drivers');
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const addFavoriteDriver = async (driverId: string): Promise<any> => {
+  try {
+    const res = await api.post<ApiResponse<any>>(`/features/favorite-drivers/${driverId}`);
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const removeFavoriteDriver = async (driverId: string): Promise<any> => {
+  try {
+    const res = await api.delete<ApiResponse<any>>(`/features/favorite-drivers/${driverId}`);
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const checkFavoriteDriver = async (driverId: string): Promise<{ isFavorite: boolean }> => {
+  try {
+    const res = await api.get<ApiResponse<{ isFavorite: boolean }>>(`/features/favorite-drivers/${driverId}/check`);
     return unwrap(res);
   } catch (error) {
     return handleAxiosError(error);
@@ -1345,6 +1438,95 @@ export const verifyDriverSubscriptionPayment = async (
     const res = await api.post<ApiResponse<any>>('/driver/subscription/verify', {
       cfOrderId,
     });
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+// ─── Trip Photos ───────────────────────────────────────────────────────────────
+export const uploadTripPhoto = async (params: {
+  bookingId: string;
+  base64: string;
+  mimeType: string;
+  phase: 'BEFORE' | 'AFTER';
+  label: string;
+  latitude?: number;
+  longitude?: number;
+}): Promise<any> => {
+  try {
+    const res = await api.post<ApiResponse<any>>(`/trip-photos/${params.bookingId}/upload`, {
+      base64: params.base64,
+      mimeType: params.mimeType,
+      phase: params.phase,
+      label: params.label,
+      latitude: params.latitude,
+      longitude: params.longitude,
+    });
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const getTripPhotos = async (bookingId: string): Promise<any> => {
+  try {
+    const res = await api.get<ApiResponse<any>>(`/trip-photos/${bookingId}`);
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const getTripPhotoCount = async (bookingId: string, phase: 'BEFORE' | 'AFTER'): Promise<any> => {
+  try {
+    const res = await api.get<ApiResponse<any>>(`/trip-photos/${bookingId}/count/${phase}`);
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+// ─── Driver Badges ─────────────────────────────────────────────────────────────
+export const getAllBadges = async (): Promise<any> => {
+  try {
+    const res = await api.get<ApiResponse<any>>('/badges');
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const getMyBadges = async (): Promise<any> => {
+  try {
+    const res = await api.get<ApiResponse<any>>('/badges/my');
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const getDriverBadgesApi = async (driverId: string): Promise<any> => {
+  try {
+    const res = await api.get<ApiResponse<any>>(`/badges/driver/${driverId}`);
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const getBadgeQuiz = async (badgeId: string): Promise<any> => {
+  try {
+    const res = await api.get<ApiResponse<any>>(`/badges/${badgeId}/quiz`);
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const submitBadgeQuiz = async (badgeId: string, answers: number[]): Promise<any> => {
+  try {
+    const res = await api.post<ApiResponse<any>>(`/badges/${badgeId}/quiz`, { answers });
     return unwrap(res);
   } catch (error) {
     return handleAxiosError(error);

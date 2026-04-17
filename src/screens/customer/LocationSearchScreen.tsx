@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { G } from '../../constants/glassStyles';
 
 import { GOOGLE_MAPS_API_KEY } from '../../constants/config';
 import { useAppDispatch, useAppSelector } from '../../redux/store';
@@ -231,6 +232,10 @@ const LocationSearchScreen = ({ navigation, route }: Props) => {
       </View>
 
       <FlatList
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={8}
+          windowSize={5}
+          initialNumToRender={8}
         data={rows}
         keyExtractor={(item) => item.key}
         contentContainerStyle={styles.listContent}
@@ -300,7 +305,7 @@ const LocationSearchScreen = ({ navigation, route }: Props) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0A0A0A' },
+  container: { flex: 1, backgroundColor: G.bg },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -308,19 +313,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.3)',
+    borderBottomColor: G.border3,
   },
   backBtn: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#141414',
+    backgroundColor: G.glass2,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
   },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: G.textPrimary },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -330,10 +335,10 @@ const styles = StyleSheet.create({
     margin: 16,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-    backgroundColor: '#111111',
+    borderColor: G.border3,
+    backgroundColor: G.bgAlt,
   },
-  input: { flex: 1, fontSize: 16, color: '#FFFFFF' },
+  input: { flex: 1, fontSize: 16, color: G.textPrimary },
   listContent: { paddingHorizontal: 16, paddingBottom: 16 },
   row: {
     flexDirection: 'row',
@@ -341,12 +346,12 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.3)',
+    borderBottomColor: G.border3,
   },
-  savedTitle: { fontSize: 13, fontWeight: '800', color: '#FFFFFF' },
-  rowText: { flex: 1, fontSize: 14, color: '#FFFFFF' },
+  savedTitle: { fontSize: 13, fontWeight: '800', color: G.textPrimary },
+  rowText: { flex: 1, fontSize: 14, color: G.textPrimary },
   emptyState: { paddingVertical: 24, alignItems: 'center' },
-  emptyText: { color: '#8A8A8A', fontSize: 14 },
+  emptyText: { color: G.textSecondary, fontSize: 14 },
   selectingOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(10,10,10,0.85)',
@@ -354,7 +359,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 12,
   },
-  selectingText: { color: '#FFFFFF', fontWeight: '600' },
+  selectingText: { color: G.textPrimary, fontWeight: '600' },
 });
 
 export default LocationSearchScreen;

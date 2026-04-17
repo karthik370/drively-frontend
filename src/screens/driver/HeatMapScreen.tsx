@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Circle, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { G } from '../../constants/glassStyles';
 
 const { width } = Dimensions.get('window');
 
@@ -127,21 +128,21 @@ const HeatMapScreen = ({ navigation }: any) => {
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#111111' },
+    container: { flex: 1, backgroundColor: G.bgAlt },
     header: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-        paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#0A0A0A',
-        borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.3)',
+        paddingHorizontal: 16, paddingVertical: 12, backgroundColor: G.bg,
+        borderBottomWidth: 1, borderBottomColor: G.border3,
     },
-    backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#141414', alignItems: 'center', justifyContent: 'center' },
-    headerTitle: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
-    refreshBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#141414', alignItems: 'center', justifyContent: 'center' },
+    backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: G.glass2, alignItems: 'center', justifyContent: 'center' },
+    headerTitle: { fontSize: 16, fontWeight: '800', color: G.textPrimary },
+    refreshBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: G.glass2, alignItems: 'center', justifyContent: 'center' },
 
     mapWrap: { flex: 1 },
 
     legend: {
         position: 'absolute', top: 12, right: 12,
-        backgroundColor: '#0A0A0A', borderRadius: 10, padding: 10, gap: 4,
+        backgroundColor: G.bg, borderRadius: 10, padding: 10, gap: 4,
         elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 6,
     },
     legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -149,21 +150,21 @@ const styles = StyleSheet.create({
     legendText: { fontSize: 11, fontWeight: '600', color: '#CCCCCC' },
 
     zonesCard: {
-        backgroundColor: '#0A0A0A', borderTopLeftRadius: 20, borderTopRightRadius: 20,
+        backgroundColor: G.bg, borderTopLeftRadius: 20, borderTopRightRadius: 20,
         padding: 16, marginTop: -12,
         elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.08, shadowRadius: 10,
     },
-    zonesTitle: { fontSize: 15, fontWeight: '900', color: '#FFFFFF', marginBottom: 10 },
+    zonesTitle: { fontSize: 15, fontWeight: '900', color: G.textPrimary, marginBottom: 10 },
     zonesList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
     zoneChip: {
         flexDirection: 'row', alignItems: 'center', gap: 6,
-        backgroundColor: '#111111', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8,
-        borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
+        backgroundColor: G.bgAlt, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8,
+        borderWidth: 1, borderColor: G.border3,
     },
     zoneDot: { width: 8, height: 8, borderRadius: 4 },
-    zoneName: { fontSize: 12, fontWeight: '700', color: '#FFFFFF' },
+    zoneName: { fontSize: 12, fontWeight: '700', color: G.textPrimary },
     zoneDemand: { fontSize: 10, fontWeight: '800' },
-    zonesHint: { fontSize: 11, color: '#666666', fontWeight: '600' },
+    zonesHint: { fontSize: 11, color: G.textMuted, fontWeight: '600' },
 });
 
 export default HeatMapScreen;

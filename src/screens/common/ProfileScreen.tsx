@@ -8,6 +8,8 @@ import { getActiveBooking, goOffline } from '../../services/api';
 import { BookingStatus, UserType } from '../../types';
 import { setDriverOnline } from '../../redux/slices/driverSlice';
 import { ScaleIn, SlideUp, PressableScale } from '../../components/premium/AnimatedComponents';
+import { showAlert } from '../../components/common/CustomAlert';
+import { G } from '../../constants/glassStyles';
 
 const ProfileScreen = ({ navigation }: any) => {
   const dispatch = useAppDispatch();
@@ -73,61 +75,35 @@ const ProfileScreen = ({ navigation }: any) => {
 
   const toggleCustomerMode = async (nextValue: boolean) => {
     if (!isDriver) return;
-
     const navigateToTab = (tabName: string) => {
       try {
         const parent = typeof navigation?.getParent === 'function' ? navigation.getParent() : null;
-        if (parent && typeof parent.navigate === 'function') {
-          parent.navigate('Tabs', { screen: tabName });
-          return;
-        }
-      } catch {
-      }
-
-      try {
-        navigation.navigate(tabName);
-      } catch {
-      }
+        if (parent && typeof parent.navigate === 'function') { parent.navigate('Tabs', { screen: tabName }); return; }
+      } catch {}
+      try { navigation.navigate(tabName); } catch {}
     };
-
-    const enable = async () => {
-      try {
-        await goOffline();
-        dispatch(setDriverOnline(false));
-      } catch (e: any) {
-        Alert.alert('Go offline first', e?.message || 'Please set yourself OFFLINE before enabling Customer mode.');
-        return;
-      }
-
-      if (hasActiveTrip) {
-        Alert.alert('Cannot switch mode', 'An active booking is assigned. Please complete/cancel it first.');
-        return;
-      }
-
-      const ok = await ensureBackendAllowsCustomerMode();
-      if (!ok) {
-        Alert.alert('Cannot switch mode', 'An active booking is assigned. Please complete/cancel it first.');
-        return;
-      }
-
+    if (nextValue) {
+      if (hasActiveTrip) { showAlert('Cannot switch mode', 'An active booking is assigned.'); return; }
+      // Optimistic: switch immediately, verify in background
       dispatch(setRoleOverride(UserType.CUSTOMER));
+      dispatch(setDriverOnline(false));
       navigateToTab('Home');
-    };
-
-    const disable = () => {
+      // Background verification
+      void (async () => {
+        try { await goOffline(); } catch {}
+        try {
+          const ok = await ensureBackendAllowsCustomerMode();
+          if (!ok) { dispatch(clearRoleOverride()); showAlert('Cannot switch mode', 'Active booking found. Reverting.'); }
+        } catch {}
+      })();
+    } else {
       dispatch(clearRoleOverride());
       navigateToTab('Accept');
-    };
-
-    if (nextValue) {
-      await enable();
-    } else {
-      disable();
     }
   };
 
   const handleLogout = () => {
-    Alert.alert(
+    showAlert(
       'Logout',
       'Are you sure you want to logout?',
       [
@@ -177,14 +153,14 @@ const ProfileScreen = ({ navigation }: any) => {
               onPress={() => {
                 if (!isCustomerMode && !canEnableCustomerMode) {
                   if (hasActiveTrip) {
-                    Alert.alert('Cannot switch mode', 'An active booking is assigned. Please complete/cancel it first.');
+                    showAlert('Cannot switch mode', 'An active booking is assigned. Please complete/cancel it first.');
                     return;
                   }
                   if (isOnline) {
-                    Alert.alert('Go offline first', 'Please set yourself OFFLINE before enabling Customer mode.');
+                    showAlert('Go offline first', 'Please set yourself OFFLINE before enabling Customer mode.');
                     return;
                   }
-                  Alert.alert('Cannot switch mode', 'Please go offline and ensure no active booking is assigned.');
+                  showAlert('Cannot switch mode', 'Please go offline and ensure no active booking is assigned.');
                   return;
                 }
 
@@ -238,6 +214,7 @@ const ProfileScreen = ({ navigation }: any) => {
           {(isDriver && !isCustomerMode) && (
             <>
               <MenuItem icon="wallet" title="Wallet" onPress={() => navigation.navigate('DriverWallet')} />
+              <MenuItem icon="shield-star" title="🏅 Skill Badges" onPress={() => navigation.navigate('DriverBadges')} />
             </>
           )}
           <MenuItem icon="star-circle" title="Rewards" onPress={() => navigation.navigate('Rewards')} />
@@ -288,82 +265,94 @@ const MenuItem = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0F0F0F',
+    backgroundColor: G.bg,
   },
   header: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: G.glass3,
     paddingVertical: 28,
     paddingHorizontal: 20,
     alignItems: 'center',
     marginHorizontal: 16,
-    marginTop: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(201,168,76,0.15)',
+    marginTop: 12,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    borderColor: G.borderAccent,
+    shadowColor: G.accent,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 10,
   },
   avatarContainer: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    backgroundColor: '#C9A84C',
+    width: 86,
+    height: 86,
+    borderRadius: 43,
+    backgroundColor: G.accentSoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 14,
     overflow: 'hidden',
     borderWidth: 3,
-    borderColor: 'rgba(201,168,76,0.3)',
+    borderColor: G.borderAccent,
   },
   avatarImage: {
-    width: 84,
-    height: 84,
+    width: 86,
+    height: 86,
   },
   avatarText: {
-    color: '#ffffff',
+    color: G.accent,
     fontSize: 30,
     fontWeight: '800',
   },
   name: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: G.textPrimary,
     marginBottom: 4,
   },
   phone: {
     fontSize: 14,
-    color: '#8A8A8A',
+    color: G.textSecondary,
     marginBottom: 2,
   },
   email: {
     fontSize: 14,
-    color: '#8A8A8A',
+    color: G.textSecondary,
   },
   ratingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 12,
     gap: 4,
-    backgroundColor: 'rgba(245,158,11,0.08)',
+    backgroundColor: G.warningSoft,
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(245,158,11,0.25)',
   },
   rating: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   ratingCount: {
     fontSize: 13,
-    color: '#8A8A8A',
+    color: G.textSecondary,
   },
   section: {
-    backgroundColor: '#0A0A0A',
-    marginTop: 12,
+    backgroundColor: G.glass2,
+    marginTop: 14,
     marginHorizontal: 16,
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: G.border2,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 6,
   },
   menuItem: {
     flexDirection: 'row',
@@ -372,7 +361,7 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     paddingHorizontal: 18,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
+    borderBottomColor: G.border1,
   },
   menuItemLeft: {
     flexDirection: 'row',
@@ -383,7 +372,7 @@ const styles = StyleSheet.create({
   menuItemText: {
     fontSize: 15,
     fontWeight: '500',
-    color: '#FFFFFF',
+    color: G.textPrimary,
   },
   modeRow: {
     flexDirection: 'row',
@@ -392,7 +381,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 18,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
+    borderBottomColor: G.border1,
     gap: 12,
   },
   modeRowDisabled: {
@@ -401,7 +390,7 @@ const styles = StyleSheet.create({
   modeHint: {
     marginTop: 3,
     fontSize: 12,
-    color: '#8A8A8A',
+    color: G.textSecondary,
     fontWeight: '500',
     lineHeight: 16,
   },
@@ -414,20 +403,20 @@ const styles = StyleSheet.create({
     marginTop: 20,
     marginBottom: 4,
     paddingVertical: 15,
-    backgroundColor: 'rgba(239,68,68,0.06)',
-    borderRadius: 16,
+    backgroundColor: G.errorSoft,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(239,68,68,0.15)',
+    borderColor: 'rgba(239,68,68,0.30)',
   },
   logoutText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#ef4444',
+    color: G.error,
   },
   version: {
     textAlign: 'center',
     fontSize: 12,
-    color: '#555555',
+    color: G.textMuted,
     marginTop: 12,
     marginBottom: 28,
   },

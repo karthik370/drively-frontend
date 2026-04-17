@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { getRewardsSummary, getRewardsHistory } from '../../services/api';
+import { G } from '../../constants/glassStyles';
 
 const RewardsScreen = ({ navigation }: any) => {
     const [summary, setSummary] = useState<any>(null);
@@ -89,7 +90,7 @@ const RewardsScreen = ({ navigation }: any) => {
                 <View style={styles.howItWorks}>
                     <Text style={styles.sectionTitle}>How Coins Work</Text>
                     <View style={styles.howRow}>
-                        <View style={[styles.howIcon, { backgroundColor: '#141414' }]}>
+                        <View style={[styles.howIcon, { backgroundColor: G.glass2 }]}>
                             <Icon name="car" size={18} color="#C9A84C" />
                         </View>
                         <View style={styles.howInfo}>
@@ -98,7 +99,7 @@ const RewardsScreen = ({ navigation }: any) => {
                         </View>
                     </View>
                     <View style={styles.howRow}>
-                        <View style={[styles.howIcon, { backgroundColor: '#141414' }]}>
+                        <View style={[styles.howIcon, { backgroundColor: G.glass2 }]}>
                             <Icon name="tag" size={18} color="#16a34a" />
                         </View>
                         <View style={styles.howInfo}>
@@ -155,20 +156,20 @@ const RewardsScreen = ({ navigation }: any) => {
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#111111' },
+    container: { flex: 1, backgroundColor: G.bgAlt },
     header: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
         paddingHorizontal: 16, paddingVertical: 12,
-        backgroundColor: '#0A0A0A', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.3)',
+        backgroundColor: G.bg, borderBottomWidth: 1, borderBottomColor: G.border3,
     },
     backBtn: {
-        width: 40, height: 40, borderRadius: 12, backgroundColor: '#141414',
+        width: 40, height: 40, borderRadius: 12, backgroundColor: G.glass2,
         alignItems: 'center', justifyContent: 'center',
     },
-    headerTitle: { fontSize: 17, fontWeight: '800', color: '#FFFFFF' },
+    headerTitle: { fontSize: 17, fontWeight: '800', color: G.textPrimary },
     content: { padding: 16, paddingBottom: 40 },
     balanceCard: {
-        backgroundColor: '#1E1E1E', borderRadius: 20, padding: 20, marginBottom: 20,
+        backgroundColor: G.glass3, borderRadius: 20, padding: 20, marginBottom: 20,
     },
     balanceTop: { flexDirection: 'row', alignItems: 'center' },
     coinIconWrap: {
@@ -176,43 +177,43 @@ const styles = StyleSheet.create({
         alignItems: 'center', justifyContent: 'center',
     },
     balanceLabel: { fontSize: 13, color: 'rgba(255,255,255,0.6)', fontWeight: '600' },
-    balanceValue: { fontSize: 32, fontWeight: '900', color: '#ffffff', marginTop: 2 },
+    balanceValue: { fontSize: 32, fontWeight: '900', color: G.textPrimary, marginTop: 2 },
     balanceDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.1)', marginVertical: 16 },
     balanceBottom: { flexDirection: 'row', justifyContent: 'space-between' },
     balanceStat: { flex: 1, alignItems: 'center' },
     balanceStatDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.1)' },
     statLabel: { fontSize: 12, color: 'rgba(255,255,255,0.5)', fontWeight: '600' },
-    statValue: { fontSize: 16, fontWeight: '800', color: '#ffffff', marginTop: 4 },
+    statValue: { fontSize: 16, fontWeight: '800', color: G.textPrimary, marginTop: 4 },
     howItWorks: {
-        backgroundColor: '#0A0A0A', borderRadius: 16, padding: 16,
-        borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', marginBottom: 20,
+        backgroundColor: G.bg, borderRadius: 16, padding: 16,
+        borderWidth: 1, borderColor: G.border3, marginBottom: 20,
     },
-    sectionTitle: { fontSize: 16, fontWeight: '800', color: '#FFFFFF', marginBottom: 12 },
+    sectionTitle: { fontSize: 16, fontWeight: '800', color: G.textPrimary, marginBottom: 12 },
     howRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
     howIcon: {
         width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
     },
     howInfo: { flex: 1, marginLeft: 12 },
-    howTitle: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
-    howDesc: { fontSize: 12, color: '#8A8A8A', marginTop: 1 },
+    howTitle: { fontSize: 14, fontWeight: '700', color: G.textPrimary },
+    howDesc: { fontSize: 12, color: G.textSecondary, marginTop: 1 },
     emptyCard: {
-        backgroundColor: '#0A0A0A', borderRadius: 16, padding: 32,
-        alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
+        backgroundColor: G.bg, borderRadius: 16, padding: 32,
+        alignItems: 'center', borderWidth: 1, borderColor: G.border3,
     },
     emptyText: { fontSize: 15, fontWeight: '700', color: '#CCCCCC', marginTop: 12 },
-    emptyHint: { fontSize: 13, color: '#666666', marginTop: 4 },
+    emptyHint: { fontSize: 13, color: G.textMuted, marginTop: 4 },
     txRow: {
-        flexDirection: 'row', alignItems: 'center', backgroundColor: '#0A0A0A',
-        borderRadius: 12, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
+        flexDirection: 'row', alignItems: 'center', backgroundColor: G.bg,
+        borderRadius: 12, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: G.border3,
     },
     txIcon: {
         width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
     },
-    txIconEarned: { backgroundColor: '#141414' },
+    txIconEarned: { backgroundColor: G.glass2 },
     txIconSpent: { backgroundColor: '#1A1010' },
     txInfo: { flex: 1, marginLeft: 12 },
-    txReason: { fontSize: 13, fontWeight: '600', color: '#FFFFFF' },
-    txDate: { fontSize: 11, color: '#666666', marginTop: 2 },
+    txReason: { fontSize: 13, fontWeight: '600', color: G.textPrimary },
+    txDate: { fontSize: 11, color: G.textMuted, marginTop: 2 },
     txAmount: { fontSize: 15, fontWeight: '800' },
     txAmountPlus: { color: '#10b981' },
     txAmountMinus: { color: '#ef4444' },

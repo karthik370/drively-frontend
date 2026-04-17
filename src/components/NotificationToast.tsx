@@ -4,6 +4,7 @@ import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppDispatch, useAppSelector } from '../redux/store';
 import { removeNotification } from '../redux/slices/notificationSlice';
+import { G } from '../constants/glassStyles';
 
 const NotificationToast = () => {
   const dispatch = useAppDispatch();

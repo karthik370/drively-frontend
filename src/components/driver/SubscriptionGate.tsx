@@ -4,6 +4,8 @@ import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { createDriverSubscriptionOrder, verifyDriverSubscriptionPayment } from '../../services/api';
 import { openCashfreeCheckout } from '../../services/cashfreeService';
 import { useAppSelector } from '../../redux/store';
+import { showAlert } from '../common/CustomAlert';
+import { G } from '../../constants/glassStyles';
 
 interface SubscriptionGateProps {
     onSuccess: () => void;
@@ -34,12 +36,11 @@ const SubscriptionGate: React.FC<SubscriptionGateProps> = ({ onSuccess, price = 
             // Step 3: Verify payment on backend
             await verifyDriverSubscriptionPayment(success.orderId);
 
-            Alert.alert('Success', 'Subscription activated successfully!', [
+            showAlert('Success', 'Subscription activated successfully!', [
                 { text: 'OK', onPress: onSuccess }
             ]);
         } catch (e: any) {
-            console.log('[SubscriptionGate] Payment error:', e?.message || e);
-            Alert.alert('Subscription Error', e.message || 'Could not complete payment');
+            showAlert('Subscription Error', e.message || 'Could not complete payment');
         } finally {
             setLoading(false);
         }
@@ -107,11 +108,11 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         padding: 20,
-        backgroundColor: '#111111',
+        backgroundColor: G.bgAlt,
     },
     card: {
         width: '100%',
-        backgroundColor: '#0A0A0A',
+        backgroundColor: G.bg,
         borderRadius: 24,
         padding: 24,
         alignItems: 'center',
@@ -121,13 +122,13 @@ const styles = StyleSheet.create({
         shadowRadius: 12,
         elevation: 8,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.3)',
+        borderColor: G.border3,
     },
     iconContainer: {
         width: 80,
         height: 80,
         borderRadius: 40,
-        backgroundColor: '#141414',
+        backgroundColor: G.glass2,
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 20,
@@ -137,7 +138,7 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 22,
         fontWeight: '800',
-        color: '#FFFFFF',
+        color: G.textPrimary,
         textAlign: 'center',
         marginBottom: 8,
     },
@@ -153,7 +154,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'baseline',
         marginBottom: 24,
-        backgroundColor: '#141414',
+        backgroundColor: G.glass2,
         paddingHorizontal: 20,
         paddingVertical: 12,
         borderRadius: 16,
@@ -161,13 +162,13 @@ const styles = StyleSheet.create({
     currency: {
         fontSize: 24,
         fontWeight: '700',
-        color: '#FFFFFF',
+        color: G.textPrimary,
         marginRight: 4,
     },
     price: {
         fontSize: 48,
         fontWeight: '900',
-        color: '#FFFFFF',
+        color: G.textPrimary,
         letterSpacing: -1,
     },
     period: {
@@ -193,7 +194,7 @@ const styles = StyleSheet.create({
     },
     payButton: {
         width: '100%',
-        backgroundColor: '#1E1E1E',
+        backgroundColor: G.glass3,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
@@ -205,7 +206,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#CCCCCC',
     },
     payButtonText: {
-        color: '#ffffff',
+        color: G.textPrimary,
         fontSize: 16,
         fontWeight: '800',
     },

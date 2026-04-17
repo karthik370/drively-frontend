@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { G } from '../../constants/glassStyles';
 
 interface Props {
     todayEarnings: number;
@@ -49,7 +50,7 @@ const EarningsGoalCard = ({ todayEarnings, dailyGoal = 2000 }: Props) => {
 
 const styles = StyleSheet.create({
     container: {
-        backgroundColor: '#0A0A0A',
+        backgroundColor: G.bg,
         borderRadius: 14,
         padding: 16,
         marginHorizontal: 16,
@@ -66,12 +67,12 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         marginBottom: 12,
     },
-    title: { fontSize: 14, fontWeight: '800', color: '#FFFFFF' },
+    title: { fontSize: 14, fontWeight: '800', color: G.textPrimary },
     goalAmount: { fontSize: 14, fontWeight: '800', color: '#8A8A8A' },
 
     progressBg: {
         height: 8,
-        backgroundColor: '#141414',
+        backgroundColor: G.glass2,
         borderRadius: 4,
         overflow: 'hidden',
         marginBottom: 8,
@@ -85,7 +86,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
     },
-    earnedText: { fontSize: 12, fontWeight: '700', color: '#FFFFFF' },
+    earnedText: { fontSize: 12, fontWeight: '700', color: G.textPrimary },
     remainingText: { fontSize: 12, fontWeight: '700', color: '#8A8A8A' },
 });
 

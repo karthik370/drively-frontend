@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { showAlert } from '../../components/common/CustomAlert';
+import { G } from '../../constants/glassStyles';
 
 interface AirportTerminal {
     id: string;
@@ -67,7 +69,7 @@ const AirportTransferScreen = ({ navigation }: Props) => {
 
     const handleContinue = () => {
         if (!airport || !selectedTerminal) {
-            return Alert.alert('Select terminal', 'Please select an airport and terminal');
+            return showAlert('Select terminal', 'Please select an airport and terminal');
         }
         const terminal = airport.terminals.find((t) => t.id === selectedTerminal);
         const label = `${airport.city} Airport (${terminal?.code || ''})`;
@@ -125,7 +127,7 @@ const AirportTransferScreen = ({ navigation }: Props) => {
                         onPress={() => { setSelectedAirport(i); setSelectedTerminal(null); }}
                     >
                         <Icon name="airplane" size={18} color={selectedAirport === i ? '#2563eb' : '#6b7280'} />
-                        <Text style={[styles.airportName, selectedAirport === i && { color: '#C9A84C' }]}>
+                        <Text style={[styles.airportName, selectedAirport === i && { color: G.accent }]}>
                             {ap.city} ({ap.code})
                         </Text>
                         {selectedAirport === i ? <Icon name="check-circle" size={18} color="#C9A84C" /> : null}
@@ -144,7 +146,7 @@ const AirportTransferScreen = ({ navigation }: Props) => {
                             >
                                 <View style={[styles.terminalDot, selectedTerminal === t.id && styles.terminalDotActive]} />
                                 <View style={{ flex: 1 }}>
-                                    <Text style={[styles.terminalName, selectedTerminal === t.id && { color: '#C9A84C' }]}>
+                                    <Text style={[styles.terminalName, selectedTerminal === t.id && { color: G.accent }]}>
                                         {t.name}
                                     </Text>
                                     <Text style={styles.terminalCode}>{t.code}</Text>
@@ -186,61 +188,61 @@ const AirportTransferScreen = ({ navigation }: Props) => {
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#111111' },
+    container: { flex: 1, backgroundColor: G.bgAlt },
     header: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-        paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#0A0A0A',
-        borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.3)',
+        paddingHorizontal: 16, paddingVertical: 12, backgroundColor: G.bg,
+        borderBottomWidth: 1, borderBottomColor: G.border3,
     },
-    backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#141414', alignItems: 'center', justifyContent: 'center' },
-    headerTitle: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
+    backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: G.glass2, alignItems: 'center', justifyContent: 'center' },
+    headerTitle: { fontSize: 16, fontWeight: '800', color: G.textPrimary },
     content: { padding: 16, paddingBottom: 32 },
 
-    sectionTitle: { fontSize: 15, fontWeight: '900', color: '#FFFFFF', marginBottom: 10, marginTop: 16 },
+    sectionTitle: { fontSize: 15, fontWeight: '900', color: G.textPrimary, marginBottom: 10, marginTop: 16 },
 
     typeRow: { flexDirection: 'row', gap: 10 },
     typeCard: {
-        flex: 1, backgroundColor: '#0A0A0A', borderRadius: 14, padding: 16, alignItems: 'center',
-        borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)', gap: 6,
+        flex: 1, backgroundColor: G.bg, borderRadius: 14, padding: 16, alignItems: 'center',
+        borderWidth: 1.5, borderColor: G.border3, gap: 6,
     },
-    typeCardActive: { borderColor: '#C9A84C', backgroundColor: '#141414' },
+    typeCardActive: { borderColor: G.accent, backgroundColor: G.glass2 },
     typeLabel: { fontSize: 13, fontWeight: '800', color: '#CCCCCC' },
-    typeLabelActive: { color: '#C9A84C' },
-    typeDesc: { fontSize: 11, color: '#666666', textAlign: 'center' },
+    typeLabelActive: { color: G.accent },
+    typeDesc: { fontSize: 11, color: G.textMuted, textAlign: 'center' },
 
     airportRow: {
         flexDirection: 'row', alignItems: 'center', gap: 10,
-        backgroundColor: '#0A0A0A', borderRadius: 10, padding: 14, marginBottom: 6,
-        borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
+        backgroundColor: G.bg, borderRadius: 10, padding: 14, marginBottom: 6,
+        borderWidth: 1, borderColor: G.border3,
     },
-    airportRowActive: { borderColor: '#C9A84C', backgroundColor: '#141414' },
+    airportRowActive: { borderColor: G.accent, backgroundColor: G.glass2 },
     airportName: { flex: 1, fontSize: 14, fontWeight: '700', color: '#CCCCCC' },
 
     terminalRow: {
         flexDirection: 'row', alignItems: 'center', gap: 10,
-        backgroundColor: '#0A0A0A', borderRadius: 10, padding: 14, marginBottom: 6,
-        borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
+        backgroundColor: G.bg, borderRadius: 10, padding: 14, marginBottom: 6,
+        borderWidth: 1, borderColor: G.border3,
     },
-    terminalRowActive: { borderColor: '#C9A84C', backgroundColor: '#141414' },
-    terminalDot: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)' },
-    terminalDotActive: { bordercolor: '#C9A84C', backgroundColor: '#C9A84C' },
+    terminalRowActive: { borderColor: G.accent, backgroundColor: G.glass2 },
+    terminalDot: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: G.border3 },
+    terminalDotActive: { borderColor: G.accent, backgroundColor: G.accent },
     terminalName: { fontSize: 13, fontWeight: '700', color: '#CCCCCC' },
-    terminalCode: { fontSize: 11, color: '#666666', marginTop: 1 },
+    terminalCode: { fontSize: 11, color: G.textMuted, marginTop: 1 },
 
-    flightCard: { backgroundColor: '#0A0A0A', borderRadius: 14, padding: 16, marginTop: 8 },
-    inputLabel: { fontSize: 12, fontWeight: '700', color: '#8A8A8A', marginBottom: 6 },
+    flightCard: { backgroundColor: G.bg, borderRadius: 14, padding: 16, marginTop: 8 },
+    inputLabel: { fontSize: 12, fontWeight: '700', color: G.textSecondary, marginBottom: 6 },
     input: {
-        borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)', borderRadius: 10, padding: 12,
-        fontSize: 14, fontWeight: '600', color: '#FFFFFF',
+        borderWidth: 1.5, borderColor: G.border3, borderRadius: 10, padding: 12,
+        fontSize: 14, fontWeight: '600', color: G.textPrimary,
     },
-    flightHint: { fontSize: 11, color: '#666666', marginTop: 6 },
+    flightHint: { fontSize: 11, color: G.textMuted, marginTop: 6 },
 
     continueBtn: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-        backgroundColor: '#C9A84C', borderRadius: 14, padding: 16, marginTop: 24,
-        elevation: 4, shadowcolor: '#C9A84C', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 6,
+        backgroundColor: G.accent, borderRadius: 14, padding: 16, marginTop: 24,
+        elevation: 4, shadowColor: G.accent, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 6,
     },
-    continueBtnText: { fontSize: 15, fontWeight: '900', color: '#ffffff' },
+    continueBtnText: { fontSize: 15, fontWeight: '900', color: G.textPrimary },
 });
 
 export default AirportTransferScreen;

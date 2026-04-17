@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { getPendingDriverVerifications, PendingDriverVerificationItem } from '../../services/api';
+import { G } from '../../constants/glassStyles';
 
 const AdminDriverVerificationsScreen = ({ navigation }: any) => {
   const [items, setItems] = useState<PendingDriverVerificationItem[]>([]);
@@ -57,6 +58,10 @@ const AdminDriverVerificationsScreen = ({ navigation }: any) => {
         </View>
       ) : (
         <FlatList
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={8}
+          windowSize={5}
+          initialNumToRender={8}
           data={items}
           keyExtractor={(it) => String(it.driverId)}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void onRefresh()} />}
@@ -97,7 +102,7 @@ const AdminDriverVerificationsScreen = ({ navigation }: any) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0A0A0A' },
+  container: { flex: 1, backgroundColor: G.bg },
   header: {
     paddingHorizontal: 16,
     paddingTop: 14,
@@ -106,15 +111,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.3)',
+    borderBottomColor: G.border3,
   },
-  title: { fontSize: 18, fontWeight: '900', color: '#FFFFFF' },
+  title: { fontSize: 18, fontWeight: '900', color: G.textPrimary },
   refreshBtn: { padding: 10 },
   list: { padding: 14 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
   row: {
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: G.border3,
     borderRadius: 14,
     paddingVertical: 12,
     paddingHorizontal: 12,
@@ -128,16 +133,16 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#C9A84C',
+    backgroundColor: G.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { color: '#ffffff', fontWeight: '900', fontSize: 18 },
+  avatarText: { color: G.textPrimary, fontWeight: '900', fontSize: 18 },
   meta: { marginLeft: 12, flex: 1, minWidth: 0 },
-  name: { fontWeight: '900', color: '#FFFFFF', fontSize: 15 },
-  phone: { marginTop: 2, color: '#8A8A8A', fontWeight: '700' },
-  emptyTitle: { marginTop: 10, fontSize: 16, fontWeight: '900', color: '#FFFFFF' },
-  emptySub: { marginTop: 6, textAlign: 'center', color: '#8A8A8A', fontWeight: '600' },
+  name: { fontWeight: '900', color: G.textPrimary, fontSize: 15 },
+  phone: { marginTop: 2, color: G.textSecondary, fontWeight: '700' },
+  emptyTitle: { marginTop: 10, fontSize: 16, fontWeight: '900', color: G.textPrimary },
+  emptySub: { marginTop: 6, textAlign: 'center', color: G.textSecondary, fontWeight: '600' },
 });
 
 export default AdminDriverVerificationsScreen;

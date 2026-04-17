@@ -1,4 +1,5 @@
 import React from 'react';
+import { ActivityIndicator, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
@@ -43,6 +44,8 @@ import InAppChatScreen from '../screens/common/InAppChatScreen';
 import ChatScreen from '../screens/common/ChatScreen';
 import DriverTiersScreen from '../screens/driver/DriverTiersScreen';
 import HeatMapScreen from '../screens/driver/HeatMapScreen';
+import TripPhotoScreen from '../screens/common/TripPhotoScreen';
+import DriverBadgesScreen from '../screens/driver/DriverBadgesScreen';
 
 import CustomerWalletScreen from '../screens/customer/CustomerWalletScreen';
 import WalletTopupScreen from '../screens/customer/WalletTopupScreen';
@@ -69,6 +72,8 @@ const CustomerTabs = () => {
         headerShown: false,
         tabBarActiveTintColor: tabBarTheme.activeTintColor,
         tabBarInactiveTintColor: tabBarTheme.inactiveTintColor,
+        lazy: true,
+        freezeOnBlur: true,
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.borderLight,
@@ -125,6 +130,8 @@ const DriverTabs = () => {
         headerShown: false,
         tabBarActiveTintColor: tabBarTheme.activeTintColor,
         tabBarInactiveTintColor: tabBarTheme.inactiveTintColor,
+        lazy: true,
+        freezeOnBlur: true,
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.borderLight,
@@ -210,6 +217,16 @@ const MainNavigator = () => {
     return user?.userType;
   })();
 
+  // Show loading while driver verification state is being fetched
+  // This prevents the documents screen from flashing for verified drivers
+  if (effectiveUserType === UserType.DRIVER && !verification.hydrated) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#C9A84C" />
+      </View>
+    );
+  }
+
   const tabsComponent = (() => {
     if (!user) return CustomerTabs;
     if (effectiveUserType === UserType.CUSTOMER) return CustomerTabs;
@@ -232,7 +249,7 @@ const MainNavigator = () => {
   })();
 
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+    <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg }, animation: 'slide_from_right', animationDuration: 200 }}>
       <Stack.Screen
         name="Tabs"
         component={tabsComponent}
@@ -245,7 +262,7 @@ const MainNavigator = () => {
       <Stack.Screen name="LocationSearch" component={LocationSearchScreen} />
       <Stack.Screen name="RideConfirm" component={RideConfirmScreen} />
       <Stack.Screen name="BookingDetails" component={BookingDetailsScreen} />
-      <Stack.Screen name="Tracking" component={TrackingScreen} />
+      <Stack.Screen name="Tracking" component={TrackingScreen} options={{ animation: 'fade', animationDuration: 150 }} />
       <Stack.Screen name="PromoCodes" component={PromoCodesScreen} />
 
       <Stack.Screen name="SupportChat" component={SupportChatScreen} />
@@ -276,6 +293,8 @@ const MainNavigator = () => {
       <Stack.Screen name="TipDriver" component={TipDriverScreen} />
       <Stack.Screen name="Chat" component={ChatScreen} />
       <Stack.Screen name="DriverWallet" component={DriverWalletScreen} />
+      <Stack.Screen name="TripPhotos" component={TripPhotoScreen} />
+      <Stack.Screen name="DriverBadges" component={DriverBadgesScreen} />
     </Stack.Navigator>
   );
 };
