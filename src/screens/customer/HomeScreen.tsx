@@ -379,7 +379,7 @@ const HomeScreen = ({ navigation }: any) => {
                 const lat = Number((d as any)?.location?.latitude);
                 const lng = Number((d as any)?.location?.longitude);
                 if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-                return <DriverMarker key={String(d.id)} latitude={lat} longitude={lng} />;
+                return <DriverMarker key={String(d.id)} latitude={lat} longitude={lng} isNearby />;
               })}
             </MapView>
 

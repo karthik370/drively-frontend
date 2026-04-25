@@ -17,6 +17,7 @@ import MapView, { Marker, Polyline } from 'react-native-maps';
 import * as Location from 'expo-location';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { G } from '../../constants/glassStyles';
+import DriverMarker from '../../components/maps/DriverMarker';
 
 import api, { getWalletBalance, getDiscountPreview, type DiscountPreview } from '../../services/api';
 import PaymentMethodSelector, { type PaymentOption } from '../../components/customer/PaymentMethodSelector';
@@ -1055,16 +1056,12 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
             const lng = Number((d as any)?.location?.longitude);
             if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
             return (
-              <Marker
+              <DriverMarker
                 key={String((d as any)?.id)}
-                coordinate={{ latitude: lat, longitude: lng }}
-                tracksViewChanges={false}
-                anchor={{ x: 0.5, y: 0.5 }}
-              >
-                <View style={styles.nearbyDriverMarker}>
-                  <Icon name="car" size={18} color="#C9A84C" />
-                </View>
-              </Marker>
+                latitude={lat}
+                longitude={lng}
+                isNearby
+              />
             );
           })}
         </MapView>

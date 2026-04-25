@@ -1426,14 +1426,12 @@ const TrackingScreen = ({ navigation, route }: any) => {
               const lng = Number((d as any)?.location?.longitude);
               if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
               return (
-                <Marker key={String((d as any)?.id)} coordinate={{ latitude: lat, longitude: lng }} tracksViewChanges={markerTracksChanges} zIndex={6} title="Driver">
-                  <View style={markerStyles.center}>
-                    <View style={markerStyles.driverCircle}>
-                      <Icon name="car-side" size={18} color="#C9A84C" />
-                    </View>
-                    <View style={markerStyles.driverArrow} />
-                  </View>
-                </Marker>
+                <DriverMarker
+                  key={String((d as any)?.id)}
+                  latitude={lat}
+                  longitude={lng}
+                  isNearby
+                />
               );
             })
             : null}
