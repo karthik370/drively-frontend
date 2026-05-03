@@ -157,13 +157,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
   const hasRouteEtaRef = useRef<boolean>(false); // Suppress approx ETA when route API ETA exists
   const lastEtaDispatchTsRef = useRef<number>(0); // ETA smoothing: min 5s between updates
 
-  // Android needs tracksViewChanges=true for initial bitmap render, then false to stop blinking.
-  // Important: do NOT re-enable this on coordinate changes — that causes the blinking.
-  const [markerTracksChanges, setMarkerTracksChanges] = React.useState(true);
-  useEffect(() => {
-    const t = setTimeout(() => setMarkerTracksChanges(false), 3000);
-    return () => clearTimeout(t);
-  }, []);
+  // (markerTracksChanges removed — pickup/drop markers now use native pinColor, no bitmap tracking needed)
 
   // Poll payment status while QR modal is open
   useEffect(() => {
@@ -966,12 +960,14 @@ const TrackingScreen = ({ navigation, route }: any) => {
   );
 
   // ── Production-grade Uber/Ola-style map camera ──
-  // Fits map to show BOTH driver position and destination with full polyline visible
+  // Key insight: Uber/Ola fit the map to ONLY the two endpoints (driver + target).
+  // The polyline follows naturally between them — no need to sample polyline points.
+  // This gives a clean, predictable zoom that always shows "where the driver is"
+  // and "where they're going" without over-zooming for route bends.
   const cameraFitDoneForStatusRef = useRef<string | null>(null);
   const lastCameraDriverRef = useRef<{ latitude: number; longitude: number } | null>(null);
   const lastCameraTimestampRef = useRef<number>(0);
 
-  // Core fit function — uses multiple fallback layers to ALWAYS find both points
   const fitMapToRoute = React.useCallback((
     overrideDriver?: { latitude: number; longitude: number } | null,
     overrideTarget?: { latitude: number; longitude: number } | null,
@@ -980,13 +976,11 @@ const TrackingScreen = ({ navigation, route }: any) => {
     const isActive = Boolean(status && ['ACCEPTED', 'DRIVER_ARRIVING', 'ARRIVED', 'STARTED', 'IN_PROGRESS'].includes(status));
     if (!isActive) return;
 
-    // Layer 1: explicit overrides, Layer 2: refs, Layer 3: direct Redux state
-    // In driver mode, prefer GPS location over socket driverLocation
     const driverFallback = isDriverModeRef.current ? (currentLocation ?? driverLocation) : (driverLocation ?? currentLocation);
     const driverPos = overrideDriver ?? routeStartRef.current ?? driverFallback ?? null;
     const targetPos = overrideTarget ?? routeTargetRef.current ?? null;
 
-    // For round trips in progress, no target — just fit around driver + pickup
+    // Round trips in progress: no target — fit around driver + pickup
     if (!targetPos) {
       if (!driverPos) return;
       const pickup = effectivePickupRef.current;
@@ -999,42 +993,38 @@ const TrackingScreen = ({ navigation, route }: any) => {
       return;
     }
 
-    // Build points array: ALWAYS include driver + target as the two anchor points
-    let points: { latitude: number; longitude: number }[] = [];
-
-    // If we have a decoded polyline, sample it for full route visibility
-    const currentRoute = decodedRoute;
-    if (currentRoute && currentRoute.length > 2) {
-      points.push(currentRoute[0]);
-      for (let i = 5; i < currentRoute.length - 1; i += 5) {
-        points.push(currentRoute[i]);
-      }
-      points.push(currentRoute[currentRoute.length - 1]);
+    if (!driverPos) {
+      // No driver yet — show target with some buffer
+      mapRef.current?.fitToCoordinates(
+        [targetPos, { latitude: targetPos.latitude + 0.003, longitude: targetPos.longitude + 0.003 }],
+        { edgePadding: mapEdgePadding, animated: true },
+      );
+      return;
     }
 
-    // Always include driver position and target — these are the two "ends"
-    if (driverPos) points.push(driverPos);
-    points.push(targetPos);
+    // ── Uber-style: fit ONLY driver + target — polyline follows naturally ──
+    const points: { latitude: number; longitude: number }[] = [driverPos, targetPos];
 
-    // Prevent extreme zoom-in when driver is very close to target (<300m)
-    if (driverPos) {
-      const d = Math.max(Math.abs(driverPos.latitude - targetPos.latitude), Math.abs(driverPos.longitude - targetPos.longitude));
-      if (d < 0.003) {
-        const center = { latitude: (driverPos.latitude + targetPos.latitude) / 2, longitude: (driverPos.longitude + targetPos.longitude) / 2 };
-        points.push({ latitude: center.latitude + 0.004, longitude: center.longitude + 0.004 });
-        points.push({ latitude: center.latitude - 0.004, longitude: center.longitude - 0.004 });
-      }
-    } else if (points.length < 2) {
-      // No driver pos available — add a buffer around target so map doesn't crash
-      const p = points[0] || targetPos;
-      points = [p, { latitude: p.latitude + 0.004, longitude: p.longitude + 0.004 }];
+    // Minimum zoom guard: when driver is very close (<200m), add padding
+    // so the map doesn't zoom in so much that the user can't see context.
+    const dLat = Math.abs(driverPos.latitude - targetPos.latitude);
+    const dLng = Math.abs(driverPos.longitude - targetPos.longitude);
+    if (dLat < 0.002 && dLng < 0.002) {
+      const center = {
+        latitude: (driverPos.latitude + targetPos.latitude) / 2,
+        longitude: (driverPos.longitude + targetPos.longitude) / 2,
+      };
+      points.push(
+        { latitude: center.latitude + 0.002, longitude: center.longitude + 0.002 },
+        { latitude: center.latitude - 0.002, longitude: center.longitude - 0.002 },
+      );
     }
 
     mapRef.current?.fitToCoordinates(points, {
       edgePadding: mapEdgePadding,
       animated: true,
     });
-  }, [decodedRoute, mapEdgePadding, driverLocation]);
+  }, [mapEdgePadding, driverLocation]);
   // Store fitMapToRoute in a ref so effects don't depend on it
   // (fitMapToRoute changes every time driverLocation updates, which was killing the timeouts!)
   const fitMapToRouteRef = useRef(fitMapToRoute);
@@ -1434,7 +1424,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
           onPanDrag={handleMapPan}
         >
           {decodedRoute && decodedRoute.length > 1 && !isRoundTripStarted ? (
-            <RoutePolyline coordinates={decodedRoute} strokeWidth={4} strokeColor="#2412eaff" animated />
+            <RoutePolyline coordinates={decodedRoute} strokeWidth={5} strokeColor="#4285F4" animated />
           ) : null}
           {stablePickupCoord ? (
             <Marker
@@ -2728,42 +2718,7 @@ const styles = StyleSheet.create({
   },
 });
 
-const markerStyles = StyleSheet.create({
-  center: { alignItems: 'center' },
-  pickupCircle: {
-    width: 30, height: 30, borderRadius: 15,
-    backgroundColor: '#10b981',
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2.5, borderColor: '#ffffff',
-    elevation: 6,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25, shadowRadius: 4,
-  },
-  pickupArrow: {
-    width: 10, height: 10,
-    backgroundColor: '#10b981',
-    borderRadius: 1,
-    transform: [{ rotate: '45deg' }],
-    marginTop: -6,
-    elevation: 5,
-  },
-  dropCircle: {
-    width: 30, height: 30, borderRadius: 15,
-    backgroundColor: '#ef4444',
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2.5, borderColor: '#ffffff',
-    elevation: 6,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25, shadowRadius: 4,
-  },
-  dropArrow: {
-    width: 10, height: 10,
-    backgroundColor: '#ef4444',
-    borderRadius: 1,
-    transform: [{ rotate: '45deg' }],
-    marginTop: -6,
-    elevation: 5,
-  },
-});
+// (markerStyles removed — pickup/drop now use native pinColor markers)
+
 
 export default TrackingScreen;
