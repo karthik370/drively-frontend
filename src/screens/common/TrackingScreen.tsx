@@ -537,7 +537,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
     };
 
     run();
-    timer = setInterval(run, 20000); // 20s instead of 12s — less flicker
+    timer = setInterval(run, 10000); // Poll every 10s — fast enough for real-time feel
 
     return () => {
       mounted = false;
