@@ -1462,7 +1462,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
                   zIndex={3}
                 >
                   <Image
-                    source={require('../../assets/markers/car_top.png')}
+                    source={require('../../../assets/markers/car_top.png')}
                     style={{ width: 22, height: 22 }}
                     resizeMode="contain"
                   />
