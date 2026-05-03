@@ -921,10 +921,10 @@ const TrackingScreen = ({ navigation, route }: any) => {
 
   const mapEdgePadding = useMemo(
     () => ({
-      top: 40,
-      right: 40,
-      bottom: 40,
-      left: 40,
+      top: 60,
+      right: 50,
+      bottom: 200, // Large bottom padding — Uber-style, keeps markers above the booking card
+      left: 50,
     }),
     []
   );
@@ -1430,7 +1430,6 @@ const TrackingScreen = ({ navigation, route }: any) => {
                   key={String((d as any)?.id)}
                   latitude={lat}
                   longitude={lng}
-                  isNearby
                 />
               );
             })
@@ -2726,21 +2725,7 @@ const markerStyles = StyleSheet.create({
     borderLeftColor: 'transparent', borderRightColor: 'transparent',
     borderTopColor: '#ef4444', marginTop: -2,
   },
-  driverCircle: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: '#1A1A2E',
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 3, borderColor: '#C9A84C',
-    elevation: 8,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3, shadowRadius: 6,
-  },
-  driverArrow: {
-    width: 0, height: 0,
-    borderLeftWidth: 7, borderRightWidth: 7, borderTopWidth: 10,
-    borderLeftColor: 'transparent', borderRightColor: 'transparent',
-    borderTopColor: '#1A1A2E', marginTop: -2,
-  },
+  // (driverCircle and driverArrow removed — nearby drivers now use DriverMarker with car_top.png)
 });
 
 export default TrackingScreen;
