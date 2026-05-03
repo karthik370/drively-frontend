@@ -198,6 +198,34 @@ const TrackingScreen = ({ navigation, route }: any) => {
     return () => { socket.off('payment_confirmed', onPaymentConfirmed); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [booking?.id]);
+
+  // Fix #7: Fallback polling for cash payment — if socket event doesn't arrive,
+  // poll the REST API every 5s while trip is COMPLETED and payment is not yet confirmed.
+  useEffect(() => {
+    if (paymentDone) return;
+    if ((booking as any)?.paymentStatus === 'PAID') { setPaymentDone(true); return; }
+    if (booking?.status !== BookingStatus.COMPLETED) return;
+    if (!booking?.id) return;
+
+    let mounted = true;
+    const timer = setInterval(async () => {
+      if (!mounted || paymentDone) return;
+      try {
+        const res = await getBookingPaymentStatus(booking.id);
+        if (res?.paymentStatus === 'PAID' && mounted) {
+          setPaymentDone(true);
+          setShowQrModal(false);
+          console.log('[PAYMENT-POLL] Detected PAID via REST fallback');
+        }
+      } catch {
+        // Non-critical — keep trying
+      }
+    }, 5000);
+
+    return () => { mounted = false; clearInterval(timer); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [booking?.id, booking?.status, paymentDone]);
+
   const lastRouteTsRef = useRef<number>(0);
   const lastApproxEtaTsRef = useRef<number>(0);
   const lastFitTargetKeyRef = useRef<string | null>(null);
@@ -1138,13 +1166,13 @@ const TrackingScreen = ({ navigation, route }: any) => {
       // Suspend auto-following if the user is looking around the map
       if (isMapPannedRef.current) return;
 
-      // Recenter every 6s or when driver moves >30m
-      if (movedMeters >= 30 || now - lastCameraTimestampRef.current >= 6000) {
+      // Recenter every 4s or when driver moves >20m — responsive like Uber
+      if (movedMeters >= 20 || now - lastCameraTimestampRef.current >= 4000) {
         lastCameraTimestampRef.current = now;
         lastCameraDriverRef.current = { latitude: driverPos.latitude, longitude: driverPos.longitude };
         fitMapToRouteRef.current();
       }
-    }, 4000);
+    }, 3000);
 
     return () => clearInterval(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2696,36 +2724,39 @@ const styles = StyleSheet.create({
 const markerStyles = StyleSheet.create({
   center: { alignItems: 'center' },
   pickupCircle: {
-    width: 36, height: 36, borderRadius: 18,
+    width: 30, height: 30, borderRadius: 15,
     backgroundColor: '#10b981',
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 3, borderColor: '#ffffff',
-    elevation: 8,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3, shadowRadius: 6,
+    borderWidth: 2.5, borderColor: '#ffffff',
+    elevation: 6,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25, shadowRadius: 4,
   },
   pickupArrow: {
-    width: 0, height: 0,
-    borderLeftWidth: 7, borderRightWidth: 7, borderTopWidth: 10,
-    borderLeftColor: 'transparent', borderRightColor: 'transparent',
-    borderTopColor: '#10b981', marginTop: -2,
+    width: 10, height: 10,
+    backgroundColor: '#10b981',
+    borderRadius: 1,
+    transform: [{ rotate: '45deg' }],
+    marginTop: -6,
+    elevation: 5,
   },
   dropCircle: {
-    width: 36, height: 36, borderRadius: 18,
+    width: 30, height: 30, borderRadius: 15,
     backgroundColor: '#ef4444',
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 3, borderColor: '#ffffff',
-    elevation: 8,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3, shadowRadius: 6,
+    borderWidth: 2.5, borderColor: '#ffffff',
+    elevation: 6,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25, shadowRadius: 4,
   },
   dropArrow: {
-    width: 0, height: 0,
-    borderLeftWidth: 7, borderRightWidth: 7, borderTopWidth: 10,
-    borderLeftColor: 'transparent', borderRightColor: 'transparent',
-    borderTopColor: '#ef4444', marginTop: -2,
+    width: 10, height: 10,
+    backgroundColor: '#ef4444',
+    borderRadius: 1,
+    transform: [{ rotate: '45deg' }],
+    marginTop: -6,
+    elevation: 5,
   },
-  // (driverCircle and driverArrow removed — nearby drivers now use DriverMarker with car_top.png)
 });
 
 export default TrackingScreen;

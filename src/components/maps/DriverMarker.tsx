@@ -27,8 +27,8 @@
  *    prop (native) rather than a JS `transform` — avoids extra bitmap renders.
  *
  * 5. **Marker size**
- *    38 × 38 dp — large enough to be clearly visible on high-DPI screens,
- *    small enough not to obscure the map.  Matches Uber's vehicle icon sizing.
+ *    28 × 28 dp — compact like Uber/Ola.  Clearly visible on high-DPI
+ *    screens without obscuring the map or polyline at close zoom.
  */
 
 import React, { useEffect, useRef, useState, useMemo } from 'react';
@@ -51,8 +51,8 @@ export type DriverMarkerProps = {
 // ── Pre-require at module level — cached by Metro, available on first render ──
 const CAR_IMAGE = require('../../../assets/markers/car_top.png');
 
-// Marker rendered size (dp). 38 is the sweet-spot: visible but not obstructive.
-const MARKER_SIZE = 38;
+// Marker rendered size (dp). 28 matches Uber's compact vehicle icon.
+const MARKER_SIZE = 28;
 
 // Animation duration for the slide between two GPS points.
 // Should be slightly longer than the GPS/socket update interval (~3-5 s)

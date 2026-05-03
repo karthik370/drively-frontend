@@ -936,6 +936,7 @@ export const collectCashPayment = async (bookingId: string): Promise<any> => {
   }
 };
 
+
 /** Returns the full URL to download the invoice PDF for a completed booking. */
 export const getInvoicePdfUrl = (bookingId: string): string => {
   const baseURL = api.defaults.baseURL || '';
