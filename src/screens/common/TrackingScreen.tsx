@@ -960,10 +960,9 @@ const TrackingScreen = ({ navigation, route }: any) => {
   );
 
   // ── Production-grade Uber/Ola-style map camera ──
-  // Key insight: Uber/Ola fit the map to ONLY the two endpoints (driver + target).
-  // The polyline follows naturally between them — no need to sample polyline points.
-  // This gives a clean, predictable zoom that always shows "where the driver is"
-  // and "where they're going" without over-zooming for route bends.
+  // Uses animateToRegion with calculated deltas for PRECISE zoom control.
+  // fitToCoordinates + edgePadding was causing unpredictable over-zooming.
+  // This calculates the exact region needed to show driver + target at street level.
   const cameraFitDoneForStatusRef = useRef<string | null>(null);
   const lastCameraDriverRef = useRef<{ latitude: number; longitude: number } | null>(null);
   const lastCameraTimestampRef = useRef<number>(0);
@@ -985,46 +984,50 @@ const TrackingScreen = ({ navigation, route }: any) => {
       if (!driverPos) return;
       const pickup = effectivePickupRef.current;
       if (pickup) {
-        mapRef.current?.fitToCoordinates([driverPos, pickup], {
-          edgePadding: mapEdgePadding,
-          animated: true,
-        });
+        const dLat = Math.abs(driverPos.latitude - pickup.latitude);
+        const dLng = Math.abs(driverPos.longitude - pickup.longitude);
+        const latDelta = Math.max(dLat * 2.5, 0.005);
+        const lngDelta = Math.max(dLng * 2.5, 0.005);
+        mapRef.current?.animateToRegion({
+          latitude: (driverPos.latitude + pickup.latitude) / 2 - latDelta * 0.15,
+          longitude: (driverPos.longitude + pickup.longitude) / 2,
+          latitudeDelta: latDelta,
+          longitudeDelta: lngDelta,
+        }, 600);
       }
       return;
     }
 
     if (!driverPos) {
-      // No driver yet — show target with some buffer
-      mapRef.current?.fitToCoordinates(
-        [targetPos, { latitude: targetPos.latitude + 0.003, longitude: targetPos.longitude + 0.003 }],
-        { edgePadding: mapEdgePadding, animated: true },
-      );
+      // No driver yet — show target at street zoom
+      mapRef.current?.animateToRegion({
+        latitude: targetPos.latitude,
+        longitude: targetPos.longitude,
+        latitudeDelta: 0.006,
+        longitudeDelta: 0.006,
+      }, 600);
       return;
     }
 
-    // ── Uber-style: fit ONLY driver + target — polyline follows naturally ──
-    const points: { latitude: number; longitude: number }[] = [driverPos, targetPos];
-
-    // Minimum zoom guard: when driver is very close (<200m), add padding
-    // so the map doesn't zoom in so much that the user can't see context.
+    // ── Calculate region to show BOTH driver + target at optimal zoom ──
+    // Delta = distance between them × 2.2 (comfortable padding around markers)
+    // Minimum delta = 0.005 (~500m) so map never zooms in too close
     const dLat = Math.abs(driverPos.latitude - targetPos.latitude);
     const dLng = Math.abs(driverPos.longitude - targetPos.longitude);
-    if (dLat < 0.002 && dLng < 0.002) {
-      const center = {
-        latitude: (driverPos.latitude + targetPos.latitude) / 2,
-        longitude: (driverPos.longitude + targetPos.longitude) / 2,
-      };
-      points.push(
-        { latitude: center.latitude + 0.002, longitude: center.longitude + 0.002 },
-        { latitude: center.latitude - 0.002, longitude: center.longitude - 0.002 },
-      );
-    }
+    const latDelta = Math.max(dLat * 2.2, 0.005);
+    const lngDelta = Math.max(dLng * 2.2, 0.005);
 
-    mapRef.current?.fitToCoordinates(points, {
-      edgePadding: mapEdgePadding,
-      animated: true,
-    });
-  }, [mapEdgePadding, driverLocation]);
+    // Center between driver and target, shifted UP by 15% to account for bottom card
+    const centerLat = (driverPos.latitude + targetPos.latitude) / 2 - latDelta * 0.15;
+    const centerLng = (driverPos.longitude + targetPos.longitude) / 2;
+
+    mapRef.current?.animateToRegion({
+      latitude: centerLat,
+      longitude: centerLng,
+      latitudeDelta: latDelta,
+      longitudeDelta: lngDelta,
+    }, 600);
+  }, [driverLocation]);
   // Store fitMapToRoute in a ref so effects don't depend on it
   // (fitMapToRoute changes every time driverLocation updates, which was killing the timeouts!)
   const fitMapToRouteRef = useRef(fitMapToRoute);
