@@ -1450,11 +1450,20 @@ const TrackingScreen = ({ navigation, route }: any) => {
               const lng = Number((d as any)?.location?.longitude);
               if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
               return (
-                <DriverMarker
+                <Marker
                   key={String((d as any)?.id)}
-                  latitude={lat}
-                  longitude={lng}
-                />
+                  coordinate={{ latitude: lat, longitude: lng }}
+                  tracksViewChanges={false}
+                  anchor={{ x: 0.5, y: 0.5 }}
+                  flat
+                  zIndex={3}
+                >
+                  <Image
+                    source={require('../../assets/markers/car_top.png')}
+                    style={{ width: 22, height: 22 }}
+                    resizeMode="contain"
+                  />
+                </Marker>
               );
             })
             : null}
