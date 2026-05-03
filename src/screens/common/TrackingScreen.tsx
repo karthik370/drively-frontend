@@ -140,7 +140,15 @@ const TrackingScreen = ({ navigation, route }: any) => {
   const [statusUpdating, setStatusUpdating] = React.useState(false); // Loading overlay for status transitions
   const [isMapPanned, setIsMapPanned] = React.useState(false); // Suspends auto-camera when user moves map
   const isMapPannedRef = useRef(false);
+  const pannedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { isMapPannedRef.current = isMapPanned; }, [isMapPanned]);
+  // Auto-reset panned flag after 10s so camera resumes following driver
+  const handleMapPan = React.useCallback(() => {
+    setIsMapPanned(true);
+    if (pannedTimerRef.current) clearTimeout(pannedTimerRef.current);
+    pannedTimerRef.current = setTimeout(() => setIsMapPanned(false), 10000);
+  }, []);
+  useEffect(() => { return () => { if (pannedTimerRef.current) clearTimeout(pannedTimerRef.current); }; }, []);
   
   const isCancellingRef = useRef<boolean>(false); // Prevents 'searching' flash on cancel
   const mapRef = useRef<MapView | null>(null);
@@ -1423,30 +1431,28 @@ const TrackingScreen = ({ navigation, route }: any) => {
           provider={PROVIDER_GOOGLE}
           style={StyleSheet.absoluteFill}
           initialRegion={initialRegion}
-          onPanDrag={() => setIsMapPanned(true)}
+          onPanDrag={handleMapPan}
         >
           {decodedRoute && decodedRoute.length > 1 && !isRoundTripStarted ? (
             <RoutePolyline coordinates={decodedRoute} strokeWidth={4} strokeColor="#2412eaff" animated />
           ) : null}
           {stablePickupCoord ? (
-            <Marker coordinate={stablePickupCoord} tracksViewChanges={markerTracksChanges} zIndex={5} title="Pickup">
-              <View style={markerStyles.center}>
-                <View style={markerStyles.pickupCircle}>
-                  <Icon name="account" size={18} color="#ffffff" />
-                </View>
-                <View style={markerStyles.pickupArrow} />
-              </View>
-            </Marker>
+            <Marker
+              coordinate={stablePickupCoord}
+              tracksViewChanges={false}
+              zIndex={5}
+              title="Pickup"
+              pinColor="#10b981"
+            />
           ) : null}
           {stableDropCoord && !isRoundTripStarted ? (
-            <Marker coordinate={stableDropCoord} tracksViewChanges={markerTracksChanges} zIndex={5} title="Drop">
-              <View style={markerStyles.center}>
-                <View style={markerStyles.dropCircle}>
-                  <Icon name="flag-checkered" size={18} color="#ffffff" />
-                </View>
-                <View style={markerStyles.dropArrow} />
-              </View>
-            </Marker>
+            <Marker
+              coordinate={stableDropCoord}
+              tracksViewChanges={false}
+              zIndex={5}
+              title="Drop"
+              pinColor="#ef4444"
+            />
           ) : null}
           {!isDriverMode && isWaitingForDriver
             ? nearbyDrivers.map((d) => {
@@ -1477,6 +1483,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
           <TouchableOpacity 
             style={[styles.recenterBtn, { bottom: mapEdgePadding.bottom + 20 }]} 
             onPress={() => {
+              if (pannedTimerRef.current) clearTimeout(pannedTimerRef.current);
               setIsMapPanned(false);
               fitMapToRoute();
             }}

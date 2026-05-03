@@ -232,7 +232,13 @@ export const loadUser = createAsyncThunk(
         await SecureStore.deleteItemAsync('refreshToken');
         await SecureStore.deleteItemAsync(ROLE_OVERRIDE_KEY);
       }
-      return rejectWithValue(error.response?.data?.message || error?.message || 'Failed to load user');
+
+      // Tag the error so the reducer knows whether tokens still exist
+      const tokensStillExist = !isUnauthenticated;
+      return rejectWithValue({
+        message: error.response?.data?.message || error?.message || 'Failed to load user',
+        tokensStillExist,
+      });
     }
   }
 );
@@ -342,10 +348,17 @@ const authSlice = createSlice({
         state.isAuthenticated = true;
         state.roleOverride = (action.payload as any).roleOverride || null;
       })
-      .addCase(loadUser.rejected, (state) => {
+      .addCase(loadUser.rejected, (state, action) => {
         state.isLoading = false;
-        state.isAuthenticated = false;
-        state.roleOverride = null;
+        // Only force logout if tokens were actually deleted (401).
+        // If it's just a transient network error during Expo reload,
+        // keep the user authenticated so they don't get kicked to login.
+        const payload = action.payload as any;
+        const tokensStillExist = payload?.tokensStillExist === true;
+        if (!tokensStillExist) {
+          state.isAuthenticated = false;
+          state.roleOverride = null;
+        }
       });
   },
 });
