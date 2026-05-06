@@ -324,9 +324,31 @@ const OtpVerificationScreen = ({ route, navigation }: any) => {
 
       throw new Error(`Login failed. ${JSON.stringify({ userExists: (result as any)?.userExists, verified: (result as any)?.verified })}`);
     } catch (err: any) {
-      showAlert('Error', getErrorMessage(err) || 'Invalid OTP');
-      setOtp(['', '', '', '', '', '']);
-      inputRefs.current[0]?.focus();
+      const errMsg = getErrorMessage(err) || 'Invalid OTP';
+      // Detect network errors — keep OTP digits so user can retry without re-typing
+      const isNetworkError =
+        errMsg.toLowerCase().includes('network') ||
+        errMsg.toLowerCase().includes('timeout') ||
+        errMsg.toLowerCase().includes('connection') ||
+        errMsg.toLowerCase().includes('failed to fetch') ||
+        errMsg.toLowerCase().includes('xhr') ||
+        errMsg.toLowerCase().includes('socket') ||
+        err?.name === 'AbortError' ||
+        err?.code === 'ECONNREFUSED' ||
+        err?.status === 0;
+
+      if (isNetworkError) {
+        // Keep digits so user can tap retry without re-typing
+        showAlert(
+          'Network Error',
+          'Could not connect to server. Please check your connection and tap "Verify & Continue" to try again.',
+        );
+      } else {
+        // Real OTP error (wrong code, expired, etc.) — clear digits
+        showAlert('Error', errMsg);
+        setOtp(['', '', '', '', '', '']);
+        inputRefs.current[0]?.focus();
+      }
     } finally {
       setLocalLoading(false);
     }
