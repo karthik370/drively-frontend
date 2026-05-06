@@ -1,12 +1,14 @@
 /**
- * DriverMarker — Production-grade car marker.
+ * DriverMarker — Production-grade car marker that does NOT move during zoom.
  *
- * Uses plain `<Marker>` (NOT Marker.Animated/AnimatedRegion) to avoid
- * marker drift during pinch-zoom on Android.
+ * KEY FIX: Uses a plain `<Marker>` (NOT `Marker.Animated` / `AnimatedRegion`).
+ * AnimatedRegion caused the marker to visually drift during pinch-zoom on
+ * Android because the animation interpolation fights with the map's own
+ * coordinate projection during the zoom gesture.
  *
- * Rotation: ALWAYS from polyline segment when available (not GPS compass
- * which is wildly inaccurate on most Android phones). Falls back to
- * movement bearing only when no polyline is provided.
+ * Movement: `animateMarkerToCoordinate()` on Android (native SDK handles it).
+ * Rotation: Set instantly via the `rotation` prop (no JS-side animation timer).
+ * Image: Uses `<Image>` child with `tracksViewChanges={false}` after first render.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -22,15 +24,21 @@ export type DriverMarkerProps = {
   onPress?: () => void;
 };
 
+// Pre-require at module level — cached by Metro, available on first render
 const CAR_IMAGE = require('../../../assets/markers/car_top.png');
+
+// Marker rendered size (dp). 28 matches Uber's compact vehicle icon.
 const MARKER_SIZE = 28;
+
+// Animation duration for the slide between two GPS points.
 const ANIM_DURATION_MS = 1000;
 
-// ── Geometry ──
+// ── Geometry Helpers ──
 
 const toRad = (deg: number) => (deg * Math.PI) / 180;
 const toDeg = (rad: number) => (rad * 180) / Math.PI;
 
+/** Bearing from point A → B in degrees (0 = North, 90 = East). */
 const calcBearing = (
   a: { latitude: number; longitude: number },
   b: { latitude: number; longitude: number },
@@ -45,6 +53,7 @@ const calcBearing = (
   return (toDeg(Math.atan2(y, x)) + 360) % 360;
 };
 
+/** Fast approximate distance in meters (Pythagoras on lat/lng). */
 const fastDist = (
   a: { latitude: number; longitude: number },
   b: { latitude: number; longitude: number },
@@ -54,6 +63,11 @@ const fastDist = (
   return Math.sqrt(dLat * dLat + dLng * dLng) * 111_000;
 };
 
+/**
+ * Snap a GPS point to the nearest segment on a polyline.
+ * Returns the projected coordinate and the segment index, or null if
+ * the point is more than 100 m away from the polyline.
+ */
 const snapToPolyline = (
   point: { latitude: number; longitude: number },
   polyline: { latitude: number; longitude: number }[],
@@ -67,6 +81,7 @@ const snapToPolyline = (
   for (let i = 0; i < polyline.length - 1; i++) {
     const a = polyline[i];
     const b = polyline[i + 1];
+
     const dx = b.longitude - a.longitude;
     const dy = b.latitude - a.latitude;
     const lenSq = dx * dx + dy * dy;
@@ -91,8 +106,7 @@ const snapToPolyline = (
     }
   }
 
-  // Allow up to 150m snap distance (roads can be offset from GPS)
-  if (bestDist > 150) return null;
+  if (bestDist > 300) return null;  // 300m threshold — phone GPS can be 50-150m off in urban areas
   return { coord: bestCoord, segIndex: bestIdx };
 };
 
@@ -107,14 +121,19 @@ const DriverMarker = ({
   routeCoordinates,
   onPress,
 }: DriverMarkerProps) => {
+  // Image-ready flag: flip to false after initial bitmap capture
   const [imageReady, setImageReady] = useState(false);
+
+  // Current marker coordinate (state — only updated when GPS changes, NOT during zoom)
   const [coord, setCoord] = useState({ latitude, longitude });
   const [rotation, setRotation] = useState(0);
 
+  // Ref for the native marker (Android's `animateMarkerToCoordinate`)
   const markerRef = useRef<any>(null);
   const prevCoordRef = useRef({ latitude, longitude });
   const prevRotationRef = useRef(0);
 
+  // ── Core effect: fires every time the incoming coordinate changes ──
   useEffect(() => {
     const prev = prevCoordRef.current;
     const dLat = Math.abs(latitude - prev.latitude);
@@ -123,46 +142,50 @@ const DriverMarker = ({
     // Skip trivially small updates (GPS jitter)
     if (dLat < 0.000002 && dLng < 0.000002) return;
 
+    // ─ Calculate target position (optionally snapped to road) ─
     const rawTarget = { latitude, longitude };
     let target = rawTarget;
-    let targetBearing: number = prevRotationRef.current; // Default: keep current rotation
+    let targetBearing: number;
 
-    // ── PRIORITY 1: Snap to polyline & use road segment bearing ──
-    // This gives the cleanest rotation — always pointing along the road.
-    // GPS compass heading is wildly inaccurate on most Android phones,
-    // so we NEVER use it when we have a polyline.
     const snapResult = routeCoordinates
       ? snapToPolyline(rawTarget, routeCoordinates)
       : null;
 
     if (snapResult) {
+      // Snapped to polyline — use road segment bearing (most reliable)
       target = snapResult.coord;
       const seg = routeCoordinates!;
       const nextIdx = Math.min(snapResult.segIndex + 1, seg.length - 1);
-      // Use the FORWARD direction of the road segment
-      if (snapResult.segIndex !== nextIdx) {
-        targetBearing = calcBearing(seg[snapResult.segIndex], seg[nextIdx]);
-      }
+      targetBearing = calcBearing(seg[snapResult.segIndex], seg[nextIdx]);
     } else {
-      // ── PRIORITY 2: Use movement bearing (only if moved significantly) ──
+      // Not snapped — only recalculate bearing if driver actually moved >5m
+      // Otherwise keep previous rotation (prevents random spinning from GPS noise)
       const movedMeters = fastDist(prev, rawTarget);
       if (movedMeters > 5) {
         targetBearing = calcBearing(prev, rawTarget);
+      } else {
+        targetBearing = prevRotationRef.current;
       }
-      // If moved < 5m, keep previous rotation (prevents jitter)
     }
 
-    // ── Move the marker ──
+    // Override with hardware heading when available
+    if (typeof heading === 'number' && Number.isFinite(heading)) {
+      targetBearing = heading;
+    }
+
+    // ─ Move the marker ─
     if (Platform.OS === 'android' && markerRef.current) {
+      // Native Android SDK handles the interpolation on the GPU — no drift during zoom
       markerRef.current.animateMarkerToCoordinate?.(
         { latitude: target.latitude, longitude: target.longitude },
         ANIM_DURATION_MS,
       );
+    } else {
+      // iOS or fallback: set coordinate directly (instant move)
+      setCoord({ latitude: target.latitude, longitude: target.longitude });
     }
-    // Always update coord state (used as fallback on iOS and initial position)
-    setCoord({ latitude: target.latitude, longitude: target.longitude });
 
-    // ── Set rotation ──
+    // ─ Set rotation instantly ─
     setRotation(targetBearing);
     prevRotationRef.current = targetBearing;
     prevCoordRef.current = target;
@@ -184,6 +207,7 @@ const DriverMarker = ({
         style={styles.carImage}
         resizeMode="contain"
         onLoad={() => {
+          // Small delay to guarantee Android has captured the bitmap
           setTimeout(() => setImageReady(true), 300);
         }}
       />

@@ -146,7 +146,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
   const handleMapPan = React.useCallback(() => {
     setIsMapPanned(true);
     if (pannedTimerRef.current) clearTimeout(pannedTimerRef.current);
-    pannedTimerRef.current = setTimeout(() => setIsMapPanned(false), 8000);
+    pannedTimerRef.current = setTimeout(() => setIsMapPanned(false), 10000);
   }, []);
   useEffect(() => { return () => { if (pannedTimerRef.current) clearTimeout(pannedTimerRef.current); }; }, []);
   
@@ -959,15 +959,11 @@ const TrackingScreen = ({ navigation, route }: any) => {
     []
   );
 
-  // ── Uber/Ola-style map camera — tight framing ──
-  // Uses animateToRegion with calculated deltas for PRECISE zoom control.
-  //
-  // HOW UBER DOES IT:
-  // - Delta = 1.6× the distance between driver and target (tight but comfortable)
-  // - Minimum delta = 0.003 (~330m) — street-level, never too zoomed in
-  // - Center shifted UP by 20% of delta to account for the bottom card
-  // - When driver is far (>5km): wider view showing both points
-  // - When driver is close (<500m): street-level zoom showing the approach
+  // ── Production-grade Uber/Ola-style map camera ──
+  // Phase-based: different zoom behavior for each trip phase.
+  // ACCEPTED → fit driver + pickup (they're usually close)
+  // STARTED/IN_PROGRESS → FOLLOW the driver at close zoom (~1km), NOT the distant drop
+  // COMPLETED → show summary view fitting driver + drop
   const cameraFitDoneForStatusRef = useRef<string | null>(null);
   const lastCameraDriverRef = useRef<{ latitude: number; longitude: number } | null>(null);
   const lastCameraTimestampRef = useRef<number>(0);
@@ -984,46 +980,61 @@ const TrackingScreen = ({ navigation, route }: any) => {
     const driverPos = overrideDriver ?? routeStartRef.current ?? driverFallback ?? null;
     const targetPos = overrideTarget ?? routeTargetRef.current ?? null;
 
-    // Round trips in progress: no target — fit around driver + pickup
+    // Round trips in progress: no target — follow driver
     if (!targetPos) {
       if (!driverPos) return;
       const pickup = effectivePickupRef.current;
       if (pickup) {
         const dLat = Math.abs(driverPos.latitude - pickup.latitude);
         const dLng = Math.abs(driverPos.longitude - pickup.longitude);
-        const latDelta = Math.max(dLat * 1.6, 0.003);
-        const lngDelta = Math.max(dLng * 1.6, 0.003);
+        const latDelta = Math.max(dLat * 2.5, 0.005);
+        const lngDelta = Math.max(dLng * 2.5, 0.005);
         mapRef.current?.animateToRegion({
-          latitude: (driverPos.latitude + pickup.latitude) / 2 - latDelta * 0.2,
+          latitude: (driverPos.latitude + pickup.latitude) / 2 - latDelta * 0.15,
           longitude: (driverPos.longitude + pickup.longitude) / 2,
           latitudeDelta: latDelta,
           longitudeDelta: lngDelta,
-        }, 500);
+        }, 600);
       }
       return;
     }
 
     if (!driverPos) {
-      // No driver yet — show target at street zoom
       mapRef.current?.animateToRegion({
-        latitude: targetPos.latitude - 0.0005, // Slight offset up
+        latitude: targetPos.latitude,
         longitude: targetPos.longitude,
-        latitudeDelta: 0.004,
-        longitudeDelta: 0.004,
-      }, 500);
+        latitudeDelta: 0.006,
+        longitudeDelta: 0.006,
+      }, 600);
       return;
     }
 
-    // ── Calculate region: tight framing around driver + target ──
+    // ── Phase-based camera (the key difference from before) ──
+    const isTripPhase = status && ['STARTED', 'IN_PROGRESS'].includes(status);
     const dLat = Math.abs(driverPos.latitude - targetPos.latitude);
     const dLng = Math.abs(driverPos.longitude - targetPos.longitude);
+    const approxDistDeg = Math.max(dLat, dLng);
 
-    // 1.6× multiplier = tight but comfortable. Min 0.003 = ~330m street level.
-    const latDelta = Math.max(dLat * 1.6, 0.003);
-    const lngDelta = Math.max(dLng * 1.6, 0.003);
+    if (isTripPhase && approxDistDeg > 0.018) {
+      // ── TRIP IN PROGRESS + drop is far (>2km) ──
+      // Follow the driver at a close zoom showing ~1km of road ahead.
+      // Shift center slightly towards the target so the road ahead is visible.
+      const bearingLat = targetPos.latitude > driverPos.latitude ? 0.002 : -0.002;
+      const bearingLng = targetPos.longitude > driverPos.longitude ? 0.002 : -0.002;
+      mapRef.current?.animateToRegion({
+        latitude: driverPos.latitude + bearingLat,
+        longitude: driverPos.longitude + bearingLng,
+        latitudeDelta: 0.008,
+        longitudeDelta: 0.008,
+      }, 600);
+      return;
+    }
 
-    // Center shifted UP by 20% so both markers sit above the bottom booking card
-    const centerLat = (driverPos.latitude + targetPos.latitude) / 2 - latDelta * 0.2;
+    // ── ACCEPTED phase OR close to drop (<2km) OR COMPLETED ──
+    // Fit both driver + target — they're close enough for a good zoom
+    const latDelta = Math.max(dLat * 2.2, 0.005);
+    const lngDelta = Math.max(dLng * 2.2, 0.005);
+    const centerLat = (driverPos.latitude + targetPos.latitude) / 2 - latDelta * 0.15;
     const centerLng = (driverPos.longitude + targetPos.longitude) / 2;
 
     mapRef.current?.animateToRegion({
@@ -1031,7 +1042,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
       longitude: centerLng,
       latitudeDelta: latDelta,
       longitudeDelta: lngDelta,
-    }, 500);
+    }, 600);
   }, [driverLocation]);
   // Store fitMapToRoute in a ref so effects don't depend on it
   // (fitMapToRoute changes every time driverLocation updates, which was killing the timeouts!)
@@ -1174,13 +1185,13 @@ const TrackingScreen = ({ navigation, route }: any) => {
       // Suspend auto-following if the user is looking around the map
       if (isMapPannedRef.current) return;
 
-      // Recenter every 3s or when driver moves >15m — tight tracking like Uber
-      if (movedMeters >= 15 || now - lastCameraTimestampRef.current >= 3000) {
+      // Recenter every 4s or when driver moves >20m — responsive like Uber
+      if (movedMeters >= 20 || now - lastCameraTimestampRef.current >= 4000) {
         lastCameraTimestampRef.current = now;
         lastCameraDriverRef.current = { latitude: driverPos.latitude, longitude: driverPos.longitude };
         fitMapToRouteRef.current();
       }
-    }, 2000);
+    }, 3000);
 
     return () => clearInterval(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
