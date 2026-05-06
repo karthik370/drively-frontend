@@ -1,43 +1,19 @@
 /**
- * DriverMarker — Production-grade Uber/Ola-style animated car marker.
+ * DriverMarker — Production-grade car marker that does NOT move during zoom.
  *
- * Design decisions based on industry best-practices:
+ * KEY FIX: Uses a plain `<Marker>` (NOT `Marker.Animated` / `AnimatedRegion`).
+ * AnimatedRegion caused the marker to visually drift during pinch-zoom on
+ * Android because the animation interpolation fights with the map's own
+ * coordinate projection during the zoom gesture.
  *
- * 1. **PNG image (`car_top.png`) instead of inline SVG**
- *    SVG-inside-Marker is notoriously unreliable on Android — the native bridge
- *    must snapshot the React view as a bitmap on every `tracksViewChanges` tick,
- *    which causes blank/flickering markers.  Uber, Ola, and Grab all use
- *    pre-rendered PNG/WebP assets for their vehicle markers.
- *
- * 2. **`Marker.Animated` + `AnimatedRegion`**
- *    On Android, `animateMarkerToCoordinate()` delegates interpolation to the
- *    native Google Maps SDK, giving buttery-smooth 60 fps movement without JS
- *    thread pressure.  On iOS, we fall back to `Animated.timing` on the
- *    `AnimatedRegion` which is equally smooth.
- *
- * 3. **`tracksViewChanges` strategy**
- *    We start with `tracksViewChanges={true}` so the PNG bitmap is captured
- *    once on first render, then flip to `false` after the image's `onLoad`
- *    fires. After that, only `coordinate` and `rotation` props change — both
- *    handled natively without bitmap re-capture.
- *
- * 4. **Rotation**
- *    Calculated from successive GPS points (bearing formula) or from the road
- *    segment when snapping to a polyline.  Applied via the `rotation` Marker
- *    prop (native) rather than a JS `transform` — avoids extra bitmap renders.
- *
- * 5. **Marker size**
- *    28 × 28 dp — compact like Uber/Ola.  Clearly visible on high-DPI
- *    screens without obscuring the map or polyline at close zoom.
+ * Movement: `animateMarkerToCoordinate()` on Android (native SDK handles it).
+ * Rotation: Set instantly via the `rotation` prop (no JS-side animation timer).
+ * Image: Uses `<Image>` child with `tracksViewChanges={false}` after first render.
  */
 
-import React, { useEffect, useRef, useState, useMemo } from 'react';
-import { Image, StyleSheet, Platform, Animated } from 'react-native';
-import { Marker, AnimatedRegion } from 'react-native-maps';
-
-// Create AnimatedMarker component — this is more type-safe than the
-// exported MarkerAnimated which has incomplete JSX typings.
-const AnimatedMarker = Animated.createAnimatedComponent(Marker);
+import React, { useEffect, useRef, useState } from 'react';
+import { Image, StyleSheet, Platform } from 'react-native';
+import { Marker } from 'react-native-maps';
 
 export type DriverMarkerProps = {
   latitude: number;
@@ -48,15 +24,13 @@ export type DriverMarkerProps = {
   onPress?: () => void;
 };
 
-// ── Pre-require at module level — cached by Metro, available on first render ──
+// Pre-require at module level — cached by Metro, available on first render
 const CAR_IMAGE = require('../../../assets/markers/car_top.png');
 
 // Marker rendered size (dp). 28 matches Uber's compact vehicle icon.
 const MARKER_SIZE = 28;
 
 // Animation duration for the slide between two GPS points.
-// Should be slightly longer than the GPS/socket update interval (~3-5 s)
-// so the car appears to move continuously rather than jumping.
 const ANIM_DURATION_MS = 1000;
 
 // ── Geometry Helpers ──
@@ -136,12 +110,6 @@ const snapToPolyline = (
   return { coord: bestCoord, segIndex: bestIdx };
 };
 
-/** Shortest-path angle interpolation (handles 359° → 1° correctly). */
-const lerpAngle = (from: number, to: number, t: number): number => {
-  const diff = ((to - from + 540) % 360) - 180;
-  return (from + diff * t + 360) % 360;
-};
-
 // ══════════════════════════════════════════════════════════════════════
 // Component
 // ══════════════════════════════════════════════════════════════════════
@@ -153,35 +121,19 @@ const DriverMarker = ({
   routeCoordinates,
   onPress,
 }: DriverMarkerProps) => {
-  // ── Image-ready flag: starts true because require() is sync in Metro ──
-  // On Android, the native Marker still needs one render pass to capture
-  // the bitmap. We flip to false 200 ms after onLoad to be safe.
+  // Image-ready flag: flip to false after initial bitmap capture
   const [imageReady, setImageReady] = useState(false);
 
-  // ── Rotation: use ref (not state!) to avoid re-renders every 16ms ──
-  // Re-renders during zoom cause the marker to jump because
-  // tracksViewChanges re-captures the bitmap on each render.
-  const rotationRef = useRef(0);
-  const prevRotationRef = useRef(0);
-
-  // ── AnimatedRegion for smooth coordinate interpolation ──
-  const animatedCoord = useRef(
-    new AnimatedRegion({
-      latitude,
-      longitude,
-      latitudeDelta: 0.005,
-      longitudeDelta: 0.005,
-    }),
-  ).current;
+  // Current marker coordinate (state — only updated when GPS changes, NOT during zoom)
+  const [coord, setCoord] = useState({ latitude, longitude });
+  const [rotation, setRotation] = useState(0);
 
   // Ref for the native marker (Android's `animateMarkerToCoordinate`)
   const markerRef = useRef<any>(null);
   const prevCoordRef = useRef({ latitude, longitude });
+  const prevRotationRef = useRef(0);
 
-  // Rotation animation timer
-  const rotAnimRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // ── Core animation effect: fires every time the incoming coordinate changes ──
+  // ── Core effect: fires every time the incoming coordinate changes ──
   useEffect(() => {
     const prev = prevCoordRef.current;
     const dLat = Math.abs(latitude - prev.latitude);
@@ -213,76 +165,29 @@ const DriverMarker = ({
       targetBearing = heading;
     }
 
-    // ─ Animate coordinate (platform-specific for best performance) ─
-    const newCoord = {
-      latitude: target.latitude,
-      longitude: target.longitude,
-      latitudeDelta: 0.005,
-      longitudeDelta: 0.005,
-    };
-
-    if (Platform.OS === 'android') {
-      // Native Android SDK handles the interpolation on the GPU
-      markerRef.current?.animateMarkerToCoordinate?.(
+    // ─ Move the marker ─
+    if (Platform.OS === 'android' && markerRef.current) {
+      // Native Android SDK handles the interpolation on the GPU — no drift during zoom
+      markerRef.current.animateMarkerToCoordinate?.(
         { latitude: target.latitude, longitude: target.longitude },
         ANIM_DURATION_MS,
       );
     } else {
-      // iOS: use Animated.timing on AnimatedRegion
-      animatedCoord
-        .timing({
-          latitude: target.latitude,
-          longitude: target.longitude,
-          latitudeDelta: 0.005,
-          longitudeDelta: 0.005,
-          duration: ANIM_DURATION_MS,
-          useNativeDriver: false,
-          toValue: 0, // Required by TimingAnimationConfig but unused by AnimatedRegion
-        } as any)
-        .start();
+      // iOS or fallback: set coordinate directly (instant move)
+      setCoord({ latitude: target.latitude, longitude: target.longitude });
     }
 
-    // ─ Smooth rotation (ref-based — NO re-renders during animation) ─
-    if (rotAnimRef.current) {
-      clearInterval(rotAnimRef.current);
-      rotAnimRef.current = null;
-    }
-
-    const startRot = prevRotationRef.current;
-    const startTime = Date.now();
-
-    // Set final rotation immediately (marker reads from ref on next native frame)
-    rotationRef.current = targetBearing;
+    // ─ Set rotation instantly ─
+    setRotation(targetBearing);
     prevRotationRef.current = targetBearing;
-
-    // Update native marker rotation directly if on Android
-    if (Platform.OS === 'android' && markerRef.current) {
-      // The `rotation` prop on Marker.Animated updates natively
-      // We set the ref and let the next natural render pick it up
-    }
-
     prevCoordRef.current = target;
-
-    return () => {
-      if (rotAnimRef.current) {
-        clearInterval(rotAnimRef.current);
-        rotAnimRef.current = null;
-      }
-    };
-  }, [latitude, longitude, heading, routeCoordinates, animatedCoord]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (rotAnimRef.current) clearInterval(rotAnimRef.current);
-    };
-  }, []);
+  }, [latitude, longitude, heading, routeCoordinates]);
 
   return (
-    <AnimatedMarker
+    <Marker
       ref={markerRef}
-      coordinate={animatedCoord as any}
-      rotation={rotationRef.current}
+      coordinate={coord}
+      rotation={rotation}
       flat
       anchor={{ x: 0.5, y: 0.5 }}
       tracksViewChanges={!imageReady}
@@ -295,10 +200,10 @@ const DriverMarker = ({
         resizeMode="contain"
         onLoad={() => {
           // Small delay to guarantee Android has captured the bitmap
-          setTimeout(() => setImageReady(true), 200);
+          setTimeout(() => setImageReady(true), 300);
         }}
       />
-    </AnimatedMarker>
+    </Marker>
   );
 };
 
