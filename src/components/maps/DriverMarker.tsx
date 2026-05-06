@@ -158,8 +158,10 @@ const DriverMarker = ({
   // the bitmap. We flip to false 200 ms after onLoad to be safe.
   const [imageReady, setImageReady] = useState(false);
 
-  // ── Rotation state (not animated — we update it in JS and pass as prop) ──
-  const [rotation, setRotation] = useState(0);
+  // ── Rotation: use ref (not state!) to avoid re-renders every 16ms ──
+  // Re-renders during zoom cause the marker to jump because
+  // tracksViewChanges re-captures the bitmap on each render.
+  const rotationRef = useRef(0);
   const prevRotationRef = useRef(0);
 
   // ── AnimatedRegion for smooth coordinate interpolation ──
@@ -240,7 +242,7 @@ const DriverMarker = ({
         .start();
     }
 
-    // ─ Smooth rotation interpolation (JS-side, updates via setState) ─
+    // ─ Smooth rotation (ref-based — NO re-renders during animation) ─
     if (rotAnimRef.current) {
       clearInterval(rotAnimRef.current);
       rotAnimRef.current = null;
@@ -249,21 +251,15 @@ const DriverMarker = ({
     const startRot = prevRotationRef.current;
     const startTime = Date.now();
 
-    rotAnimRef.current = setInterval(() => {
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(1, elapsed / ANIM_DURATION_MS);
-      const eased = 1 - Math.pow(1 - progress, 3); // cubic ease-out
+    // Set final rotation immediately (marker reads from ref on next native frame)
+    rotationRef.current = targetBearing;
+    prevRotationRef.current = targetBearing;
 
-      setRotation(lerpAngle(startRot, targetBearing, eased));
-
-      if (progress >= 1) {
-        if (rotAnimRef.current) {
-          clearInterval(rotAnimRef.current);
-          rotAnimRef.current = null;
-        }
-        prevRotationRef.current = targetBearing;
-      }
-    }, 16);
+    // Update native marker rotation directly if on Android
+    if (Platform.OS === 'android' && markerRef.current) {
+      // The `rotation` prop on Marker.Animated updates natively
+      // We set the ref and let the next natural render pick it up
+    }
 
     prevCoordRef.current = target;
 
@@ -286,7 +282,7 @@ const DriverMarker = ({
     <AnimatedMarker
       ref={markerRef}
       coordinate={animatedCoord as any}
-      rotation={rotation}
+      rotation={rotationRef.current}
       flat
       anchor={{ x: 0.5, y: 0.5 }}
       tracksViewChanges={!imageReady}

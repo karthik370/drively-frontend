@@ -972,7 +972,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
     overrideTarget?: { latitude: number; longitude: number } | null,
   ) => {
     const status = bookingStatusRef.current;
-    const isActive = Boolean(status && ['ACCEPTED', 'DRIVER_ARRIVING', 'ARRIVED', 'STARTED', 'IN_PROGRESS'].includes(status));
+    const isActive = Boolean(status && ['ACCEPTED', 'DRIVER_ARRIVING', 'ARRIVED', 'STARTED', 'IN_PROGRESS', 'COMPLETED'].includes(status));
     if (!isActive) return;
 
     const driverFallback = isDriverModeRef.current ? (currentLocation ?? driverLocation) : (driverLocation ?? currentLocation);
@@ -1075,7 +1075,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
   useEffect(() => {
     const status = bookingStatus;
     if (!status) return;
-    const isActive = ['ACCEPTED', 'DRIVER_ARRIVING', 'ARRIVED', 'STARTED', 'IN_PROGRESS'].includes(status);
+    const isActive = ['ACCEPTED', 'DRIVER_ARRIVING', 'ARRIVED', 'STARTED', 'IN_PROGRESS', 'COMPLETED'].includes(status);
     if (!isActive) return;
 
     // Only re-fit when status actually changes
@@ -1087,12 +1087,14 @@ const TrackingScreen = ({ navigation, route }: any) => {
     console.log('[MAP-FIT] Status changed to:', status);
 
     // Step 1: Immediately fit map to show both driver + target
+    // 600ms delay ensures route target refs have updated after status-change resets
     const t1 = setTimeout(() => {
       const { driverPos, target } = getMapEndpoints();
       console.log('[MAP-FIT] Step1 fit — driver:', driverPos, 'target:', target);
       setIsMapPanned(false);
+      if (pannedTimerRef.current) clearTimeout(pannedTimerRef.current);
       fitMapToRouteRef.current(driverPos, target);
-    }, 400);
+    }, 600);
 
     // Step 2: Fetch fresh route for new target
     const t2 = setTimeout(() => {
@@ -1139,7 +1141,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
   useEffect(() => {
     if (!decodedRoute || decodedRoute.length < 2) return;
     const status = bookingStatusRef.current;
-    const isActive = Boolean(status && ['ACCEPTED', 'DRIVER_ARRIVING', 'ARRIVED', 'STARTED', 'IN_PROGRESS'].includes(status));
+    const isActive = Boolean(status && ['ACCEPTED', 'DRIVER_ARRIVING', 'ARRIVED', 'STARTED', 'IN_PROGRESS', 'COMPLETED'].includes(status));
     if (!isActive) return;
 
     // Fit to show the full polyline
@@ -1153,7 +1155,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
   useEffect(() => {
     const status = bookingStatus;
     if (!status) return;
-    const isActive = ['ACCEPTED', 'DRIVER_ARRIVING', 'ARRIVED', 'STARTED', 'IN_PROGRESS'].includes(status);
+    const isActive = ['ACCEPTED', 'DRIVER_ARRIVING', 'ARRIVED', 'STARTED', 'IN_PROGRESS', 'COMPLETED'].includes(status);
     if (!isActive) return;
 
     const timer = setInterval(() => {
