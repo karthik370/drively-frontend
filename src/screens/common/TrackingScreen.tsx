@@ -146,7 +146,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
   const handleMapPan = React.useCallback(() => {
     setIsMapPanned(true);
     if (pannedTimerRef.current) clearTimeout(pannedTimerRef.current);
-    pannedTimerRef.current = setTimeout(() => setIsMapPanned(false), 10000);
+    pannedTimerRef.current = setTimeout(() => setIsMapPanned(false), 8000);
   }, []);
   useEffect(() => { return () => { if (pannedTimerRef.current) clearTimeout(pannedTimerRef.current); }; }, []);
   
@@ -959,10 +959,15 @@ const TrackingScreen = ({ navigation, route }: any) => {
     []
   );
 
-  // ── Production-grade Uber/Ola-style map camera ──
+  // ── Uber/Ola-style map camera — tight framing ──
   // Uses animateToRegion with calculated deltas for PRECISE zoom control.
-  // fitToCoordinates + edgePadding was causing unpredictable over-zooming.
-  // This calculates the exact region needed to show driver + target at street level.
+  //
+  // HOW UBER DOES IT:
+  // - Delta = 1.6× the distance between driver and target (tight but comfortable)
+  // - Minimum delta = 0.003 (~330m) — street-level, never too zoomed in
+  // - Center shifted UP by 20% of delta to account for the bottom card
+  // - When driver is far (>5km): wider view showing both points
+  // - When driver is close (<500m): street-level zoom showing the approach
   const cameraFitDoneForStatusRef = useRef<string | null>(null);
   const lastCameraDriverRef = useRef<{ latitude: number; longitude: number } | null>(null);
   const lastCameraTimestampRef = useRef<number>(0);
@@ -986,14 +991,14 @@ const TrackingScreen = ({ navigation, route }: any) => {
       if (pickup) {
         const dLat = Math.abs(driverPos.latitude - pickup.latitude);
         const dLng = Math.abs(driverPos.longitude - pickup.longitude);
-        const latDelta = Math.max(dLat * 2.5, 0.005);
-        const lngDelta = Math.max(dLng * 2.5, 0.005);
+        const latDelta = Math.max(dLat * 1.6, 0.003);
+        const lngDelta = Math.max(dLng * 1.6, 0.003);
         mapRef.current?.animateToRegion({
-          latitude: (driverPos.latitude + pickup.latitude) / 2 - latDelta * 0.15,
+          latitude: (driverPos.latitude + pickup.latitude) / 2 - latDelta * 0.2,
           longitude: (driverPos.longitude + pickup.longitude) / 2,
           latitudeDelta: latDelta,
           longitudeDelta: lngDelta,
-        }, 600);
+        }, 500);
       }
       return;
     }
@@ -1001,24 +1006,24 @@ const TrackingScreen = ({ navigation, route }: any) => {
     if (!driverPos) {
       // No driver yet — show target at street zoom
       mapRef.current?.animateToRegion({
-        latitude: targetPos.latitude,
+        latitude: targetPos.latitude - 0.0005, // Slight offset up
         longitude: targetPos.longitude,
-        latitudeDelta: 0.006,
-        longitudeDelta: 0.006,
-      }, 600);
+        latitudeDelta: 0.004,
+        longitudeDelta: 0.004,
+      }, 500);
       return;
     }
 
-    // ── Calculate region to show BOTH driver + target at optimal zoom ──
-    // Delta = distance between them × 2.2 (comfortable padding around markers)
-    // Minimum delta = 0.005 (~500m) so map never zooms in too close
+    // ── Calculate region: tight framing around driver + target ──
     const dLat = Math.abs(driverPos.latitude - targetPos.latitude);
     const dLng = Math.abs(driverPos.longitude - targetPos.longitude);
-    const latDelta = Math.max(dLat * 2.2, 0.005);
-    const lngDelta = Math.max(dLng * 2.2, 0.005);
 
-    // Center between driver and target, shifted UP by 15% to account for bottom card
-    const centerLat = (driverPos.latitude + targetPos.latitude) / 2 - latDelta * 0.15;
+    // 1.6× multiplier = tight but comfortable. Min 0.003 = ~330m street level.
+    const latDelta = Math.max(dLat * 1.6, 0.003);
+    const lngDelta = Math.max(dLng * 1.6, 0.003);
+
+    // Center shifted UP by 20% so both markers sit above the bottom booking card
+    const centerLat = (driverPos.latitude + targetPos.latitude) / 2 - latDelta * 0.2;
     const centerLng = (driverPos.longitude + targetPos.longitude) / 2;
 
     mapRef.current?.animateToRegion({
@@ -1026,7 +1031,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
       longitude: centerLng,
       latitudeDelta: latDelta,
       longitudeDelta: lngDelta,
-    }, 600);
+    }, 500);
   }, [driverLocation]);
   // Store fitMapToRoute in a ref so effects don't depend on it
   // (fitMapToRoute changes every time driverLocation updates, which was killing the timeouts!)
@@ -1169,13 +1174,13 @@ const TrackingScreen = ({ navigation, route }: any) => {
       // Suspend auto-following if the user is looking around the map
       if (isMapPannedRef.current) return;
 
-      // Recenter every 4s or when driver moves >20m — responsive like Uber
-      if (movedMeters >= 20 || now - lastCameraTimestampRef.current >= 4000) {
+      // Recenter every 3s or when driver moves >15m — tight tracking like Uber
+      if (movedMeters >= 15 || now - lastCameraTimestampRef.current >= 3000) {
         lastCameraTimestampRef.current = now;
         lastCameraDriverRef.current = { latitude: driverPos.latitude, longitude: driverPos.longitude };
         fitMapToRouteRef.current();
       }
-    }, 3000);
+    }, 2000);
 
     return () => clearInterval(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
