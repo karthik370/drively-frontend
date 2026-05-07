@@ -25,7 +25,7 @@
         "NSPhotoLibraryUsageDescription": "Drively needs photo library access to upload documents and profile photos."
       },
       "config": {
-        "googleMapsApiKey": "AIzaSyA_Dun255HHND3b_lX5N05zvGT77NhDeCI"
+        "googleMapsApiKey": "USE_ENV_VAR_EXPO_PUBLIC_GOOGLE_MAPS_API_KEY"
       }
     },
     "android": {
@@ -53,7 +53,7 @@
       ],
       "config": {
         "googleMaps": {
-          "apiKey": "AIzaSyA_Dun255HHND3b_lX5N05zvGT77NhDeCI"
+          "apiKey": "USE_ENV_VAR_EXPO_PUBLIC_GOOGLE_MAPS_API_KEY"
         }
       }
     },

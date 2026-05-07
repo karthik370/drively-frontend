@@ -3,8 +3,10 @@ const appJson = require('./app.json');
 module.exports = ({ config }) => {
   const base = config && Object.keys(config).length ? config : appJson.expo;
 
-  const androidKey = process.env.ANDROID_GOOGLE_MAPS_API_KEY || process.env.EXPO_PUBLIC_ANDROID_GOOGLE_MAPS_API_KEY;
-  const iosKey = process.env.IOS_GOOGLE_MAPS_API_KEY || process.env.EXPO_PUBLIC_IOS_GOOGLE_MAPS_API_KEY;
+  // Single key from .env covers both Android and iOS
+  const mapsKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ||
+    process.env.ANDROID_GOOGLE_MAPS_API_KEY ||
+    process.env.IOS_GOOGLE_MAPS_API_KEY;
 
   return {
     ...base,
@@ -12,7 +14,7 @@ module.exports = ({ config }) => {
       ...(base.ios || {}),
       config: {
         ...((base.ios || {}).config || {}),
-        googleMapsApiKey: iosKey || ((base.ios || {}).config || {}).googleMapsApiKey,
+        googleMapsApiKey: mapsKey || ((base.ios || {}).config || {}).googleMapsApiKey,
       },
     },
     android: {
@@ -21,9 +23,7 @@ module.exports = ({ config }) => {
         ...((base.android || {}).config || {}),
         googleMaps: {
           ...(((base.android || {}).config || {}).googleMaps || {}),
-          apiKey:
-            androidKey ||
-            ((((base.android || {}).config || {}).googleMaps || {}) || {}).apiKey,
+          apiKey: mapsKey || (((base.android || {}).config || {}).googleMaps || {}).apiKey,
         },
       },
     },
