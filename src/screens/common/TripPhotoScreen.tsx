@@ -165,7 +165,7 @@ const TripPhotoScreen = ({ navigation, route }: any) => {
                 <Image source={{ uri: slot.uri }} style={styles.photoImage} />
               ) : (
                 <View style={styles.photoPlaceholder}>
-                  <Icon name={LABEL_ICONS[slot.label] || 'camera'} size={32} color="#666" />
+                  <Icon name={(LABEL_ICONS[slot.label] || 'camera') as any} size={32} color="#666" />
                 </View>
               )}
 

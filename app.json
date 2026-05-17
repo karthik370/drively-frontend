@@ -2,7 +2,7 @@
   "expo": {
     "name": "Drively",
     "slug": "drivemate",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "icon": "./assets/drively_logo.png",
@@ -30,7 +30,7 @@
     },
     "android": {
       "package": "com.drively.app",
-      "versionCode": 5,
+      "versionCode": 7,
       "adaptiveIcon": {
         "foregroundImage": "./assets/drively_logo.png",
         "backgroundColor": "#0A0A0A"

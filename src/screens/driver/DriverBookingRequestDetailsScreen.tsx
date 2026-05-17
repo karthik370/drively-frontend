@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Animated, Easing, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
@@ -7,7 +7,7 @@ import { useAppDispatch, useAppSelector } from '../../redux/store';
 import { removeBookingRequest, setCurrentBooking } from '../../redux/slices/bookingSlice';
 import { setDropAddress, setDropLocation, setPickupAddress, setPickupLocation } from '../../redux/slices/locationSlice';
 import socketService from '../../services/socketService';
-import { acceptBooking, calculateRoute, getBookingDetails } from '../../services/api';
+import { acceptBooking, calculateRoute } from '../../services/api';
 import { BookingStatus, PaymentMethod, VehicleType } from '../../types';
 import type { BookingRequest } from '../../components/driver/BookingRequestCard';
 import { showAlert } from '../../components/common/CustomAlert';
@@ -35,7 +35,6 @@ const haversineKm = (a: { latitude: number; longitude: number }, b: { latitude: 
   return R * c;
 };
 
-const ACCEPT_TIMEOUT = 30; // seconds
 
 const DriverBookingRequestDetailsScreen = ({ navigation, route }: any) => {
   const dispatch = useAppDispatch();
@@ -56,6 +55,14 @@ const DriverBookingRequestDetailsScreen = ({ navigation, route }: any) => {
   const [pickupDistanceKm, setPickupDistanceKm] = useState<number | null>(null);
   const pickupRouteKeyRef = useRef<string>('');
 
+  // Android needs tracksViewChanges=true initially to capture View-based marker bitmaps.
+  // After 1s, switch to false to stop per-frame re-rendering (eliminates flickering).
+  const [markerReady, setMarkerReady] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setMarkerReady(true), 1000);
+    return () => clearTimeout(t);
+  }, []);
+
   // Cache coords in refs so markers persist even after Redux clears the request
   const cachedPickupRef = useRef<{ latitude: number; longitude: number } | null>(null);
   const cachedDropRef = useRef<{ latitude: number; longitude: number } | null>(null);
@@ -68,37 +75,7 @@ const DriverBookingRequestDetailsScreen = ({ navigation, route }: any) => {
   const stablePickup = cachedPickupRef.current;
   const stableDrop = cachedDropRef.current;
 
-  // Countdown timer
-  const [countdown, setCountdown] = useState(ACCEPT_TIMEOUT);
-  const timerProgress = useRef(new Animated.Value(1)).current;
 
-  useEffect(() => {
-    if (!request) return;
-    const interval = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          // Auto-reject
-          try {
-            socketService.emit('booking:reject', { bookingId });
-            dispatch(removeBookingRequest(bookingId));
-            navigation.goBack();
-          } catch { }
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    Animated.timing(timerProgress, {
-      toValue: 0,
-      duration: ACCEPT_TIMEOUT * 1000,
-      easing: Easing.linear,
-      useNativeDriver: false,
-    }).start();
-
-    return () => clearInterval(interval);
-  }, [request, bookingId, dispatch, navigation, timerProgress]);
 
   useEffect(() => {
     if (!request) return;
@@ -177,9 +154,10 @@ const DriverBookingRequestDetailsScreen = ({ navigation, route }: any) => {
     if (!bookingId || accepting) return;
     try {
       setAccepting(true);
-      await acceptBooking(bookingId, '');
+      // acceptBooking returns { booking: {...} } — unwrap it
+      const result = await acceptBooking(bookingId, '');
+      const raw = (result as any)?.booking ?? result;
       try { socketService.joinBooking(bookingId); } catch { }
-      const raw = await getBookingDetails(bookingId);
       const now = new Date().toISOString();
       dispatch(removeBookingRequest(bookingId));
 
@@ -279,61 +257,56 @@ const DriverBookingRequestDetailsScreen = ({ navigation, route }: any) => {
           provider={PROVIDER_GOOGLE}
           style={StyleSheet.absoluteFill}
           initialRegion={initialRegion}
+          onMapReady={() => {
+            // Fit map to show all markers after map is ready
+            const points: { latitude: number; longitude: number }[] = [];
+            if (stablePickup) points.push(stablePickup);
+            if (stableDrop) points.push(stableDrop);
+            if (driverLocation && Number.isFinite(driverLocation.latitude) && Number.isFinite(driverLocation.longitude)) {
+              points.push({ latitude: driverLocation.latitude, longitude: driverLocation.longitude });
+            }
+            if (points.length >= 2) {
+              setTimeout(() => {
+                mapRef.current?.fitToCoordinates(points, {
+                  edgePadding: { top: 60, bottom: 80, left: 40, right: 40 },
+                  animated: true,
+                });
+              }, 300);
+            }
+          }}
         >
-          {/* Pickup marker with cached coords */}
+          {/* Pickup marker */}
           {stablePickup ? (
-            <Marker coordinate={stablePickup} tracksViewChanges={true} zIndex={5} title="Pickup">
-              <View style={styles.markerWrap}>
-                <View style={[styles.markerDot, { backgroundColor: '#10b981' }]}>
-                  <Icon name="account" size={18} color="#ffffff" />
-                </View>
-                <View style={[styles.markerTriangle, { borderTopColor: '#10b981' }]} />
-              </View>
-            </Marker>
+            <Marker
+              coordinate={stablePickup}
+              tracksViewChanges={false}
+              zIndex={5}
+              title="Pickup"
+              pinColor="green"
+            />
           ) : null}
-          {/* Drop marker with cached coords */}
+          {/* Drop marker */}
           {stableDrop ? (
-            <Marker coordinate={stableDrop} tracksViewChanges={true} zIndex={5} title="Drop">
-              <View style={styles.markerWrap}>
-                <View style={[styles.markerDot, { backgroundColor: '#ef4444' }]}>
-                  <Icon name="flag-checkered" size={18} color="#ffffff" />
-                </View>
-                <View style={[styles.markerTriangle, { borderTopColor: '#ef4444' }]} />
-              </View>
-            </Marker>
+            <Marker
+              coordinate={stableDrop}
+              tracksViewChanges={false}
+              zIndex={5}
+              title="Drop"
+              pinColor="red"
+            />
           ) : null}
-          {/* Driver location marker */}
+          {/* Driver location marker — pure View, no image load delay */}
           {driverLocation && Number.isFinite(driverLocation.latitude) && Number.isFinite(driverLocation.longitude) ? (
-            <Marker coordinate={{ latitude: driverLocation.latitude, longitude: driverLocation.longitude }} tracksViewChanges={true} zIndex={10} title="You">
-              <View style={styles.driverMarker}>
-                <Icon name="navigation-variant" size={20} color="#ffffff" />
-              </View>
-            </Marker>
+            <Marker
+              coordinate={{ latitude: driverLocation.latitude, longitude: driverLocation.longitude }}
+              tracksViewChanges={false}
+              anchor={{ x: 0.5, y: 0.5 }}
+              zIndex={10}
+              title="You"
+              pinColor="#4285F4"
+            />
           ) : null}
-        </MapView>
-
-        {/* Countdown timer bar overlay */}
-        <View style={styles.timerBarWrap}>
-          <Animated.View
-            style={[
-              styles.timerBar,
-              {
-                width: timerProgress.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: ['0%', '100%'],
-                }),
-                backgroundColor: countdown > 10 ? '#10b981' : countdown > 5 ? '#f59e0b' : '#ef4444',
-              },
-            ]}
-          />
-        </View>
-
-        {/* Countdown badge */}
-        <View style={styles.countdownBadge}>
-          <Text style={[styles.countdownText, countdown <= 5 && { color: '#ef4444' }]}>
-            {countdown}s
-          </Text>
-        </View>
+      </MapView>
       </View>
 
       {/* Details card */}

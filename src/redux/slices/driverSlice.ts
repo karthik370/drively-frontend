@@ -86,6 +86,7 @@ const driverSlice = createSlice({
         state.verification.backgroundCheckStatus = String((action.payload as any)?.backgroundCheckStatus || 'PENDING') as any;
         state.verification.submitted = Boolean((action.payload as any)?.submitted);
         state.verification.updatedAt = typeof (action.payload as any)?.updatedAt === 'string' ? (action.payload as any).updatedAt : null;
+        state.verification.reason = typeof (action.payload as any)?.rejectionReason === 'string' ? (action.payload as any).rejectionReason : null;
       })
       .addCase(loadDriverVerificationStatus.rejected, (state) => {
         state.verification.isLoading = false;

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DrawerActions } from '@react-navigation/native';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Switch } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Switch, Modal } from 'react-native';
+import * as Location from 'expo-location';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppDispatch, useAppSelector } from '../../redux/store';
@@ -8,7 +9,7 @@ import { setDriverOnline } from '../../redux/slices/driverSlice';
 import { addBookingRequest, clearBookingRequests, removeBookingRequest, setCurrentBooking } from '../../redux/slices/bookingSlice';
 import { setDropAddress, setDropLocation, setPickupAddress, setPickupLocation } from '../../redux/slices/locationSlice';
 import socketService from '../../services/socketService';
-import { acceptBooking, getActiveBooking, getAvailableBookings, getBookingDetails, goOffline, goOnline } from '../../services/api';
+import { acceptBooking, getActiveBooking, getAvailableBookings, goOffline, goOnline } from '../../services/api';
 import BookingRequestCard, { type BookingRequest } from '../../components/driver/BookingRequestCard';
 import useBookingRequest from '../../hooks/useBookingRequest';
 import useRealTimeLocation from '../../hooks/useRealTimeLocation';
@@ -28,6 +29,7 @@ const DriverOnlineScreen = ({ navigation }: any) => {
   const onlineToggleInFlightRef = useRef<boolean>(false);
   const [activeBookingId, setActiveBookingId] = useState<string | null>(null);
   const [tripFilter, setTripFilter] = useState<'ALL' | 'ONE_WAY' | 'ROUND_TRIP' | 'OUTSTATION'>('ALL');
+  const [showDisclosure, setShowDisclosure] = useState(false);
   const onlineSentRef = useRef<boolean>(false);
   const acceptingRef = useRef<string | null>(null);
   const pollInFlightRef = useRef<boolean>(false);
@@ -91,6 +93,40 @@ const DriverOnlineScreen = ({ navigation }: any) => {
     },
     [dispatch]
   );
+
+  const handleGoOnlineWithDisclosure = async () => {
+    try {
+      const fg = await Location.requestForegroundPermissionsAsync();
+      if (fg.status !== 'granted') {
+        showAlert('Permission Required', 'Location permission is needed to go online.');
+        setShowDisclosure(false);
+        return;
+      }
+      
+      const bg = await Location.requestBackgroundPermissionsAsync();
+      if (bg.status !== 'granted') {
+        showAlert('Permission Required', 'Background location permission is needed to receive bookings while the app is closed.');
+        setShowDisclosure(false);
+        return;
+      }
+
+      setShowDisclosure(false);
+      await setOnlineState(true);
+    } catch (e) {
+      setShowDisclosure(false);
+    }
+  };
+
+  const handleToggleSwitch = async (v: boolean) => {
+    if (v) {
+      const bgStatus = await Location.getBackgroundPermissionsAsync();
+      if (bgStatus.status !== 'granted') {
+        setShowDisclosure(true);
+        return;
+      }
+    }
+    void setOnlineState(Boolean(v));
+  };
 
   useEffect(() => {
     if (!isOnline) {
@@ -390,9 +426,7 @@ const DriverOnlineScreen = ({ navigation }: any) => {
                 </View>
                 <Switch
                   value={isOnline}
-                  onValueChange={(v) => {
-                    void setOnlineState(Boolean(v));
-                  }}
+                  onValueChange={(v) => void handleToggleSwitch(v)}
                   trackColor={{ false: '#d1d5db', true: '#10b981' }}
                   thumbColor="#ffffff"
                 />
@@ -446,85 +480,62 @@ const DriverOnlineScreen = ({ navigation }: any) => {
       if (acceptingRef.current === id) return;
       acceptingRef.current = id;
 
-      // Accept booking on server
-      await acceptBooking(id, '');
+      // Accept booking on server — returns { booking: {...} }
+      const result = await acceptBooking(id, '');
+      const raw = (result as any)?.booking ?? result;
 
       // Immediately remove from request list and join socket room
       setActiveBookingId(id);
       dispatch(removeBookingRequest(id));
       try { socketService.joinBooking(id); } catch {}
 
-      // Set a minimal booking in Redux NOW so TrackingScreen can render
+      // Use the accept response directly — no need for a second getBookingDetails() call
       const now = new Date().toISOString();
+      const pickupLat = Number((raw as any)?.pickupLocationLat ?? (raw as any)?.pickup?.latitude);
+      const pickupLng = Number((raw as any)?.pickupLocationLng ?? (raw as any)?.pickup?.longitude);
+      if (Number.isFinite(pickupLat) && Number.isFinite(pickupLng)) {
+        dispatch(setPickupLocation({ latitude: pickupLat, longitude: pickupLng }));
+      }
+      dispatch(setPickupAddress(typeof (raw as any)?.pickupAddress === 'string' ? (raw as any).pickupAddress : null));
+
+      const dropLatRaw = (raw as any)?.dropLocationLat ?? (raw as any)?.drop?.latitude;
+      const dropLngRaw = (raw as any)?.dropLocationLng ?? (raw as any)?.drop?.longitude;
+      const dropLat = dropLatRaw !== undefined && dropLatRaw !== null ? Number(dropLatRaw) : NaN;
+      const dropLng = dropLngRaw !== undefined && dropLngRaw !== null ? Number(dropLngRaw) : NaN;
+      if (Number.isFinite(dropLat) && Number.isFinite(dropLng)) {
+        dispatch(setDropLocation({ latitude: dropLat, longitude: dropLng }));
+      }
+      dispatch(setDropAddress(typeof (raw as any)?.dropAddress === 'string' ? (raw as any).dropAddress : null));
+
       dispatch(
         setCurrentBooking({
-          id,
-          bookingNumber: '',
-          status: BookingStatus.ACCEPTED as any,
-          customer: null as any,
-          driver: null as any,
-          otp: null,
-          pickupLocation: { latitude: 0, longitude: 0 },
-          pickupAddress: 'Loading...',
-          vehicleType: VehicleType.CAR as any,
-          totalAmount: 0,
-          paymentMethod: PaymentMethod.CASH as any,
-          createdAt: now,
-          updatedAt: now,
+          id: String((raw as any)?.id ?? id),
+          bookingNumber: String((raw as any)?.bookingNumber ?? ''),
+          status: ((raw as any)?.status ?? BookingStatus.ACCEPTED) as any,
+          customer: (raw as any)?.customer as any,
+          driver: (raw as any)?.driver as any,
+          otp: (raw as any)?.otp ?? null,
+          pickupLocation: {
+            latitude: Number.isFinite(pickupLat) ? pickupLat : 0,
+            longitude: Number.isFinite(pickupLng) ? pickupLng : 0,
+          },
+          pickupAddress: String((raw as any)?.pickupAddress ?? 'Pickup'),
+          dropLocation:
+            Number.isFinite(dropLat) && Number.isFinite(dropLng) ? { latitude: dropLat, longitude: dropLng } : undefined,
+          dropAddress: typeof (raw as any)?.dropAddress === 'string' ? (raw as any).dropAddress : undefined,
+          scheduledTime: (raw as any)?.scheduledTime ? String((raw as any).scheduledTime) : undefined,
+          vehicleType: ((raw as any)?.vehicleType ?? VehicleType.CAR) as any,
+          transmissionType: ((raw as any)?.transmissionType ?? undefined) as any,
+          tripType: (raw as any)?.tripType as any,
+          totalAmount: typeof (raw as any)?.totalAmount === 'number' ? (raw as any).totalAmount : Number((raw as any)?.totalAmount || 0),
+          paymentMethod: ((raw as any)?.paymentMethod ?? PaymentMethod.CASH) as any,
+          createdAt: (raw as any)?.createdAt ? String((raw as any).createdAt) : now,
+          updatedAt: (raw as any)?.updatedAt ? String((raw as any).updatedAt) : now,
         })
       );
 
-      // Navigate IMMEDIATELY — don't wait for getBookingDetails
+      // Navigate IMMEDIATELY with full data already in Redux
       navigation.navigate('Tracking', { bookingId: id });
-
-      // Fetch full details in background and update Redux
-      getBookingDetails(id)
-        .then((raw: any) => {
-          if (!raw) return;
-          const pickupLat = Number(raw?.pickupLocationLat ?? raw?.pickupLatitude ?? raw?.pickup?.latitude);
-          const pickupLng = Number(raw?.pickupLocationLng ?? raw?.pickupLongitude ?? raw?.pickup?.longitude);
-          if (Number.isFinite(pickupLat) && Number.isFinite(pickupLng)) {
-            dispatch(setPickupLocation({ latitude: pickupLat, longitude: pickupLng }));
-          }
-          dispatch(setPickupAddress(typeof raw?.pickupAddress === 'string' ? raw.pickupAddress : null));
-
-          const dropLatRaw = raw?.dropLocationLat ?? raw?.dropLatitude ?? raw?.drop?.latitude;
-          const dropLngRaw = raw?.dropLocationLng ?? raw?.dropLongitude ?? raw?.drop?.longitude;
-          const dropLat = dropLatRaw !== undefined ? Number(dropLatRaw) : NaN;
-          const dropLng = dropLngRaw !== undefined ? Number(dropLngRaw) : NaN;
-          if (Number.isFinite(dropLat) && Number.isFinite(dropLng)) {
-            dispatch(setDropLocation({ latitude: dropLat, longitude: dropLng }));
-          }
-          dispatch(setDropAddress(typeof raw?.dropAddress === 'string' ? raw.dropAddress : null));
-
-          dispatch(
-            setCurrentBooking({
-              id: String(raw?.id ?? id),
-              bookingNumber: String(raw?.bookingNumber ?? ''),
-              status: (raw?.status ?? BookingStatus.ACCEPTED) as any,
-              customer: raw?.customer as any,
-              driver: raw?.driver as any,
-              otp: raw?.otp ?? null,
-              pickupLocation: {
-                latitude: Number.isFinite(pickupLat) ? pickupLat : 0,
-                longitude: Number.isFinite(pickupLng) ? pickupLng : 0,
-              },
-              pickupAddress: String(raw?.pickupAddress ?? 'Pickup'),
-              dropLocation:
-                Number.isFinite(dropLat) && Number.isFinite(dropLng) ? { latitude: dropLat, longitude: dropLng } : undefined,
-              dropAddress: typeof raw?.dropAddress === 'string' ? raw.dropAddress : undefined,
-              scheduledTime: raw?.scheduledTime ? String(raw.scheduledTime) : undefined,
-              vehicleType: (raw?.vehicleType ?? VehicleType.CAR) as any,
-              transmissionType: (raw?.transmissionType ?? undefined) as any,
-              tripType: raw?.tripType as any,
-              totalAmount: typeof raw?.totalAmount === 'number' ? raw.totalAmount : Number(raw?.totalAmount || 0),
-              paymentMethod: (raw?.paymentMethod ?? PaymentMethod.CASH) as any,
-              createdAt: raw?.createdAt ? String(raw.createdAt) : now,
-              updatedAt: raw?.updatedAt ? String(raw.updatedAt) : now,
-            })
-          );
-        })
-        .catch(() => {});
     } catch (e: any) {
       showAlert('Accept booking', e?.message || 'Failed to accept booking');
     } finally {
@@ -624,9 +635,7 @@ const DriverOnlineScreen = ({ navigation }: any) => {
             </View>
             <Switch
               value={isOnline}
-              onValueChange={(v) => {
-                void setOnlineState(Boolean(v));
-              }}
+              onValueChange={(v) => void handleToggleSwitch(v)}
               trackColor={{ false: '#ef4444', true: '#10b981' }}
               thumbColor="#ef4444"
             />
@@ -650,6 +659,28 @@ const DriverOnlineScreen = ({ navigation }: any) => {
           <Text style={styles.emptySub}>Stay online to receive requests</Text>
         </View>
       )}
+
+      {/* Prominent Disclosure Modal for Google Play */}
+      <Modal visible={showDisclosure} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Icon name="map-marker-radius" size={48} color="#C9A84C" style={{ marginBottom: 16 }} />
+            <Text style={styles.modalTitle}>Location Tracking</Text>
+            <Text style={styles.modalText}>
+              DriveMate collects location data to enable live trip tracking, calculate accurate fares, and assign nearby rides even when the app is closed or not in use.
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalBtnCancel} onPress={() => setShowDisclosure(false)}>
+                <Text style={styles.modalBtnCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalBtnAccept} onPress={handleGoOnlineWithDisclosure}>
+                <Text style={styles.modalBtnAcceptText}>I Agree</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 };
@@ -823,16 +854,13 @@ const styles = StyleSheet.create({
     marginTop: 18,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     gap: 12,
-    width: '100%',
-    maxWidth: 320,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 18,
     backgroundColor: G.glass2,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: G.border2,
+    borderColor: G.border1,
   },
   menuButton: {
     width: 42,
@@ -915,6 +943,70 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: G.textSecondary,
     textAlign: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: 12,
+  },
+  modalText: {
+    fontSize: 15,
+    color: '#4b5563',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalBtnCancel: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBtnCancelText: {
+    color: '#4b5563',
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  modalBtnAccept: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#C9A84C',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBtnAcceptText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 15,
   },
 });
 

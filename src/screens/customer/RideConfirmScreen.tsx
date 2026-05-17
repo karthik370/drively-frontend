@@ -3,6 +3,7 @@ import { InteractionManager } from 'react-native';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Modal,
   Platform,
   SafeAreaView,
@@ -33,6 +34,7 @@ import {
   setUserLocation,
 } from '../../redux/slices/locationSlice';
 import { showAlert } from '../../components/common/CustomAlert';
+import { CAR_IMAGE } from '../../components/maps/DriverMarker';
 
 type Props = {
   navigation: any;
@@ -997,16 +999,16 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
       return {
         latitude: 12.9716,
         longitude: 77.5946,
-        latitudeDelta: 0.08,
-        longitudeDelta: 0.08,
+        latitudeDelta: 0.02,
+        longitudeDelta: 0.02,
       };
     }
 
     return {
       latitude: base.latitude,
       longitude: base.longitude,
-      latitudeDelta: 0.05,
-      longitudeDelta: 0.05,
+      latitudeDelta: 0.015,
+      longitudeDelta: 0.015,
     };
   }, [pickupLocation, dropLocation]);
 
@@ -1040,7 +1042,26 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
       </View>
 
       <View style={styles.mapWrap}>
-        <MapView ref={mapRef} style={StyleSheet.absoluteFill} initialRegion={initialRegion} onPress={onMapPress}>
+        <MapView
+          ref={mapRef}
+          style={StyleSheet.absoluteFill}
+          initialRegion={initialRegion}
+          onPress={onMapPress}
+          onMapReady={() => {
+            // Fit map to show pickup + drop with proper padding
+            const pts: { latitude: number; longitude: number }[] = [];
+            if (pickupLocation) pts.push(pickupLocation);
+            if (effectiveDropLocation && !isSingleLocationRoundTrip) pts.push(effectiveDropLocation);
+            if (pts.length >= 2) {
+              setTimeout(() => {
+                mapRef.current?.fitToCoordinates(pts, {
+                  edgePadding: { top: 40, bottom: 40, left: 40, right: 40 },
+                  animated: true,
+                });
+              }, 400);
+            }
+          }}
+        >
           {pickupLocation ? (
             <Marker coordinate={pickupLocation} pinColor="#10b981" title="Pickup" zIndex={10} />
           ) : null}
@@ -1060,10 +1081,15 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
                 coordinate={{ latitude: lat, longitude: lng }}
                 tracksViewChanges={false}
                 anchor={{ x: 0.5, y: 0.5 }}
+                flat
+                zIndex={3}
               >
-                <View style={styles.nearbyDriverMarker}>
-                  <Icon name="car" size={18} color="#C9A84C" />
-                </View>
+                <Image
+                  source={CAR_IMAGE}
+                  style={{ width: 22, height: 22 }}
+                  resizeMode="contain"
+                  fadeDuration={0}
+                />
               </Marker>
             );
           })}

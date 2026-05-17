@@ -1,48 +1,69 @@
 /**
- * DriverMarker — Production-grade car marker that does NOT move during zoom.
+ * DriverMarker — Production-grade car marker (Uber/Rapido style).
  *
- * KEY FIX: Uses a plain `<Marker>` (NOT `Marker.Animated` / `AnimatedRegion`).
- * AnimatedRegion caused the marker to visually drift during pinch-zoom on
- * Android because the animation interpolation fights with the map's own
- * coordinate projection during the zoom gesture.
+ * ══ KEY FIX: NATIVE IMAGE PROP ══
+ * Using Marker's `image` prop instead of a child <Image> view.
+ * Child views require bitmap capture (tracksViewChanges), which causes:
+ *   - Marker invisible when tracksViewChanges=false from start
+ *   - Marker drifts at different zoom levels due to bitmap projection bugs
+ *   - Marker shifts during map pan while tracksViewChanges=true
+ * The `image` prop renders entirely in native Google Maps SDK — zero drift.
  *
- * Movement: `animateMarkerToCoordinate()` on Android (native SDK handles it).
- * Rotation: Set instantly via the `rotation` prop (no JS-side animation timer).
- * Image: Uses `<Image>` child with `tracksViewChanges={false}` after first render.
+ * ══ FULL PIPELINE ══
+ * Raw GPS → Snap to polyline → Clamp forward-only → Segment bearing →
+ * Lerp bearing (wraparound safe) → RAF lerp coordinate → trim polyline
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Image, StyleSheet, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import { Marker } from 'react-native-maps';
+
+// ─────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────
+
+export type Coord = { latitude: number; longitude: number };
 
 export type DriverMarkerProps = {
   latitude: number;
   longitude: number;
   heading?: number;
-  /** Decoded polyline coords — used to snap position & derive road-bearing */
-  routeCoordinates?: { latitude: number; longitude: number }[] | null;
+  routeCoordinates?: Coord[] | null;
+  onRemainingRoute?: (remaining: Coord[]) => void;
   onPress?: () => void;
 };
 
-// Pre-require at module level — cached by Metro, available on first render
+// ─────────────────────────────────────────────────────────────────────
+// Constants
+// ─────────────────────────────────────────────────────────────────────
+
 const CAR_IMAGE = require('../../../assets/markers/car_top.png');
+export { CAR_IMAGE };
 
-// Marker rendered size (dp). 28 matches Uber's compact vehicle icon.
-const MARKER_SIZE = 28;
+const ANIM_MS = 1000;
+const SNAP_RADIUS_M = 200;
 
-// Animation duration for the slide between two GPS points.
-const ANIM_DURATION_MS = 1000;
+// ─────────────────────────────────────────────────────────────────────
+// Geometry helpers
+// ─────────────────────────────────────────────────────────────────────
 
-// ── Geometry Helpers ──
+const toRad = (d: number) => (d * Math.PI) / 180;
+const toDeg = (r: number) => (r * 180) / Math.PI;
 
-const toRad = (deg: number) => (deg * Math.PI) / 180;
-const toDeg = (rad: number) => (rad * 180) / Math.PI;
+function lerp(a: number, b: number, t: number) {
+  return a + (b - a) * t;
+}
 
-/** Bearing from point A → B in degrees (0 = North, 90 = East). */
-const calcBearing = (
-  a: { latitude: number; longitude: number },
-  b: { latitude: number; longitude: number },
-): number => {
+function distM(a: Coord, b: Coord): number {
+  const dLat = (b.latitude - a.latitude) * 111_320;
+  const dLng =
+    (b.longitude - a.longitude) *
+    111_320 *
+    Math.cos(toRad((a.latitude + b.latitude) / 2));
+  return Math.sqrt(dLat * dLat + dLng * dLng);
+}
+
+function calcBearing(a: Coord, b: Coord): number {
   const dLon = toRad(b.longitude - a.longitude);
   const lat1 = toRad(a.latitude);
   const lat2 = toRad(b.latitude);
@@ -51,175 +72,196 @@ const calcBearing = (
     Math.cos(lat1) * Math.sin(lat2) -
     Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
   return (toDeg(Math.atan2(y, x)) + 360) % 360;
-};
+}
 
-/** Fast approximate distance in meters (Pythagoras on lat/lng). */
-const fastDist = (
-  a: { latitude: number; longitude: number },
-  b: { latitude: number; longitude: number },
-) => {
-  const dLat = a.latitude - b.latitude;
-  const dLng = a.longitude - b.longitude;
-  return Math.sqrt(dLat * dLat + dLng * dLng) * 111_000;
-};
+function lerpBearing(from: number, to: number, t: number): number {
+  let diff = to - from;
+  if (diff > 180) diff -= 360;
+  if (diff < -180) diff += 360;
+  return (from + diff * t + 360) % 360;
+}
 
-/**
- * Snap a GPS point to the nearest segment on a polyline.
- * Returns the projected coordinate and the segment index, or null if
- * the point is more than 100 m away from the polyline.
- */
-const snapToPolyline = (
-  point: { latitude: number; longitude: number },
-  polyline: { latitude: number; longitude: number }[],
-): { coord: { latitude: number; longitude: number }; segIndex: number } | null => {
-  if (!polyline || polyline.length < 2) return null;
+function closestOnSeg(P: Coord, A: Coord, B: Coord): Coord {
+  const dx = B.longitude - A.longitude;
+  const dy = B.latitude - A.latitude;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return A;
+  let t = ((P.longitude - A.longitude) * dx + (P.latitude - A.latitude) * dy) / lenSq;
+  t = Math.max(0, Math.min(1, t));
+  return { latitude: A.latitude + t * dy, longitude: A.longitude + t * dx };
+}
 
+function searchSegs(
+  raw: Coord, poly: Coord[], from: number, to: number,
+): { snapped: Coord; segIdx: number; dist: number } | null {
   let bestDist = Infinity;
-  let bestCoord = polyline[0];
-  let bestIdx = 0;
-
-  for (let i = 0; i < polyline.length - 1; i++) {
-    const a = polyline[i];
-    const b = polyline[i + 1];
-
-    const dx = b.longitude - a.longitude;
-    const dy = b.latitude - a.latitude;
-    const lenSq = dx * dx + dy * dy;
-    if (lenSq === 0) continue;
-
-    let t =
-      ((point.longitude - a.longitude) * dx +
-        (point.latitude - a.latitude) * dy) /
-      lenSq;
-    t = Math.max(0, Math.min(1, t));
-
-    const proj = {
-      latitude: a.latitude + t * dy,
-      longitude: a.longitude + t * dx,
-    };
-
-    const dist = fastDist(point, proj);
+  let bestSnapped: Coord = poly[from] ?? poly[0];
+  let bestIdx = from;
+  const end = Math.min(to, poly.length - 1);
+  for (let i = from; i < end; i++) {
+    const snapped = closestOnSeg(raw, poly[i], poly[i + 1]);
+    const dist = distM(raw, snapped);
     if (dist < bestDist) {
       bestDist = dist;
-      bestCoord = proj;
+      bestSnapped = snapped;
       bestIdx = i;
     }
   }
+  if (bestDist > SNAP_RADIUS_M) return null;
+  return { snapped: bestSnapped, segIdx: bestIdx, dist: bestDist };
+}
 
-  if (bestDist > 300) return null;  // 300m threshold — phone GPS can be 50-150m off in urban areas
-  return { coord: bestCoord, segIndex: bestIdx };
-};
+function snapToPolyline(
+  raw: Coord,
+  poly: Coord[],
+  minSegIdx: number,
+): { snapped: Coord; segIdx: number } | null {
+  if (!poly || poly.length < 2) return null;
 
-// ══════════════════════════════════════════════════════════════════════
+  const fwd = searchSegs(raw, poly, minSegIdx, poly.length);
+  if (fwd) return { snapped: fwd.snapped, segIdx: fwd.segIdx };
+
+  if (minSegIdx > 0) {
+    const full = searchSegs(raw, poly, 0, poly.length);
+    if (full) return { snapped: full.snapped, segIdx: full.segIdx };
+  }
+
+  return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Component
-// ══════════════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────
 
-const DriverMarker = ({
-  latitude,
-  longitude,
-  heading,
-  routeCoordinates,
-  onPress,
-}: DriverMarkerProps) => {
-  // Image-ready flag: flip to false after initial bitmap capture
-  const [imageReady, setImageReady] = useState(false);
+const DriverMarker = React.memo(
+  ({
+    latitude,
+    longitude,
+    heading,
+    routeCoordinates,
+    onRemainingRoute,
+    onPress,
+  }: DriverMarkerProps) => {
+    const [displayCoord, setDisplayCoord] = useState<Coord>({ latitude, longitude });
+    const [rotation, setRotation] = useState(0);
 
-  // Current marker coordinate (state — only updated when GPS changes, NOT during zoom)
-  const [coord, setCoord] = useState({ latitude, longitude });
-  const [rotation, setRotation] = useState(0);
+    // ── Persistent refs ──
+    const prevCoordRef    = useRef<Coord>({ latitude, longitude });
+    const prevBearingRef  = useRef(0);
+    const lastSegIdxRef   = useRef(0);
+    const animFrameRef    = useRef<number | null>(null);
+    const isFirstRef      = useRef(true);
+    const prevPolyRef     = useRef(routeCoordinates);
 
-  // Ref for the native marker (Android's `animateMarkerToCoordinate`)
-  const markerRef = useRef<any>(null);
-  const prevCoordRef = useRef({ latitude, longitude });
-  const prevRotationRef = useRef(0);
-
-  // ── Core effect: fires every time the incoming coordinate changes ──
-  useEffect(() => {
-    const prev = prevCoordRef.current;
-    const dLat = Math.abs(latitude - prev.latitude);
-    const dLng = Math.abs(longitude - prev.longitude);
-
-    // Skip trivially small updates (GPS jitter)
-    if (dLat < 0.000002 && dLng < 0.000002) return;
-
-    // ─ Calculate target position (optionally snapped to road) ─
-    const rawTarget = { latitude, longitude };
-    let target = rawTarget;
-    let targetBearing: number;
-
-    const snapResult = routeCoordinates
-      ? snapToPolyline(rawTarget, routeCoordinates)
-      : null;
-
-    if (snapResult) {
-      // Snapped to polyline — use road segment bearing (most reliable)
-      target = snapResult.coord;
-      const seg = routeCoordinates!;
-      const nextIdx = Math.min(snapResult.segIndex + 1, seg.length - 1);
-      targetBearing = calcBearing(seg[snapResult.segIndex], seg[nextIdx]);
-    } else {
-      // Not snapped — only recalculate bearing if driver actually moved >5m
-      // Otherwise keep previous rotation (prevents random spinning from GPS noise)
-      const movedMeters = fastDist(prev, rawTarget);
-      if (movedMeters > 5) {
-        targetBearing = calcBearing(prev, rawTarget);
-      } else {
-        targetBearing = prevRotationRef.current;
+    // Reset forward-clamp when polyline changes
+    useEffect(() => {
+      if (routeCoordinates !== prevPolyRef.current) {
+        prevPolyRef.current = routeCoordinates;
+        lastSegIdxRef.current = 0;
+        isFirstRef.current = true;
       }
-    }
+    }, [routeCoordinates]);
 
-    // Override with hardware heading when available
-    if (typeof heading === 'number' && Number.isFinite(heading)) {
-      targetBearing = heading;
-    }
+    // Cleanup
+    useEffect(
+      () => () => {
+        if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      },
+      [],
+    );
 
-    // ─ Move the marker ─
-    if (Platform.OS === 'android' && markerRef.current) {
-      // Native Android SDK handles the interpolation on the GPU — no drift during zoom
-      markerRef.current.animateMarkerToCoordinate?.(
-        { latitude: target.latitude, longitude: target.longitude },
-        ANIM_DURATION_MS,
-      );
-    } else {
-      // iOS or fallback: set coordinate directly (instant move)
-      setCoord({ latitude: target.latitude, longitude: target.longitude });
-    }
+    // ── Main GPS update ──
+    useEffect(() => {
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
 
-    // ─ Set rotation instantly ─
-    setRotation(targetBearing);
-    prevRotationRef.current = targetBearing;
-    prevCoordRef.current = target;
-  }, [latitude, longitude, heading, routeCoordinates]);
+      const poly =
+        routeCoordinates && routeCoordinates.length >= 2 ? routeCoordinates : null;
 
-  return (
-    <Marker
-      ref={markerRef}
-      coordinate={coord}
-      rotation={rotation}
-      flat
-      anchor={{ x: 0.5, y: 0.5 }}
-      tracksViewChanges={!imageReady}
-      zIndex={10}
-      onPress={onPress}
-    >
-      <Image
-        source={CAR_IMAGE}
-        style={styles.carImage}
-        resizeMode="contain"
-        onLoad={() => {
-          // Small delay to guarantee Android has captured the bitmap
-          setTimeout(() => setImageReady(true), 300);
-        }}
+      // Skip stale/emulator coords
+      if (poly && poly[0]) {
+        const dLat = Math.abs(latitude - poly[0].latitude);
+        const dLng = Math.abs(longitude - poly[0].longitude);
+        const roughKm = Math.sqrt(dLat * dLat + dLng * dLng) * 111;
+        if (roughKm > 50) return;
+      }
+
+      const rawCoord: Coord = { latitude, longitude };
+
+      let target: Coord = rawCoord;
+      let segIdx = lastSegIdxRef.current;
+      let targetBearing = prevBearingRef.current;
+
+      if (poly) {
+        const snap = snapToPolyline(rawCoord, poly, lastSegIdxRef.current);
+        if (snap) {
+          target = snap.snapped;
+          segIdx = snap.segIdx;
+          lastSegIdxRef.current = segIdx;
+
+          const nextIdx = Math.min(segIdx + 1, poly.length - 1);
+          targetBearing = calcBearing(poly[segIdx], poly[nextIdx]);
+
+          if (onRemainingRoute) {
+            onRemainingRoute([target, ...poly.slice(segIdx + 1)]);
+          }
+        } else {
+          const moved = distM(prevCoordRef.current, rawCoord);
+          if (moved > 3) targetBearing = calcBearing(prevCoordRef.current, rawCoord);
+        }
+      } else {
+        if (typeof heading === 'number' && Number.isFinite(heading)) {
+          targetBearing = heading;
+        } else {
+          const moved = distM(prevCoordRef.current, rawCoord);
+          if (moved > 3) targetBearing = calcBearing(prevCoordRef.current, rawCoord);
+        }
+      }
+
+      const movedM = distM(prevCoordRef.current, target);
+      if (!isFirstRef.current && movedM < 0.5) return;
+      isFirstRef.current = false;
+
+      const from = { ...prevCoordRef.current };
+      const fromBearing = prevBearingRef.current;
+      prevCoordRef.current = target;
+      prevBearingRef.current = targetBearing;
+
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = null;
+      }
+
+      const startTime = performance.now();
+      const tick = (now: number) => {
+        const t = Math.min((now - startTime) / ANIM_MS, 1);
+        setDisplayCoord({
+          latitude:  lerp(from.latitude,  target.latitude,  t),
+          longitude: lerp(from.longitude, target.longitude, t),
+        });
+        setRotation(lerpBearing(fromBearing, targetBearing, t));
+        if (t < 1) {
+          animFrameRef.current = requestAnimationFrame(tick);
+        } else {
+          animFrameRef.current = null;
+        }
+      };
+      animFrameRef.current = requestAnimationFrame(tick);
+    }, [latitude, longitude, heading, routeCoordinates]);
+
+    return (
+      <Marker
+        coordinate={displayCoord}
+        rotation={rotation}
+        anchor={{ x: 0.5, y: 0.5 }}
+        flat
+        tracksViewChanges={false}
+        image={CAR_IMAGE}
+        style={{ width: 32, height: 32 }}
+        zIndex={10}
+        onPress={onPress}
       />
-    </Marker>
-  );
-};
-
-const styles = StyleSheet.create({
-  carImage: {
-    width: MARKER_SIZE,
-    height: MARKER_SIZE,
+    );
   },
-});
+);
 
-export default React.memo(DriverMarker);
+export default DriverMarker;

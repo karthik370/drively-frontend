@@ -249,7 +249,7 @@ const MenuItem = ({
   title,
   onPress,
 }: {
-  icon: string;
+  icon: any;
   title: string;
   onPress?: () => void;
 }) => (

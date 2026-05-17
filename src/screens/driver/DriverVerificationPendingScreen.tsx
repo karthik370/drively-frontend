@@ -15,7 +15,7 @@ const DriverVerificationPendingScreen = () => {
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         <View style={styles.iconWrap}>
-          <Icon name="shield-clock" size={44} color="#C9A84C" />
+          <Icon name="shield-check-outline" size={44} color="#C9A84C" />
         </View>
 
         <Text style={styles.title}>Verification Pending</Text>

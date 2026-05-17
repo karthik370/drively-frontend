@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { InteractionManager } from 'react-native';
 import { Image } from 'react-native';
 import {
   View,
@@ -24,6 +23,7 @@ import {
   clearRoute,
   setDropAddress,
   setDropLocation,
+  setDriverLocation,
   setPickupAddress,
   setPickupLocation,
   setRoute,
@@ -59,7 +59,7 @@ import {
 import { formatMaskedPhone } from '../../utils/phoneMask';
 import socketService from '../../services/socketService';
 import { decodePolyline } from '../../utils/decodePolyline';
-import DriverMarker from '../../components/maps/DriverMarker';
+import DriverMarker, { CAR_IMAGE } from '../../components/maps/DriverMarker';
 import RoutePolyline from '../../components/maps/RoutePolyline';
 import DriverArrivingCard from '../../components/customer/DriverArrivingCard';
 import SearchingForDriverCard from '../../components/customer/SearchingForDriverCard';
@@ -95,15 +95,6 @@ const TrackingScreen = ({ navigation, route }: any) => {
   const dispatch = useAppDispatch();
   const insets = useSafeAreaInsets();
 
-  // ── Screen-ready gate: defer heavy work until navigation transition completes ──
-  const [screenReady, setScreenReady] = React.useState(false);
-  useEffect(() => {
-    const handle = InteractionManager.runAfterInteractions(() => {
-      setScreenReady(true);
-    });
-    return () => handle.cancel();
-  }, []);
-
   const booking = useAppSelector((s) => s.booking.currentBooking);
   const authedUserType = useAppSelector((s) => s.auth.user?.userType);
   const authedUserId = useAppSelector((s) => s.auth.user?.id);
@@ -134,6 +125,10 @@ const TrackingScreen = ({ navigation, route }: any) => {
   const [qrLoading, setQrLoading] = React.useState(false);
   const qrPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [nearbyDrivers, setNearbyDrivers] = React.useState<NearbyDriver[]>([]);
+  // Remaining polyline ahead of driver — updated by DriverMarker's road-snapping pipeline
+  const [remainingRoute, setRemainingRoute] = React.useState<{ latitude: number; longitude: number }[] | null>(null);
+  // Reset remaining route when the base decoded route changes (e.g. pickup→drop transition)
+  React.useEffect(() => { setRemainingRoute(null); }, [decodedRoute]);
   const [shareUrl, setShareUrl] = React.useState<string | null>(null);
   const [isSharing, setIsSharing] = React.useState(false);
   const [isFavDriver, setIsFavDriver] = React.useState(false);
@@ -303,6 +298,21 @@ const TrackingScreen = ({ navigation, route }: any) => {
   const isDriverForThisBooking = Boolean(
     authedUserId && ((booking as any)?.driver?.id ? String((booking as any).driver.id) === String(authedUserId) : true)
   );
+
+  // ── Auto-navigate back when booking is cleared (e.g. by socket cancel event) ──
+  // This catches cases where the socket handler dispatches clearCurrentBooking()
+  // but the screen has no trigger to unmount itself.
+  useEffect(() => {
+    if (isCancellingRef.current) return; // User is actively cancelling — don't fight navigation
+    if (!booking) {
+      // Booking was cleared by socket handler — go back
+      navigation.navigate('Tabs');
+      return;
+    }
+    if (booking.status === 'CANCELLED') {
+      navigation.navigate('Tabs');
+    }
+  }, [booking, booking?.status, navigation]);
 
   // Check if driver is already a favorite on mount
   useEffect(() => {
@@ -936,16 +946,16 @@ const TrackingScreen = ({ navigation, route }: any) => {
       return {
         latitude: 12.9716,
         longitude: 77.5946,
-        latitudeDelta: 0.05,
-        longitudeDelta: 0.05,
+        latitudeDelta: 0.02,
+        longitudeDelta: 0.02,
       };
     }
 
     return {
       latitude: base.latitude,
       longitude: base.longitude,
-      latitudeDelta: 0.02,
-      longitudeDelta: 0.02,
+      latitudeDelta: 0.012,
+      longitudeDelta: 0.012,
     };
   }, [driverLocation, effectiveDropLocation, effectivePickupLocation]);
 
@@ -968,6 +978,24 @@ const TrackingScreen = ({ navigation, route }: any) => {
   const lastCameraDriverRef = useRef<{ latitude: number; longitude: number } | null>(null);
   const lastCameraTimestampRef = useRef<number>(0);
 
+  // Edge padding for fitToCoordinates — accounts for header (top) and bottom sheet
+  const FIT_PADDING = { top: 250, bottom: 350, left: 60, right: 60 };
+
+  // Helper: sample key polyline waypoints for fitToCoordinates
+  // (fitting to all 500+ polyline points is wasteful; 10 evenly-spaced samples is enough)
+  const getPolylineSamples = React.useCallback(() => {
+    const route = decodedRoute;
+    if (!route || route.length < 2) return [];
+    if (route.length <= 10) return [...route];
+    const step = Math.floor(route.length / 10);
+    const samples: { latitude: number; longitude: number }[] = [];
+    for (let i = 0; i < route.length; i += step) {
+      samples.push(route[i]);
+    }
+    samples.push(route[route.length - 1]); // Always include last point
+    return samples;
+  }, [decodedRoute]);
+
   const fitMapToRoute = React.useCallback((
     overrideDriver?: { latitude: number; longitude: number } | null,
     overrideTarget?: { latitude: number; longitude: number } | null,
@@ -977,24 +1005,28 @@ const TrackingScreen = ({ navigation, route }: any) => {
     if (!isActive) return;
 
     const driverFallback = isDriverModeRef.current ? (currentLocation ?? driverLocation) : (driverLocation ?? currentLocation);
-    const driverPos = overrideDriver ?? routeStartRef.current ?? driverFallback ?? null;
+    let driverPos = overrideDriver ?? routeStartRef.current ?? driverFallback ?? null;
     const targetPos = overrideTarget ?? routeTargetRef.current ?? null;
 
-    // Round trips in progress: no target — follow driver
+    // Safety: if driver coords are > 500 km from target, it's a stale/emulator location — ignore it
+    if (driverPos && targetPos) {
+      const dLat = Math.abs(driverPos.latitude - targetPos.latitude);
+      const dLng = Math.abs(driverPos.longitude - targetPos.longitude);
+      const roughKm = Math.sqrt(dLat * dLat + dLng * dLng) * 111;
+      if (roughKm > 500) {
+        driverPos = null; // treat as unknown until real GPS arrives
+      }
+    }
+
+    // Round trips in progress: no target — fit driver + pickup
     if (!targetPos) {
       if (!driverPos) return;
       const pickup = effectivePickupRef.current;
       if (pickup) {
-        const dLat = Math.abs(driverPos.latitude - pickup.latitude);
-        const dLng = Math.abs(driverPos.longitude - pickup.longitude);
-        const latDelta = Math.max(dLat * 2.5, 0.005);
-        const lngDelta = Math.max(dLng * 2.5, 0.005);
-        mapRef.current?.animateToRegion({
-          latitude: (driverPos.latitude + pickup.latitude) / 2 - latDelta * 0.15,
-          longitude: (driverPos.longitude + pickup.longitude) / 2,
-          latitudeDelta: latDelta,
-          longitudeDelta: lngDelta,
-        }, 600);
+        mapRef.current?.fitToCoordinates(
+          [driverPos, pickup],
+          { edgePadding: FIT_PADDING, animated: true },
+        );
       }
       return;
     }
@@ -1009,41 +1041,15 @@ const TrackingScreen = ({ navigation, route }: any) => {
       return;
     }
 
-    // ── Phase-based camera (the key difference from before) ──
-    const isTripPhase = status && ['STARTED', 'IN_PROGRESS'].includes(status);
-    const dLat = Math.abs(driverPos.latitude - targetPos.latitude);
-    const dLng = Math.abs(driverPos.longitude - targetPos.longitude);
-    const approxDistDeg = Math.max(dLat, dLng);
-
-    if (isTripPhase && approxDistDeg > 0.018) {
-      // ── TRIP IN PROGRESS + drop is far (>2km) ──
-      // Follow the driver at a close zoom showing ~1km of road ahead.
-      // Shift center slightly towards the target so the road ahead is visible.
-      const bearingLat = targetPos.latitude > driverPos.latitude ? 0.002 : -0.002;
-      const bearingLng = targetPos.longitude > driverPos.longitude ? 0.002 : -0.002;
-      mapRef.current?.animateToRegion({
-        latitude: driverPos.latitude + bearingLat,
-        longitude: driverPos.longitude + bearingLng,
-        latitudeDelta: 0.008,
-        longitudeDelta: 0.008,
-      }, 600);
-      return;
-    }
-
-    // ── ACCEPTED phase OR close to drop (<2km) OR COMPLETED ──
-    // Fit both driver + target — they're close enough for a good zoom
-    const latDelta = Math.max(dLat * 2.2, 0.005);
-    const lngDelta = Math.max(dLng * 2.2, 0.005);
-    const centerLat = (driverPos.latitude + targetPos.latitude) / 2 - latDelta * 0.15;
-    const centerLng = (driverPos.longitude + targetPos.longitude) / 2;
-
-    mapRef.current?.animateToRegion({
-      latitude: centerLat,
-      longitude: centerLng,
-      latitudeDelta: latDelta,
-      longitudeDelta: lngDelta,
-    }, 600);
-  }, [driverLocation]);
+    // ── Always fitToCoordinates driver + target + poly samples ──
+    // Matches RideConfirmScreen's proven behavior: clean, predictable zoom
+    const polySamples = getPolylineSamples();
+    const pointsToFit: { latitude: number; longitude: number }[] = [driverPos, targetPos, ...polySamples];
+    mapRef.current?.fitToCoordinates(
+      pointsToFit,
+      { edgePadding: FIT_PADDING, animated: true },
+    );
+  }, [driverLocation, getPolylineSamples]);
   // Store fitMapToRoute in a ref so effects don't depend on it
   // (fitMapToRoute changes every time driverLocation updates, which was killing the timeouts!)
   const fitMapToRouteRef = useRef(fitMapToRoute);
@@ -1167,35 +1173,51 @@ const TrackingScreen = ({ navigation, route }: any) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routePolyline]);
 
-  // 3) Periodic follow: recenter as driver moves
+  // 2b) First-driver-location trigger — fit map when driver location first becomes available
+  const hadDriverLocRef = useRef(false);
   useEffect(() => {
-    const status = bookingStatus;
+    if (!driverLocation) {
+      hadDriverLocRef.current = false;
+      return;
+    }
+    if (hadDriverLocRef.current) return; // Only fire once per session
+    hadDriverLocRef.current = true;
+
+    const status = bookingStatusRef.current;
+    const isActive = status && ['ACCEPTED', 'DRIVER_ARRIVING', 'ARRIVED', 'STARTED', 'IN_PROGRESS', 'COMPLETED'].includes(status);
+    if (!isActive) return;
+
+    // Driver location just appeared — fit map to show driver + target + polyline
+    setTimeout(() => {
+      fitMapToRouteRef.current();
+    }, 400);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [driverLocation]);
+
+  // 3) Continuous camera following — reacts to location changes (like Uber)
+  // Uses driverLocation as dependency so camera follows in real-time, not on a timer
+  useEffect(() => {
+    const status = bookingStatusRef.current;
     if (!status) return;
     const isActive = ['ACCEPTED', 'DRIVER_ARRIVING', 'ARRIVED', 'STARTED', 'IN_PROGRESS', 'COMPLETED'].includes(status);
     if (!isActive) return;
+    if (isMapPannedRef.current) return;
 
-    const timer = setInterval(() => {
-      const driverPos = routeStartRef.current;
-      if (!driverPos) return;
+    const driverPos = routeStartRef.current;
+    if (!driverPos) return;
 
-      const now = Date.now();
-      const prev = lastCameraDriverRef.current;
-      const movedMeters = prev ? distanceApproxMeters(prev, driverPos) : Number.POSITIVE_INFINITY;
+    const now = Date.now();
+    const prev = lastCameraDriverRef.current;
+    const movedMeters = prev ? distanceApproxMeters(prev, driverPos) : Number.POSITIVE_INFINITY;
 
-      // Suspend auto-following if the user is looking around the map
-      if (isMapPannedRef.current) return;
-
-      // Recenter every 4s or when driver moves >20m — responsive like Uber
-      if (movedMeters >= 20 || now - lastCameraTimestampRef.current >= 4000) {
-        lastCameraTimestampRef.current = now;
-        lastCameraDriverRef.current = { latitude: driverPos.latitude, longitude: driverPos.longitude };
-        fitMapToRouteRef.current();
-      }
-    }, 3000);
-
-    return () => clearInterval(timer);
+    // Recenter when driver moves >15m or every 3s — smooth continuous tracking
+    if (movedMeters >= 15 || now - lastCameraTimestampRef.current >= 3000) {
+      lastCameraTimestampRef.current = now;
+      lastCameraDriverRef.current = { latitude: driverPos.latitude, longitude: driverPos.longitude };
+      fitMapToRouteRef.current();
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookingStatus]);
+  }, [driverLocation, currentLocation, bookingStatus]);
 
   // ── Route calculation — timer-based (checks every 15s during trip, 20s before) ──
   // SINGLE source of truth: Google Route API provides ETA and distance
@@ -1405,25 +1427,6 @@ const TrackingScreen = ({ navigation, route }: any) => {
     setIsRatingModalVisible(true);
   }, [canCustomerRateDriver]);
 
-  // Show minimal loading UI during navigation transition
-  if (!screenReady) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Icon name="arrow-left" size={24} color="#C9A84C" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Track Ride</Text>
-          <View style={{ width: 24 }} />
-        </View>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color="#C9A84C" />
-          <Text style={{ color: '#8A8A8A', marginTop: 12, fontSize: 14, fontWeight: '600' }}>Loading ride…</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
@@ -1443,17 +1446,59 @@ const TrackingScreen = ({ navigation, route }: any) => {
           style={StyleSheet.absoluteFill}
           initialRegion={initialRegion}
           onPanDrag={handleMapPan}
+          onMapReady={() => {
+            // Center map based on current booking phase
+            setTimeout(() => {
+              const status = bookingStatusRef.current;
+              const pickup = effectivePickupRef.current;
+              const isActive = status && ['ACCEPTED', 'DRIVER_ARRIVING', 'ARRIVED', 'STARTED', 'IN_PROGRESS', 'COMPLETED'].includes(status);
+
+              if (isActive) {
+                // Active trip — fit to driver + target + polyline
+                const { driverPos, target } = getMapEndpoints();
+                if (driverPos && target) {
+                  const polySamples = getPolylineSamples();
+                  mapRef.current?.fitToCoordinates([driverPos, target, ...polySamples], {
+                    edgePadding: FIT_PADDING,
+                    animated: true,
+                  });
+                } else if (target) {
+                  mapRef.current?.animateToRegion({
+                    latitude: target.latitude,
+                    longitude: target.longitude,
+                    latitudeDelta: 0.012,
+                    longitudeDelta: 0.012,
+                  }, 300);
+                }
+              } else if (pickup) {
+                // SEARCHING / REQUESTED — center on pickup, zoomed out to see nearby drivers
+                mapRef.current?.animateToRegion({
+                  latitude: pickup.latitude,
+                  longitude: pickup.longitude,
+                  latitudeDelta: 0.025,
+                  longitudeDelta: 0.025,
+                }, 300);
+              }
+            }, 500);
+          }}
         >
-          {decodedRoute && decodedRoute.length > 1 && !isRoundTripStarted ? (
-            <RoutePolyline coordinates={decodedRoute} strokeWidth={5} strokeColor="#4285F4" animated />
-          ) : null}
+          {/* Polyline: ONLY after driver accepts (ACCEPTED+), never during SEARCHING */}
+          {(() => {
+            const isActive = bookingStatus && ['ACCEPTED','DRIVER_ARRIVING','ARRIVED','STARTED','IN_PROGRESS','COMPLETED'].includes(bookingStatus as string);
+            if (!isActive || isRoundTripStarted) return null;
+            const isTrip = ['STARTED', 'IN_PROGRESS'].includes(bookingStatus as string);
+            const coords = (isTrip && remainingRoute && remainingRoute.length > 1)
+              ? remainingRoute
+              : (decodedRoute && decodedRoute.length > 1 ? decodedRoute : null);
+            return coords ? <RoutePolyline coordinates={coords} strokeWidth={5} strokeColor="#4285F4" animated /> : null;
+          })()}
           {stablePickupCoord ? (
             <Marker
               coordinate={stablePickupCoord}
               tracksViewChanges={false}
               zIndex={5}
               title="Pickup"
-              pinColor="#10b981"
+              pinColor="green"
             />
           ) : null}
           {stableDropCoord && !isRoundTripStarted ? (
@@ -1462,7 +1507,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
               tracksViewChanges={false}
               zIndex={5}
               title="Drop"
-              pinColor="#ef4444"
+              pinColor="red"
             />
           ) : null}
           {!isDriverMode && isWaitingForDriver
@@ -1474,26 +1519,29 @@ const TrackingScreen = ({ navigation, route }: any) => {
                 <Marker
                   key={String((d as any)?.id)}
                   coordinate={{ latitude: lat, longitude: lng }}
-                  tracksViewChanges={false}
+                  tracksViewChanges={true}
                   anchor={{ x: 0.5, y: 0.5 }}
                   flat
                   zIndex={3}
                 >
                   <Image
-                    source={require('../../../assets/markers/car_top.png')}
+                    source={CAR_IMAGE}
                     style={{ width: 22, height: 22 }}
                     resizeMode="contain"
+                    fadeDuration={0}
                   />
                 </Marker>
               );
             })
             : null}
-          {driverLocation ? (
+          {/* Assigned driver marker: ONLY after ACCEPTED, not during SEARCHING */}
+          {driverLocation && bookingStatus && ['ACCEPTED','DRIVER_ARRIVING','ARRIVED','STARTED','IN_PROGRESS','COMPLETED'].includes(bookingStatus as string) ? (
             <DriverMarker
               latitude={driverLocation.latitude}
               longitude={driverLocation.longitude}
               heading={(driverLocation as any)?.heading}
               routeCoordinates={decodedRoute}
+              onRemainingRoute={setRemainingRoute}
             />
           ) : null}
         </MapView>
@@ -1796,10 +1844,15 @@ const TrackingScreen = ({ navigation, route }: any) => {
                   onPress: async () => {
                     try {
                       isCancellingRef.current = true; // Prevent 'searching' flash
-                      await cancelBooking(booking.id, 'Cancelled by driver', 'DRIVER');
+                      const bId = booking.id;
+                      await cancelBooking(bId, 'Cancelled by driver', 'DRIVER');
+                      // Leave the booking socket room so we don't get stale events
+                      try { socketService.emit('booking:leave', bId); } catch {}
                       dispatch(clearCurrentBooking());
                       dispatch(clearLocations());
                       dispatch(clearRoute());
+                      dispatch(setDriverLocation(null as any));
+                      isCancellingRef.current = false;
                       navigation.navigate('Tabs');
                     } catch (e: any) {
                       isCancellingRef.current = false;

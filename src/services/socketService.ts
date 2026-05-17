@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client';
+import { Alert } from 'react-native';
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import * as Notifications from 'expo-notifications';
@@ -234,9 +235,15 @@ class SocketService {
       } catch {}
     });
 
+    // Dedup: customer receives booking:accepted from both user: room and booking: room
+    let lastAcceptedId = '';
     this.socket.on('booking:accepted', (data: any) => {
       const bookingId = String(data?.bookingId ?? '');
       if (!bookingId) return;
+      // Skip duplicate events for the same booking
+      if (lastAcceptedId === bookingId) return;
+      lastAcceptedId = bookingId;
+
       store.dispatch(updateBookingStatus({ id: bookingId, status: 'ACCEPTED' }));
 
       // Immediately update OTP from socket event (for customer)
@@ -244,104 +251,163 @@ class SocketService {
         store.dispatch(updateBookingOtp({ id: bookingId, otp: String(data.otp) }));
       }
 
-      try {
-        const userType = String((store.getState().auth.user as any)?.userType ?? '');
-        if (userType === 'CUSTOMER' || userType === 'BOTH') {
-          void Notifications.scheduleNotificationAsync({
-            content: {
-              title: 'Driver accepted',
-              body: 'A driver has accepted your booking. Open Tracking to see live updates.',
-              sound: 'default',
-            },
-            trigger: null,
-          });
-        }
-      } catch {
-      }
+      // No local notification here — the backend already sends a push notification
+      // to avoid double alerts.
 
       try {
         this.joinBooking(bookingId);
       } catch {
       }
 
-      void (async () => {
-        try {
-          const current = store.getState().booking.currentBooking;
-          if (current && String(current.id) !== bookingId) {
-            return;
-          }
+      // PERF: If socket payload includes full driver + booking data, use it directly
+      // This eliminates a 300-800ms REST API call to getBookingDetails()
+      const raw = data?.booking;
+      const driverData = data?.driver;
+      const current = store.getState().booking.currentBooking;
 
-          const raw = await getBookingDetails(bookingId);
-          const now = new Date().toISOString();
-
-          const pickupLat = Number((raw as any)?.pickupLocationLat);
-          const pickupLng = Number((raw as any)?.pickupLocationLng);
-          if (Number.isFinite(pickupLat) && Number.isFinite(pickupLng)) {
-            store.dispatch(setPickupLocation({ latitude: pickupLat, longitude: pickupLng }));
-          }
-          store.dispatch(setPickupAddress(typeof (raw as any)?.pickupAddress === 'string' ? (raw as any).pickupAddress : null));
-
-          const dropLatRaw = (raw as any)?.dropLocationLat;
-          const dropLngRaw = (raw as any)?.dropLocationLng;
-          const dropLat = dropLatRaw !== null && dropLatRaw !== undefined ? Number(dropLatRaw) : NaN;
-          const dropLng = dropLngRaw !== null && dropLngRaw !== undefined ? Number(dropLngRaw) : NaN;
-          if (Number.isFinite(dropLat) && Number.isFinite(dropLng)) {
-            store.dispatch(setDropLocation({ latitude: dropLat, longitude: dropLng }));
-          }
-          store.dispatch(setDropAddress(typeof (raw as any)?.dropAddress === 'string' ? (raw as any).dropAddress : null));
-
-          store.dispatch(
-            setCurrentBooking({
-              id: String((raw as any)?.id ?? bookingId),
-              bookingNumber: String((raw as any)?.bookingNumber ?? ''),
-              status: ((raw as any)?.status ?? BookingStatus.ACCEPTED) as any,
-              customer: (raw as any)?.customer as any,
-              driver: (raw as any)?.driver as any,
-              otp: (raw as any)?.otp ?? null,
-              pickupLocation: {
-                latitude: Number.isFinite(pickupLat) ? pickupLat : 0,
-                longitude: Number.isFinite(pickupLng) ? pickupLng : 0,
-              },
-              pickupAddress: String((raw as any)?.pickupAddress ?? 'Pickup'),
-              dropLocation:
-                Number.isFinite(dropLat) && Number.isFinite(dropLng)
-                  ? { latitude: dropLat, longitude: dropLng }
-                  : undefined,
-              dropAddress: typeof (raw as any)?.dropAddress === 'string' ? (raw as any).dropAddress : undefined,
-              scheduledTime: (raw as any)?.scheduledTime ? String((raw as any).scheduledTime) : undefined,
-              vehicleType: ((raw as any)?.vehicleType ?? VehicleType.CAR) as any,
-              tripType: (raw as any)?.tripType as any,
-              totalAmount:
-                typeof (raw as any)?.totalAmount === 'number'
-                  ? (raw as any).totalAmount
-                  : Number((raw as any)?.totalAmount || 0),
-              paymentMethod: ((raw as any)?.paymentMethod ?? PaymentMethod.CASH) as any,
-              createdAt: (raw as any)?.createdAt ? String((raw as any).createdAt) : now,
-              updatedAt: (raw as any)?.updatedAt ? String((raw as any).updatedAt) : now,
-            })
-          );
-        } catch {
+      if (raw && (raw.id || raw.bookingId)) {
+        // We have full data from socket — use directly, no REST call needed
+        const now = new Date().toISOString();
+        const pickupLat = Number(raw.pickupLocationLat);
+        const pickupLng = Number(raw.pickupLocationLng);
+        if (Number.isFinite(pickupLat) && Number.isFinite(pickupLng)) {
+          store.dispatch(setPickupLocation({ latitude: pickupLat, longitude: pickupLng }));
         }
-      })();
+        store.dispatch(setPickupAddress(typeof raw.pickupAddress === 'string' ? raw.pickupAddress : null));
+
+        const dropLat = raw.dropLocationLat !== null && raw.dropLocationLat !== undefined ? Number(raw.dropLocationLat) : NaN;
+        const dropLng = raw.dropLocationLng !== null && raw.dropLocationLng !== undefined ? Number(raw.dropLocationLng) : NaN;
+        if (Number.isFinite(dropLat) && Number.isFinite(dropLng)) {
+          store.dispatch(setDropLocation({ latitude: dropLat, longitude: dropLng }));
+        }
+        store.dispatch(setDropAddress(typeof raw.dropAddress === 'string' ? raw.dropAddress : null));
+
+        store.dispatch(
+          setCurrentBooking({
+            id: String(raw.id ?? bookingId),
+            bookingNumber: String(raw.bookingNumber ?? ''),
+            status: (raw.status ?? BookingStatus.ACCEPTED) as any,
+            customer: raw.customer ?? (current as any)?.customer ?? undefined,
+            driver: driverData ?? raw.driver ?? undefined,
+            otp: raw.otp ?? data?.otp ?? null,
+            pickupLocation: {
+              latitude: Number.isFinite(pickupLat) ? pickupLat : 0,
+              longitude: Number.isFinite(pickupLng) ? pickupLng : 0,
+            },
+            pickupAddress: String(raw.pickupAddress ?? 'Pickup'),
+            dropLocation:
+              Number.isFinite(dropLat) && Number.isFinite(dropLng)
+                ? { latitude: dropLat, longitude: dropLng }
+                : undefined,
+            dropAddress: typeof raw.dropAddress === 'string' ? raw.dropAddress : undefined,
+            scheduledTime: raw.scheduledTime ? String(raw.scheduledTime) : undefined,
+            vehicleType: (raw.vehicleType ?? VehicleType.CAR) as any,
+            tripType: raw.tripType as any,
+            totalAmount:
+              typeof raw.totalAmount === 'number'
+                ? raw.totalAmount
+                : Number(raw.totalAmount || 0),
+            paymentMethod: (raw.paymentMethod ?? PaymentMethod.CASH) as any,
+            createdAt: raw.createdAt ? String(raw.createdAt) : now,
+            updatedAt: raw.updatedAt ? String(raw.updatedAt) : now,
+          })
+        );
+      } else {
+        // Fallback: socket didn't include full data — fetch via REST (legacy path)
+        if (current && String(current.id) !== bookingId) return;
+        void (async () => {
+          try {
+            const fetched = await getBookingDetails(bookingId);
+            const now = new Date().toISOString();
+            const pickupLat = Number((fetched as any)?.pickupLocationLat);
+            const pickupLng = Number((fetched as any)?.pickupLocationLng);
+            if (Number.isFinite(pickupLat) && Number.isFinite(pickupLng)) {
+              store.dispatch(setPickupLocation({ latitude: pickupLat, longitude: pickupLng }));
+            }
+            store.dispatch(setPickupAddress(typeof (fetched as any)?.pickupAddress === 'string' ? (fetched as any).pickupAddress : null));
+            const dropLat = (fetched as any)?.dropLocationLat != null ? Number((fetched as any).dropLocationLat) : NaN;
+            const dropLng = (fetched as any)?.dropLocationLng != null ? Number((fetched as any).dropLocationLng) : NaN;
+            if (Number.isFinite(dropLat) && Number.isFinite(dropLng)) {
+              store.dispatch(setDropLocation({ latitude: dropLat, longitude: dropLng }));
+            }
+            store.dispatch(setDropAddress(typeof (fetched as any)?.dropAddress === 'string' ? (fetched as any).dropAddress : null));
+            store.dispatch(
+              setCurrentBooking({
+                id: String((fetched as any)?.id ?? bookingId),
+                bookingNumber: String((fetched as any)?.bookingNumber ?? ''),
+                status: ((fetched as any)?.status ?? BookingStatus.ACCEPTED) as any,
+                customer: (fetched as any)?.customer as any,
+                driver: (fetched as any)?.driver as any,
+                otp: (fetched as any)?.otp ?? null,
+                pickupLocation: {
+                  latitude: Number.isFinite(pickupLat) ? pickupLat : 0,
+                  longitude: Number.isFinite(pickupLng) ? pickupLng : 0,
+                },
+                pickupAddress: String((fetched as any)?.pickupAddress ?? 'Pickup'),
+                dropLocation:
+                  Number.isFinite(dropLat) && Number.isFinite(dropLng)
+                    ? { latitude: dropLat, longitude: dropLng }
+                    : undefined,
+                dropAddress: typeof (fetched as any)?.dropAddress === 'string' ? (fetched as any).dropAddress : undefined,
+                scheduledTime: (fetched as any)?.scheduledTime ? String((fetched as any).scheduledTime) : undefined,
+                vehicleType: ((fetched as any)?.vehicleType ?? VehicleType.CAR) as any,
+                tripType: (fetched as any)?.tripType as any,
+                totalAmount:
+                  typeof (fetched as any)?.totalAmount === 'number'
+                    ? (fetched as any).totalAmount
+                    : Number((fetched as any)?.totalAmount || 0),
+                paymentMethod: ((fetched as any)?.paymentMethod ?? PaymentMethod.CASH) as any,
+                createdAt: (fetched as any)?.createdAt ? String((fetched as any).createdAt) : now,
+                updatedAt: (fetched as any)?.updatedAt ? String((fetched as any).updatedAt) : now,
+              })
+            );
+          } catch {}
+        })();
+      }
     });
 
     this.socket.on('booking:cancelled', (data: any) => {
       const bookingId = String(data?.bookingId ?? '');
       if (!bookingId) return;
+      const cancelledBy = String(data?.cancelledBy ?? '').toUpperCase();
+
+      const currentId = store.getState().booking.currentBooking?.id;
+      const isMyBooking = currentId && String(currentId) === bookingId;
+      const userType = String((store.getState().auth.user as any)?.userType ?? '').toUpperCase();
+      const isCustomer = userType === 'CUSTOMER' || userType === 'BOTH';
+
+      // If driver cancelled and this is the customer's active booking,
+      // reset to SEARCHING so the "Finding driver" screen shows again
+      if (isMyBooking && cancelledBy === 'DRIVER' && isCustomer) {
+        store.dispatch(updateBookingStatus({ id: bookingId, status: 'SEARCHING' }));
+        store.dispatch(clearRoute());
+        store.dispatch(setDriverLocation(null as any));
+
+        Alert.alert(
+          'Driver Cancelled',
+          'Your driver cancelled the ride. Finding a new driver for you...',
+          [{ text: 'OK' }],
+        );
+
+        store.dispatch(
+          addNotification({
+            type: 'warning',
+            message: 'Driver cancelled. Finding a new driver...',
+            bookingId,
+          })
+        );
+        return;
+      }
+
       store.dispatch(updateBookingStatus({ id: bookingId, status: 'CANCELLED' }));
       store.dispatch(removeBookingRequest(bookingId));
 
-      const currentId = store.getState().booking.currentBooking?.id;
-      if (currentId && String(currentId) === bookingId) {
-        const currentStatus = String(store.getState().booking.currentBooking?.status ?? '');
-        if (currentStatus === 'SEARCHING' || currentStatus === 'REQUESTED') {
-          store.dispatch(clearRoute());
-          store.dispatch(setDriverLocation(null as any));
-        } else {
-          store.dispatch(clearCurrentBooking());
-          store.dispatch(clearLocations());
-          store.dispatch(clearRoute());
-        }
+      if (isMyBooking) {
+        // Always fully clean up on cancel — prevents stale data in any state
+        store.dispatch(clearCurrentBooking());
+        store.dispatch(clearLocations());
+        store.dispatch(clearRoute());
+        store.dispatch(setDriverLocation(null as any));
       }
 
       store.dispatch(
@@ -351,6 +417,59 @@ class SocketService {
           bookingId,
         })
       );
+    });
+
+    // Handle booking:status from backend (e.g. driver pre-start cancel resets to SEARCHING)
+    this.socket.on('booking:status', (data: any) => {
+      const bookingId = String(data?.bookingId ?? '');
+      const newStatus = String(data?.status ?? '');
+      if (!bookingId || !newStatus) return;
+
+      const currentId = store.getState().booking.currentBooking?.id;
+      if (!currentId || String(currentId) !== bookingId) return;
+
+      const prevStatus = String(store.getState().booking.currentBooking?.status ?? '');
+      const userType = String((store.getState().auth.user as any)?.userType ?? '').toUpperCase();
+      const isCustomer = userType === 'CUSTOMER' || userType === 'BOTH';
+
+      // Driver cancelled pre-start → backend reset to SEARCHING
+      if (isCustomer && newStatus === 'SEARCHING' && prevStatus !== 'SEARCHING' && prevStatus !== 'REQUESTED') {
+        store.dispatch(updateBookingStatus({ id: bookingId, status: 'SEARCHING' }));
+        store.dispatch(clearRoute());
+        store.dispatch(setDriverLocation(null as any));
+
+        // Immediate visible alert (works even when app is in foreground)
+        Alert.alert(
+          'Driver Cancelled',
+          'Your driver cancelled the ride. Finding a new driver for you...',
+          [{ text: 'OK' }],
+        );
+
+        try {
+          void Notifications.scheduleNotificationAsync({
+            content: {
+              title: 'Driver cancelled',
+              body: 'Your driver cancelled the ride. Finding a new driver for you...',
+              sound: 'default',
+            },
+            trigger: null,
+          });
+        } catch {}
+
+        store.dispatch(
+          addNotification({
+            type: 'warning',
+            message: 'Driver cancelled. Finding a new driver...',
+            bookingId,
+          })
+        );
+        return;
+      }
+
+      // Generic status update — but ignore SEARCHING for drivers
+      // (drivers get booking:cancelled separately, processing SEARCHING causes stale data)
+      if (!isCustomer && newStatus === 'SEARCHING') return;
+      store.dispatch(updateBookingStatus({ id: bookingId, status: newStatus }));
     });
 
     this.socket.on('booking:offer-removed', (data: any) => {
