@@ -83,176 +83,86 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
   const kycLoading = useAppSelector((s) => s.driver.kycLoading);
 
   const [loading, setLoading] = useState(false);
-  const [digiboostHtml, setDigiboostHtml] = useState<string | null>(null);
+  const [digilockerUrl, setDigilockerUrl] = useState<string | null>(null);
   const [showWebView, setShowWebView] = useState(false);
   const [panNumber, setPanNumber] = useState('');
   const [dlNumber, setDlNumber] = useState('');
   const [dobInput, setDobInput] = useState('');
   const [selfieUri, setSelfieUri] = useState<string | null>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Load KYC status on mount
   useEffect(() => {
     dispatch(loadKycStatus());
   }, [dispatch]);
 
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+    };
+  }, []);
+
   const activeStep = getActiveStep(kyc);
   const progress = getProgressPercent(kyc);
 
-  // ── Step 1: DigiLocker Aadhaar Verification via DigiBoost SDK ───────────
+  // ── Auto-poll: check DigiLocker completion while WebView is open ────────
+  const startPolling = useCallback(() => {
+    // Clear any existing polling
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+    }
+
+    pollingRef.current = setInterval(async () => {
+      try {
+        const status = await checkDigiLockerStatus();
+        if (status.aadhaarVerified) {
+          // Stop polling
+          if (pollingRef.current) {
+            clearInterval(pollingRef.current);
+            pollingRef.current = null;
+          }
+          // Close WebView and update state
+          setShowWebView(false);
+          setDigilockerUrl(null);
+          dispatch(setKycStatus(status));
+          showAlert('Success! ✅', 'Aadhaar verified via DigiLocker.');
+        }
+      } catch {
+        // Silently ignore polling errors — will retry on next interval
+      }
+    }, 5000); // Poll every 5 seconds
+  }, [dispatch]);
+
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+  }, []);
+
+  // ── Step 1: DigiLocker Aadhaar Verification ─────────────────────────────
   const handleStartDigiLocker = useCallback(async () => {
     setLoading(true);
     try {
       const result = await initiateDigiLocker();
-      if (result.sdkToken) {
-        // Build HTML page that loads the DigiBoost SDK
-        const html = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>DigiLocker Verification</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      background: #0A0A0A;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      color: #FFFFFF;
-      padding: 20px;
-    }
-    #digilocker-button {
-      margin-top: 20px;
-    }
-    .status {
-      margin-top: 20px;
-      text-align: center;
-      font-size: 14px;
-      color: #A0A0A0;
-    }
-    .loading {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 16px;
-    }
-    .spinner {
-      width: 40px;
-      height: 40px;
-      border: 3px solid rgba(0, 229, 144, 0.2);
-      border-top-color: #00E590;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-  </style>
-</head>
-<body>
-  <div class="loading" id="loading">
-    <div class="spinner"></div>
-    <p>Initializing DigiLocker...</p>
-  </div>
-  <div id="digilocker-button"></div>
-  <div class="status" id="status"></div>
-
-  <script src="https://cdn.jsdelivr.net/gh/surepassio/surepass-digiboost-web-sdk@latest/index.min.js"></script>
-  <script>
-    document.getElementById('loading').style.display = 'none';
-    document.getElementById('status').innerText = 'Tap the button below to verify your Aadhaar via DigiLocker.';
-
-    try {
-      window.DigiboostSdk({
-        gateway: "${result.gateway}",
-        token: "${result.sdkToken}",
-        selector: "#digilocker-button",
-        style: {
-          backgroundColor: "#00E590",
-          color: "#0A0A0A",
-          padding: "16px 32px",
-          borderRadius: "12px",
-          fontSize: "16px",
-          fontWeight: "700",
-          width: "100%",
-          border: "none",
-          cursor: "pointer"
-        },
-        onSuccess: function(data) {
-          document.getElementById('status').innerText = '✅ Verification successful! Processing...';
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'DIGILOCKER_SUCCESS',
-            data: data
-          }));
-        },
-        onFailure: function(error) {
-          document.getElementById('status').innerText = '❌ Verification was cancelled or failed.';
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'DIGILOCKER_FAILURE',
-            error: error
-          }));
-        }
-      });
-    } catch (e) {
-      document.getElementById('status').innerText = 'Error loading SDK: ' + e.message;
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'DIGILOCKER_ERROR',
-        error: e.message
-      }));
-    }
-  </script>
-</body>
-</html>`;
-        setDigiboostHtml(html);
+      if (result.digilockerUrl) {
+        setDigilockerUrl(result.digilockerUrl);
         setShowWebView(true);
+        // Start polling for completion
+        startPolling();
       } else {
-        showAlert('Error', 'Failed to initialize DigiLocker. Please try again.');
+        showAlert('Error', 'Failed to get DigiLocker URL. Please try again.');
       }
     } catch (e: any) {
       showAlert('Error', e?.message || 'Failed to start DigiLocker verification.');
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  // Handle messages from the DigiBoost SDK WebView
-  const handleWebViewMessage = useCallback(async (event: any) => {
-    try {
-      const message = JSON.parse(event.nativeEvent.data);
-
-      if (message.type === 'DIGILOCKER_SUCCESS') {
-        setShowWebView(false);
-        setDigiboostHtml(null);
-        setLoading(true);
-        try {
-          // Fetch Aadhaar data from backend using stored client_id
-          const status = await checkDigiLockerStatus();
-          dispatch(setKycStatus(status));
-          if (status.aadhaarVerified) {
-            showAlert('Success! ✅', 'Aadhaar verified via DigiLocker.');
-          } else {
-            showAlert('Info', 'DigiLocker verification completed. Processing your data...');
-          }
-        } catch (e: any) {
-          showAlert('Error', e?.message || 'Failed to process DigiLocker verification.');
-        } finally {
-          setLoading(false);
-        }
-      } else if (message.type === 'DIGILOCKER_FAILURE') {
-        setShowWebView(false);
-        setDigiboostHtml(null);
-        showAlert('Cancelled', 'DigiLocker verification was cancelled or failed. You can try again.');
-      } else if (message.type === 'DIGILOCKER_ERROR') {
-        setShowWebView(false);
-        setDigiboostHtml(null);
-        showAlert('Error', `DigiLocker SDK error: ${message.error}`);
-      }
-    } catch {
-      // ignore parse errors
-    }
-  }, [dispatch]);
+  }, [startPolling]);
 
   const handleCheckDigiLocker = useCallback(async () => {
     setLoading(true);
@@ -260,6 +170,9 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
       const status = await checkDigiLockerStatus();
       dispatch(setKycStatus(status));
       if (status.aadhaarVerified) {
+        setShowWebView(false);
+        setDigilockerUrl(null);
+        stopPolling();
         showAlert('Success! ✅', 'Aadhaar verified via DigiLocker.');
       }
     } catch (e: any) {
@@ -267,7 +180,7 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
     } finally {
       setLoading(false);
     }
-  }, [dispatch]);
+  }, [dispatch, stopPolling]);
 
   // ── Step 2: Fallback (PAN / DL) ─────────────────────────────────────────
   const handleSubmitFallback = useCallback(async () => {
@@ -468,7 +381,7 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
   // ── Aadhaar DigiLocker Step UI ───────────────────────────────────────────
   const renderAadhaarStep = () => {
     // Show WebView if active
-    if (showWebView && digiboostHtml) {
+    if (showWebView && digilockerUrl) {
       return (
         <View style={[glass.card, styles.stepCard, { minHeight: 500 }]}>
           <View style={styles.stepHeader}>
@@ -478,25 +391,23 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
             <View style={{ flex: 1 }}>
               <Text style={styles.stepTitle}>DigiLocker Verification</Text>
               <Text style={styles.stepSubtitle}>
-                Complete your Aadhaar verification in the DigiLocker window below.
+                Complete your Aadhaar verification below. The app will automatically detect when you're done.
               </Text>
             </View>
           </View>
 
           <View style={{ flex: 1, minHeight: 450, borderRadius: 12, overflow: 'hidden', marginTop: 12 }}>
             <WebView
-              source={{ html: digiboostHtml }}
-              style={{ flex: 1, backgroundColor: '#0A0A0A' }}
-              onMessage={handleWebViewMessage}
+              source={{ uri: digilockerUrl }}
+              style={{ flex: 1 }}
               javaScriptEnabled
               domStorageEnabled
-              javaScriptCanOpenWindowsAutomatically
-              allowsPopups
+              thirdPartyCookiesEnabled
               startInLoadingState
               renderLoading={() => (
                 <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0A0A0A' }}>
                   <ActivityIndicator size="large" color={G.accent} />
-                  <Text style={[styles.stepSubtitle, { marginTop: 12 }]}>Loading DigiLocker SDK...</Text>
+                  <Text style={[styles.stepSubtitle, { marginTop: 12 }]}>Loading DigiLocker...</Text>
                 </View>
               )}
             />
@@ -507,7 +418,8 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
             activeOpacity={0.85}
             onPress={() => {
               setShowWebView(false);
-              setDigiboostHtml(null);
+              setDigilockerUrl(null);
+              stopPolling();
             }}
           >
             <Icon name="close" size={18} color={G.textPrimary} style={{ marginRight: 8 }} />

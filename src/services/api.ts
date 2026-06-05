@@ -607,6 +607,7 @@ export type AadhaarOtpResponse = {
 export type DigiLockerInitiateResponse = {
   sdkToken: string;
   clientId: string;
+  digilockerUrl: string;
   expirySeconds: number;
   gateway: 'sandbox' | 'production';
   status: string;
