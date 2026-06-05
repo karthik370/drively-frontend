@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Switch, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
@@ -118,7 +118,7 @@ const ProfileScreen = ({ navigation }: any) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top','bottom']}>
       <ScrollView>
         <ScaleIn delay={100}>
           <View style={styles.header}>
@@ -217,7 +217,9 @@ const ProfileScreen = ({ navigation }: any) => {
               <MenuItem icon="shield-star" title="🏅 Skill Badges" onPress={() => navigation.navigate('DriverBadges')} />
             </>
           )}
-          <MenuItem icon="star-circle" title="Rewards" onPress={() => navigation.navigate('Rewards')} />
+          {(!isDriver || isCustomerMode) && (
+            <MenuItem icon="star-circle" title="Rewards" onPress={() => navigation.navigate('Rewards')} />
+          )}
           <MenuItem icon="gift" title="Refer & Earn" onPress={() => navigation.navigate('Referral')} />
         </View>
 

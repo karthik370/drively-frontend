@@ -579,6 +579,130 @@ export const verifyDriverDocuments = async (driverId: string, approved: boolean,
   }
 };
 
+// ── KYC Verification Endpoints ──────────────────────────────────────────────
+
+export type KycStatusValue =
+  | 'NOT_STARTED'
+  | 'AADHAAR_OTP_PENDING'
+  | 'DIGILOCKER_PENDING'
+  | 'DIGILOCKER_COMPLETED'
+  | 'FALLBACK_PENDING'
+  | 'FACE_MATCH_PENDING'
+  | 'COMPLETED'
+  | 'FAILED';
+
+export type KycInitiateResponse = {
+  status: string;
+  message: string;
+  digilockerUrl?: string;
+  verificationId?: string;
+  expiresAt?: string;
+};
+
+export type AadhaarOtpResponse = {
+  message: string;
+  status: string;
+};
+
+export type DigiLockerInitiateResponse = {
+  sdkToken: string;
+  clientId: string;
+  expirySeconds: number;
+  gateway: 'sandbox' | 'production';
+  status: string;
+  message: string;
+};
+
+export type AadhaarVerifyResponse = KycStatusResponse;
+
+export type KycStatusResponse = {
+  status: KycStatusValue;
+  aadhaarVerified: boolean;
+  panVerified: boolean;
+  dlVerified: boolean;
+  faceMatchPassed: boolean;
+  faceMatchScore: number | null;
+  failureReason: string | null;
+  digilockerUrl: string | null;
+  digilockerUrlExpiresAt: string | null;
+};
+
+export type KycSelfieResponse = {
+  selfieUrl: string;
+  faceMatchScore: number;
+  faceMatchPassed: boolean;
+  kycCompleted: boolean;
+};
+
+export const initiateKyc = async (): Promise<KycInitiateResponse> => {
+  try {
+    const res = await api.post<ApiResponse<KycInitiateResponse>>('/kyc/initiate', {});
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const getKycStatus = async (): Promise<KycStatusResponse> => {
+  try {
+    const res = await api.get<ApiResponse<KycStatusResponse>>('/kyc/status');
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const checkDigiLockerCompletion = async (): Promise<KycStatusResponse> => {
+  try {
+    const res = await api.post<ApiResponse<KycStatusResponse>>('/kyc/digilocker/check', {});
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const submitKycFallback = async (data: {
+  panNumber?: string;
+  dlNumber?: string;
+  dob?: string; // YYYY-MM-DD format
+}): Promise<KycStatusResponse> => {
+  try {
+    const res = await api.post<ApiResponse<KycStatusResponse>>('/kyc/fallback', data);
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const submitKycSelfie = async (base64: string, mimeType: string = 'image/jpeg'): Promise<KycSelfieResponse> => {
+  try {
+    const res = await api.post<ApiResponse<KycSelfieResponse>>('/kyc/selfie', { base64, mimeType });
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+// ── DigiLocker Verification ──────────────────────────────────────────────
+
+export const initiateDigiLocker = async (): Promise<DigiLockerInitiateResponse> => {
+  try {
+    const res = await api.post<ApiResponse<DigiLockerInitiateResponse>>('/kyc/digilocker/initiate', {});
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const checkDigiLockerStatus = async (): Promise<KycStatusResponse> => {
+  try {
+    const res = await api.post<ApiResponse<KycStatusResponse>>('/kyc/digilocker/check', {});
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
 export type GeocodeResponse = {
   latitude: number;
   longitude: number;
@@ -1284,7 +1408,62 @@ export const createTripShareLink = async (bookingId: string): Promise<{ shareTok
   }
 };
 
+export const getPublicTracking = async (shareToken: string): Promise<any> => {
+  try {
+    const res = await api.get<ApiResponse<any>>(`/bookings/track/${shareToken}`);
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+// ── Emergency / SOS ─────────────────────────────────────────────────
+
+export const triggerSOS = async (params: {
+  bookingId: string;
+  latitude: number;
+  longitude: number;
+}): Promise<{ emergencyId: string; status: string }> => {
+  try {
+    const res = await api.post<ApiResponse<any>>('/emergency/trigger', params);
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const resolveEmergency = async (emergencyId: string): Promise<any> => {
+  try {
+    const res = await api.post<ApiResponse<any>>(`/emergency/${emergencyId}/resolve`);
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export type EmergencyContact = { id: string; name: string; phone: string };
+
+export const getEmergencyContacts = async (): Promise<EmergencyContact[]> => {
+  try {
+    const res = await api.get<ApiResponse<EmergencyContact[]>>('/emergency/contacts');
+    const data = unwrap(res);
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const saveEmergencyContacts = async (contacts: EmergencyContact[]): Promise<EmergencyContact[]> => {
+  try {
+    const res = await api.put<ApiResponse<EmergencyContact[]>>('/emergency/contacts', { contacts });
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
 // ── Referrals ───────────────────────────────────────────────────────
+
 
 export const generateReferralCode = async (type: 'DRIVER' | 'CUSTOMER'): Promise<any> => {
   try {

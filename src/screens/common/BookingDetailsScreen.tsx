@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
@@ -155,7 +155,7 @@ const BookingDetailsScreen = ({ navigation, route }: any) => {
   /* ─── render ──────────────────────────────────────── */
   if (loading && !booking) {
     return (
-      <SafeAreaView style={s.screen}>
+      <SafeAreaView style={s.screen} edges={['top','bottom']}>
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" color={G.accent} />
           <Text style={[gText.body, { marginTop: 12 }]}>Loading…</Text>
@@ -165,7 +165,7 @@ const BookingDetailsScreen = ({ navigation, route }: any) => {
   }
 
   return (
-    <SafeAreaView style={s.screen}>
+    <SafeAreaView style={s.screen} edges={['top','bottom']}>
       {/* Header */}
       <View style={s.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>

@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DrawerActions } from '@react-navigation/native';
-import { ActivityIndicator, Alert, ScrollView, View, Text, StyleSheet, TouchableOpacity, Animated, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, View, Text, StyleSheet, TouchableOpacity, Animated, NativeScrollEvent, NativeSyntheticEvent, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import MapView, { Marker } from 'react-native-maps';
@@ -188,7 +188,7 @@ const HomeScreen = ({ navigation }: any) => {
       nearbyFetchRef.current.inFlight = true;
       nearbyFetchRef.current.lastKey = key;
       try {
-        const res = await getNearbyDrivers(base.latitude, base.longitude, 6);
+        const res = await getNearbyDrivers(base.latitude, base.longitude, 20);
         if (!mounted) return;
         const arr = Array.isArray(res) ? res : [];
         setNearbyDrivers(arr);
@@ -327,7 +327,7 @@ const HomeScreen = ({ navigation }: any) => {
   }, [scrollHidden]);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top','bottom']}>
       <ScrollView contentContainerStyle={styles.scrollContent} onScroll={onContentScroll} scrollEventThrottle={100}>
         <FadeIn delay={100}>
           <View style={styles.header}>
@@ -353,6 +353,7 @@ const HomeScreen = ({ navigation }: any) => {
 
         {hasActiveTrip ? (
           <View style={styles.activeTripCard}>
+            <Icon name="steering" size={26} color="#C9A84C" style={{ marginRight: 12 }} />
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={styles.activeTripTitle}>Trip in progress</Text>
               <Text style={styles.activeTripSub} numberOfLines={1}>
@@ -594,23 +595,29 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   activeTripCard: {
-    marginHorizontal: 12,
+    marginHorizontal: 16,
     marginTop: 12,
-    marginBottom: 12,
-    backgroundColor: G.glass3,
+    marginBottom: 8,
+    backgroundColor: Platform.OS === 'android' ? '#151518' : G.glass3,
     borderRadius: 16,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: G.borderAccent,
-    shadowColor: G.accent,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 8,
-    minHeight: 64,
+    borderColor: '#C9A84C',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#C9A84C',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+    minHeight: 68,
   },
   activeTripTitle: {
     color: G.textPrimary,

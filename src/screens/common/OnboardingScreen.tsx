@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions, FlatList, Animated } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { G } from '../../constants/glassStyles';
@@ -60,6 +61,7 @@ const OnboardingScreen = ({ onComplete }: Props) => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const flatListRef = useRef<FlatList>(null);
     const scrollX = useRef(new Animated.Value(0)).current;
+    const insets = useSafeAreaInsets();
 
     const handleNext = () => {
         if (currentIndex < SLIDES.length - 1) {
@@ -94,10 +96,10 @@ const OnboardingScreen = ({ onComplete }: Props) => {
     const isLastSlide = currentIndex === SLIDES.length - 1;
 
     return (
-        <View style={styles.container}>
+        <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
             {/* Skip button */}
             {!isLastSlide ? (
-                <TouchableOpacity style={styles.skipBtn} onPress={handleSkip}>
+                <TouchableOpacity style={[styles.skipBtn, { top: insets.top + 8 }]} onPress={handleSkip}>
                     <Text style={styles.skipText}>Skip</Text>
                 </TouchableOpacity>
             ) : null}
@@ -143,7 +145,7 @@ const OnboardingScreen = ({ onComplete }: Props) => {
                 <Text style={styles.nextBtnText}>{isLastSlide ? 'Get Started' : 'Next'}</Text>
                 <Icon name={isLastSlide ? 'check' : 'arrow-right'} size={18} color="#ffffff" />
             </TouchableOpacity>
-        </View>
+        </SafeAreaView>
     );
 };
 
@@ -166,7 +168,6 @@ const styles = StyleSheet.create({
 
     skipBtn: {
         position: 'absolute',
-        top: 60,
         right: 20,
         zIndex: 10,
         paddingHorizontal: 16,

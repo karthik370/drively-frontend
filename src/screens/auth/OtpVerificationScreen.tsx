@@ -1,11 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react';
+﻿import React, { useState, useRef, useEffect } from 'react';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
   Text,
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  SafeAreaView,
   Alert,
   ActivityIndicator,
   Platform,
@@ -406,7 +406,7 @@ const OtpVerificationScreen = ({ route, navigation }: any) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView edges={['top','bottom']} style={styles.container}>
       <StatusBar style="light" />
 
       <View style={styles.header}>

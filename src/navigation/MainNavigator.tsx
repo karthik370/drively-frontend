@@ -45,6 +45,7 @@ import ChatScreen from '../screens/common/ChatScreen';
 import DriverTiersScreen from '../screens/driver/DriverTiersScreen';
 import HeatMapScreen from '../screens/driver/HeatMapScreen';
 import TripPhotoScreen from '../screens/common/TripPhotoScreen';
+import SharedTripScreen from '../screens/common/SharedTripScreen';
 import DriverBadgesScreen from '../screens/driver/DriverBadgesScreen';
 
 import CustomerWalletScreen from '../screens/customer/CustomerWalletScreen';
@@ -295,6 +296,7 @@ const MainNavigator = () => {
       <Stack.Screen name="DriverWallet" component={DriverWalletScreen} />
       <Stack.Screen name="TripPhotos" component={TripPhotoScreen} />
       <Stack.Screen name="DriverBadges" component={DriverBadgesScreen} />
+      <Stack.Screen name="SharedTrip" component={SharedTripScreen} />
     </Stack.Navigator>
   );
 };

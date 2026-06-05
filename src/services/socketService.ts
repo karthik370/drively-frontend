@@ -219,20 +219,9 @@ class SocketService {
         timestamp: ts,
       }));
 
-      // Show local notification if message is from other party
-      try {
-        const myId = String(store.getState().auth.user?.id ?? '');
-        if (senderId && myId && senderId !== myId) {
-          void Notifications.scheduleNotificationAsync({
-            content: {
-              title: 'New message',
-              body: msgText.length > 100 ? msgText.slice(0, 100) + '…' : msgText,
-              sound: 'default',
-            },
-            trigger: null,
-          });
-        }
-      } catch {}
+      // NOTE: No local notification here — the backend already sends an Expo push
+      // notification for chat messages (see bookingHandlers.ts chat:message handler).
+      // Scheduling a local one too would cause a double notification.
     });
 
     // Dedup: customer receives booking:accepted from both user: room and booking: room

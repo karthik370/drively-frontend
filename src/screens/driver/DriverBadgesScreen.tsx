@@ -1,4 +1,4 @@
-/**
+﻿/**
  * DriverBadgesScreen — Skill badges with quiz system
  * ───────────────────────────────────────────────────
  * View all available badges, earned badges, take quizzes
@@ -156,7 +156,7 @@ const DriverBadgesScreen = ({ navigation }: any) => {
 
   if (!screenReady || loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top','bottom']}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <Icon name="arrow-left" size={24} color="#C9A84C" />
@@ -172,7 +172,7 @@ const DriverBadgesScreen = ({ navigation }: any) => {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top','bottom']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Icon name="arrow-left" size={24} color="#C9A84C" />

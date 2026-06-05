@@ -16,6 +16,12 @@ import * as Haptics from 'expo-haptics';
 import { showAlert } from '../common/CustomAlert';
 import { G } from '../../constants/glassStyles';
 
+export type DriverBadgeInfo = {
+  title: string;
+  icon: string;
+  color: string;
+};
+
 export type DriverInfo = {
   id: string;
   name: string;
@@ -24,6 +30,7 @@ export type DriverInfo = {
   vehicleLabel?: string | null;
   vehicleNumber?: string | null;
   phoneNumber?: string | null;
+  badges?: DriverBadgeInfo[];
 };
 
 export type DriverInfoCardProps = {
@@ -174,6 +181,15 @@ const DriverInfoCard = ({
                   {driver.vehicleLabel ? `  •  ${driver.vehicleLabel}` : ''}
                   {driver.vehicleNumber ? `  •  ${driver.vehicleNumber}` : ''}
                 </Text>
+                {Array.isArray(driver.badges) && driver.badges.length > 0 && (
+                  <View style={styles.badgeRow}>
+                    {driver.badges.slice(0, 3).map((b, i) => (
+                      <View key={i} style={[styles.badgePill, { backgroundColor: b.color + '22', borderColor: b.color + '55' }]}>
+                        <Text style={[styles.badgeText, { color: b.color }]}>{b.title}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
               </View>
             </View>
 
@@ -309,6 +325,22 @@ const styles = StyleSheet.create({
   },
   footerActions: {
     marginTop: 12,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: 4,
+  },
+  badgePill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  badgeText: {
+    fontSize: 9,
+    fontWeight: '700',
   },
 });
 

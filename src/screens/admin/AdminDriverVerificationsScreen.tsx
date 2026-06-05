@@ -1,9 +1,9 @@
-import React, { useCallback, useEffect, useState } from 'react';
+﻿import React, { useCallback, useEffect, useState } from 'react';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ActivityIndicator,
   FlatList,
   RefreshControl,
-  SafeAreaView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -44,7 +44,7 @@ const AdminDriverVerificationsScreen = ({ navigation }: any) => {
   }, [load]);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView edges={['top','bottom']} style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Driver Verifications</Text>
         <TouchableOpacity style={styles.refreshBtn} onPress={() => void onRefresh()}>

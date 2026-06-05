@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -13,7 +13,7 @@ catch { LinearGradient = ({ style, children }: any) => <View style={[style, { ba
 
 const WelcomeScreen = ({ navigation }: any) => {
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top','bottom']}>
       <StatusBar style="light" />
       <View style={styles.content}>
         <View style={styles.logoContainer}>

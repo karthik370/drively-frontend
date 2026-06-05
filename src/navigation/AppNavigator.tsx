@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AppState, AppStateStatus, ActivityIndicator, View, StyleSheet } from 'react-native';
+import { AppState, AppStateStatus, ActivityIndicator, View, StyleSheet, Linking } from 'react-native';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { navigationTheme } from '../theme';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -28,6 +28,55 @@ import socketService from '../services/socketService';
 const Stack = createNativeStackNavigator();
 
 const navigationRef = createNavigationContainerRef<any>();
+
+// Deep linking configuration for trip sharing
+const linking = {
+  prefixes: ['drively://', 'https://v2.kurnm.click'],
+  config: {
+    screens: {
+      Main: {
+        screens: {
+          MainTabs: {
+            screens: {
+              SharedTrip: {
+                path: 'track/:shareToken',
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  // Handle URLs that don't match config — manual parsing
+  getStateFromPath: (path: string) => {
+    const trackMatch = path.match(/^\/?track\/([a-zA-Z0-9]+)/);
+    if (trackMatch) {
+      return {
+        routes: [
+          {
+            name: 'Main',
+            state: {
+              routes: [
+                {
+                  name: 'MainTabs',
+                  state: {
+                    routes: [
+                      {
+                        name: 'SharedTrip',
+                        params: { shareToken: trackMatch[1] },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      };
+    }
+    return undefined;
+  },
+};
 
 const EXPO_PUSH_TOKEN_KEY = 'expoPushToken';
 
@@ -247,7 +296,7 @@ const AppNavigator = () => {
   }
 
   return (
-    <NavigationContainer ref={navigationRef} theme={navigationTheme as any}>
+    <NavigationContainer ref={navigationRef} theme={navigationTheme as any} linking={linking as any}>
       <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#0A0A0A' } }}>
         {isAuthenticated ? (
           <Stack.Screen name="Main" component={DrawerNavigator} />

@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Switch, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
@@ -13,7 +13,7 @@ const DriverHomeScreen = () => {
   const isOnline = useAppSelector((s) => s.driver.isOnline);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top','bottom']}>
       <View style={styles.header}>
         <View style={styles.headerTopRow}>
           <Text style={styles.greeting}>Hello Driver! 👋</Text>

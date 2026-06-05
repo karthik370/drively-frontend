@@ -566,7 +566,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
 
       nearbyFetchRef.current.inFlight = true;
       try {
-        const res = await getNearbyDrivers(effectivePickupLocation.latitude, effectivePickupLocation.longitude, 6);
+        const res = await getNearbyDrivers(effectivePickupLocation.latitude, effectivePickupLocation.longitude, 20);
         if (!mounted) return;
         setNearbyDrivers(Array.isArray(res) ? res : []);
       } catch {
@@ -951,13 +951,16 @@ const TrackingScreen = ({ navigation, route }: any) => {
       };
     }
 
+    const isPending = bookingStatus && ['REQUESTED', 'SEARCHING'].includes(bookingStatus);
+    const delta = isPending ? 0.07 : 0.012;
+
     return {
       latitude: base.latitude,
       longitude: base.longitude,
-      latitudeDelta: 0.012,
-      longitudeDelta: 0.012,
+      latitudeDelta: delta,
+      longitudeDelta: delta,
     };
-  }, [driverLocation, effectiveDropLocation, effectivePickupLocation]);
+  }, [driverLocation, effectiveDropLocation, effectivePickupLocation, bookingStatus]);
 
   const mapEdgePadding = useMemo(
     () => ({
@@ -1475,8 +1478,8 @@ const TrackingScreen = ({ navigation, route }: any) => {
                 mapRef.current?.animateToRegion({
                   latitude: pickup.latitude,
                   longitude: pickup.longitude,
-                  latitudeDelta: 0.025,
-                  longitudeDelta: 0.025,
+                  latitudeDelta: 0.07,
+                  longitudeDelta: 0.07,
                 }, 300);
               }
             }, 500);
@@ -1519,18 +1522,13 @@ const TrackingScreen = ({ navigation, route }: any) => {
                 <Marker
                   key={String((d as any)?.id)}
                   coordinate={{ latitude: lat, longitude: lng }}
-                  tracksViewChanges={true}
+                  tracksViewChanges={false}
                   anchor={{ x: 0.5, y: 0.5 }}
                   flat
                   zIndex={3}
-                >
-                  <Image
-                    source={CAR_IMAGE}
-                    style={{ width: 22, height: 22 }}
-                    resizeMode="contain"
-                    fadeDuration={0}
-                  />
-                </Marker>
+                  image={CAR_IMAGE}
+                  style={{ width: 22, height: 22 }}
+                />
               );
             })
             : null}
@@ -1641,9 +1639,19 @@ const TrackingScreen = ({ navigation, route }: any) => {
                     url = res.shareUrl;
                     setShareUrl(url);
                   }
-                  await Share.share({
-                    message: `Track my Drively ride live: ${url}`,
-                  });
+                  const dName = (booking as any)?.driver?.firstName
+                    ? `${(booking as any).driver.firstName} ${(booking as any).driver.lastName || ''}`.trim()
+                    : null;
+                  const pickAddr = (booking as any)?.pickupAddress || '';
+                  const dAddr = (booking as any)?.dropAddress || '';
+
+                  let msg = `🚗 Track my Drively ride live!\n`;
+                  if (dName) msg += `\nDriver: ${dName}`;
+                  if (pickAddr) msg += `\nFrom: ${pickAddr}`;
+                  if (dAddr) msg += `\nTo: ${dAddr}`;
+                  msg += `\n\n${url}`;
+
+                  await Share.share({ message: msg });
                 } catch (e: any) {
                   if (e?.message !== 'User did not share') {
                     showAlert('Share', 'Failed to create share link');

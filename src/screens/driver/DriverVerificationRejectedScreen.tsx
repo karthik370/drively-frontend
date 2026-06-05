@@ -1,17 +1,45 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useAppDispatch, useAppSelector } from '../../redux/store';
 import { logout } from '../../redux/slices/authSlice';
+import { loadKycStatus } from '../../redux/slices/driverSlice';
 import { G } from '../../constants/glassStyles';
 
 const DriverVerificationRejectedScreen = ({ navigation }: any) => {
   const dispatch = useAppDispatch();
   const verification = useAppSelector((s) => s.driver.verification);
+  const kyc = useAppSelector((s) => s.driver.kyc);
+
+  useEffect(() => {
+    dispatch(loadKycStatus());
+  }, [dispatch]);
+
+  // Determine the rejection reason — prioritize KYC-specific reasons
+  const reason =
+    kyc?.failureReason ||
+    verification.reason ||
+    null;
+
+  // Build specific failure context from KYC status
+  const getFailureDetails = () => {
+    if (!kyc) return [];
+    const details: { label: string; failed: boolean }[] = [];
+
+    details.push({ label: 'Aadhaar Verification', failed: !kyc.aadhaarVerified });
+    details.push({ label: 'PAN Verification', failed: !kyc.panVerified });
+    details.push({ label: 'Driving License', failed: !kyc.dlVerified });
+    details.push({ label: 'Face Match', failed: !kyc.faceMatchPassed });
+
+    return details;
+  };
+
+  const failureDetails = getFailureDetails();
+  const hasKycDetails = kyc && kyc.status !== 'NOT_STARTED';
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top','bottom']}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
           {/* Icon */}
@@ -21,17 +49,17 @@ const DriverVerificationRejectedScreen = ({ navigation }: any) => {
 
           <Text style={styles.title}>Verification Rejected</Text>
           <Text style={styles.subtitle}>
-            Your documents could not be verified. Please review the reason below and resubmit corrected documents.
+            Your identity could not be verified. Please review the details below and try again.
           </Text>
 
-          {/* Rejection reason from admin */}
-          {verification.reason ? (
+          {/* Rejection reason */}
+          {reason ? (
             <View style={styles.reasonBox}>
               <View style={styles.reasonHeader}>
                 <Icon name="alert-circle" size={18} color="#ef4444" />
                 <Text style={styles.reasonTitle}>Rejection Reason</Text>
               </View>
-              <Text style={styles.reasonText}>{verification.reason}</Text>
+              <Text style={styles.reasonText}>{reason}</Text>
             </View>
           ) : (
             <View style={styles.reasonBox}>
@@ -45,24 +73,39 @@ const DriverVerificationRejectedScreen = ({ navigation }: any) => {
             </View>
           )}
 
+          {/* KYC Status Breakdown */}
+          {hasKycDetails && failureDetails.length > 0 && (
+            <View style={styles.kycBreakdown}>
+              <Text style={styles.kycBreakdownTitle}>Verification Status</Text>
+              {failureDetails.map((item) => (
+                <View key={item.label} style={styles.kycRow}>
+                  <Icon
+                    name={item.failed ? 'close-circle' : 'check-circle'}
+                    size={18}
+                    color={item.failed ? G.error : G.success}
+                  />
+                  <Text style={[styles.kycRowText, item.failed && styles.kycRowTextFailed]}>
+                    {item.label}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+
           {/* Instructions */}
           <View style={styles.instructionsBox}>
             <Text style={styles.instructionsTitle}>How to fix this</Text>
             <View style={styles.step}>
               <View style={styles.stepNumber}><Text style={styles.stepNumberText}>1</Text></View>
-              <Text style={styles.stepText}>Take clear, well-lit photos of your documents (License, Aadhaar, PAN)</Text>
+              <Text style={styles.stepText}>Retry DigiLocker verification — ensure you grant consent for all documents</Text>
             </View>
             <View style={styles.step}>
               <View style={styles.stepNumber}><Text style={styles.stepNumberText}>2</Text></View>
-              <Text style={styles.stepText}>Ensure all text and numbers are fully readable — no blur or glare</Text>
+              <Text style={styles.stepText}>If manual entry is needed, double-check your PAN and DL numbers</Text>
             </View>
             <View style={styles.step}>
               <View style={styles.stepNumber}><Text style={styles.stepNumberText}>3</Text></View>
-              <Text style={styles.stepText}>Take a clear selfie with your face fully visible</Text>
-            </View>
-            <View style={styles.step}>
-              <View style={styles.stepNumber}><Text style={styles.stepNumberText}>4</Text></View>
-              <Text style={styles.stepText}>Tap "Resubmit Documents" below to upload again</Text>
+              <Text style={styles.stepText}>Take a clear, well-lit selfie with your face fully visible — no sunglasses</Text>
             </View>
           </View>
 
@@ -77,7 +120,7 @@ const DriverVerificationRejectedScreen = ({ navigation }: any) => {
             }}
           >
             <Icon name="file-document-edit" size={20} color="#0A0A0A" style={{ marginRight: 8 }} />
-            <Text style={styles.primaryText}>Resubmit Documents</Text>
+            <Text style={styles.primaryText}>Retry Verification</Text>
           </TouchableOpacity>
 
           {/* Logout */}
@@ -137,6 +180,36 @@ const styles = StyleSheet.create({
   },
   reasonTitle: { color: '#ef4444', fontWeight: '800', fontSize: 15, marginLeft: 8 },
   reasonText: { color: '#E0C0C0', fontWeight: '600', lineHeight: 22, fontSize: 14 },
+  kycBreakdown: {
+    width: '100%',
+    maxWidth: 380,
+    borderWidth: 1,
+    borderColor: G.border2,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 20,
+    backgroundColor: G.glass1,
+    gap: 10,
+  },
+  kycBreakdownTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: G.textPrimary,
+    marginBottom: 4,
+  },
+  kycRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  kycRowText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: G.success,
+  },
+  kycRowTextFailed: {
+    color: G.error,
+  },
   instructionsBox: {
     width: '100%',
     maxWidth: 380,

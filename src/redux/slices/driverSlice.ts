@@ -1,6 +1,6 @@
 import { createAsyncThunk, createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { logout, loadUser } from './authSlice';
-import { getDriverDocumentsStatus } from '../../services/api';
+import { getDriverDocumentsStatus, getKycStatus, KycStatusResponse } from '../../services/api';
 
 export type DriverVerificationStatus = 'PENDING' | 'VERIFIED' | 'REJECTED' | 'EXPIRED';
 
@@ -17,6 +17,8 @@ export type DriverVerificationState = {
 interface DriverState {
   isOnline: boolean;
   verification: DriverVerificationState;
+  kyc: KycStatusResponse | null;
+  kycLoading: boolean;
 }
 
 const initialState: DriverState = {
@@ -30,6 +32,8 @@ const initialState: DriverState = {
     isLoading: false,
     hydrated: false,
   },
+  kyc: null,
+  kycLoading: false,
 };
 
 export const loadDriverVerificationStatus = createAsyncThunk(
@@ -40,6 +44,18 @@ export const loadDriverVerificationStatus = createAsyncThunk(
       return status;
     } catch (e: any) {
       return rejectWithValue(e?.message || 'Failed to load verification status');
+    }
+  }
+);
+
+export const loadKycStatus = createAsyncThunk(
+  'driver/loadKycStatus',
+  async (_, { rejectWithValue }) => {
+    try {
+      const status = await getKycStatus();
+      return status;
+    } catch (e: any) {
+      return rejectWithValue(e?.message || 'Failed to load KYC status');
     }
   }
 );
@@ -57,24 +73,34 @@ const driverSlice = createSlice({
         ...action.payload,
       } as any;
     },
+    setKycStatus: (state, action: PayloadAction<KycStatusResponse>) => {
+      state.kyc = action.payload;
+    },
+    clearKycStatus: (state) => {
+      state.kyc = null;
+    },
   },
   extraReducers: (builder) => {
     builder
       .addCase(logout.pending, (state) => {
         state.isOnline = false;
         state.verification = { ...initialState.verification };
+        state.kyc = null;
       })
       .addCase(logout.fulfilled, (state) => {
         state.isOnline = false;
         state.verification = { ...initialState.verification };
+        state.kyc = null;
       })
       .addCase(logout.rejected, (state) => {
         state.isOnline = false;
         state.verification = { ...initialState.verification };
+        state.kyc = null;
       })
       .addCase(loadUser.rejected, (state) => {
         state.isOnline = false;
         state.verification = { ...initialState.verification };
+        state.kyc = null;
       })
       .addCase(loadDriverVerificationStatus.pending, (state) => {
         state.verification.isLoading = true;
@@ -91,9 +117,20 @@ const driverSlice = createSlice({
       .addCase(loadDriverVerificationStatus.rejected, (state) => {
         state.verification.isLoading = false;
         state.verification.hydrated = true;
+      })
+      // KYC status
+      .addCase(loadKycStatus.pending, (state) => {
+        state.kycLoading = true;
+      })
+      .addCase(loadKycStatus.fulfilled, (state, action) => {
+        state.kycLoading = false;
+        state.kyc = action.payload;
+      })
+      .addCase(loadKycStatus.rejected, (state) => {
+        state.kycLoading = false;
       });
   },
 });
 
-export const { setDriverOnline, setDriverVerification } = driverSlice.actions;
+export const { setDriverOnline, setDriverVerification, setKycStatus, clearKycStatus } = driverSlice.actions;
 export default driverSlice.reducer;

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+﻿import React, { useEffect, useState, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     RefreshControl, ActivityIndicator, Alert, Modal, TextInput,
@@ -105,7 +105,7 @@ const DriverWalletScreen = ({ navigation }: any) => {
 
     if (loading) {
         return (
-            <SafeAreaView style={styles.container}>
+            <SafeAreaView style={styles.container} edges={['top','bottom']}>
                 <ActivityIndicator size="large" color="#10b981" style={{ marginTop: 100 }} />
             </SafeAreaView>
         );
@@ -127,7 +127,7 @@ const DriverWalletScreen = ({ navigation }: any) => {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container} edges={['top','bottom']}>
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>

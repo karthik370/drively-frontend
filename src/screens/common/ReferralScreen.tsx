@@ -1,11 +1,11 @@
-import React, { useEffect, useState, useCallback } from 'react';
+﻿import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Share, Alert, RefreshControl, ActivityIndicator, TextInput, Clipboard,
+  Share, RefreshControl, ActivityIndicator, Clipboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
-import { generateReferralCode, getReferralStats, applyReferralCode } from '../../services/api';
+import { generateReferralCode, getReferralStats } from '../../services/api';
 import { useAppSelector } from '../../redux/store';
 import { UserType } from '../../types';
 import { showAlert } from '../../components/common/CustomAlert';
@@ -21,9 +21,7 @@ const ReferralScreen = ({ navigation }: any) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Apply code state
-  const [applyCode, setApplyCode] = useState('');
-  const [applying, setApplying] = useState(false);
+
 
   const isDriver = userType === UserType.DRIVER;
   const type = isDriver ? 'DRIVER' : 'CUSTOMER';
@@ -63,30 +61,11 @@ const ReferralScreen = ({ navigation }: any) => {
     showAlert('Copied!', 'Referral code copied to clipboard');
   };
 
-  const handleApplyCode = async () => {
-    const code = applyCode.trim();
-    if (!code) {
-      showAlert('Enter Code', 'Please enter a referral code');
-      return;
-    }
-    setApplying(true);
-    try {
-      const result = await applyReferralCode(code);
-      showAlert(
-        '🎉 Code Applied!',
-        `Referred by ${result?.referrerName || 'a friend'}. Complete your first ride to earn ₹${result?.rewardOnFirstTrip || 0}!`,
-      );
-      setApplyCode('');
-      fetchData(); // Refresh stats
-    } catch (e: any) {
-      showAlert('Error', e?.message || 'Invalid referral code');
-    }
-    setApplying(false);
-  };
+
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top','bottom']}>
         <ActivityIndicator size="large" color="#C9A84C" style={{ marginTop: 80 }} />
       </SafeAreaView>
     );
@@ -95,7 +74,7 @@ const ReferralScreen = ({ navigation }: any) => {
   const hasAppliedCode = !!stats?.myReferral;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top','bottom']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Icon name="arrow-left" size={22} color="#C9A84C" />
@@ -138,38 +117,7 @@ const ReferralScreen = ({ navigation }: any) => {
           <Text style={styles.shareBtnText}>Share with friends</Text>
         </TouchableOpacity>
 
-        {/* Apply Referral Code — only if user hasn't already applied one */}
-        {!hasAppliedCode && (
-          <View style={styles.applyCard}>
-            <Text style={styles.applyTitle}>Have a referral code?</Text>
-            <Text style={styles.applyDesc}>
-              Enter your friend's code to earn ₹{referredReward} after your first ride
-            </Text>
-            <View style={styles.applyRow}>
-              <TextInput
-                style={styles.applyInput}
-                placeholder="Enter code"
-                placeholderTextColor="#666"
-                value={applyCode}
-                onChangeText={setApplyCode}
-                autoCapitalize="characters"
-                maxLength={15}
-                editable={!applying}
-              />
-              <TouchableOpacity
-                style={[styles.applyBtn, applying && { opacity: 0.6 }]}
-                onPress={handleApplyCode}
-                disabled={applying}
-              >
-                {applying ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.applyBtnText}>Apply</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
+        {/* Referral code can only be entered during signup */}
 
         {/* Referred by indicator */}
         {hasAppliedCode && (
@@ -241,7 +189,7 @@ const ReferralScreen = ({ navigation }: any) => {
         <View style={styles.stepsCard}>
           {[
             { icon: 'share-variant', text: 'Share your code with friends', color: '#7c3aed' },
-            { icon: 'account-plus', text: 'They sign up & enter your code', color: G.accent },
+            { icon: 'account-plus', text: 'They enter your code during signup', color: G.accent },
             { icon: 'car', text: 'They complete their first ride', color: '#f59e0b' },
             { icon: 'wallet-plus', text: `You both get ₹ credited to wallet!`, color: '#10b981' },
           ].map((step, i) => (

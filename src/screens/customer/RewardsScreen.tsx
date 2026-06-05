@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+﻿import React, { useEffect, useState, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     RefreshControl, ActivityIndicator, Share, Alert
@@ -33,7 +33,7 @@ const RewardsScreen = ({ navigation }: any) => {
 
     if (loading) {
         return (
-            <SafeAreaView style={styles.container}>
+            <SafeAreaView style={styles.container} edges={['top','bottom']}>
                 <ActivityIndicator size="large" color="#C9A84C" style={{ marginTop: 80 }} />
             </SafeAreaView>
         );
@@ -43,7 +43,7 @@ const RewardsScreen = ({ navigation }: any) => {
     const discountValue = summary?.discountValue ?? 0;
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container} edges={['top','bottom']}>
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
                     <Icon name="arrow-left" size={22} color="#C9A84C" />

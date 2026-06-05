@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DrawerActions } from '@react-navigation/native';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Switch, Modal } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Switch, Modal, Platform } from 'react-native';
 import * as Location from 'expo-location';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -576,6 +576,7 @@ const DriverOnlineScreen = ({ navigation }: any) => {
 
       {scheduledLockInfo ? (
         <View style={styles.scheduledBanner}>
+          <Icon name="calendar-clock" size={26} color="#f59e0b" style={{ marginRight: 12 }} />
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={styles.scheduledBannerTitle}>Scheduled booking locked</Text>
             <Text style={styles.scheduledBannerSub} numberOfLines={1}>
@@ -598,6 +599,7 @@ const DriverOnlineScreen = ({ navigation }: any) => {
 
       {hasActiveTrip ? (
         <View style={styles.activeTripCard}>
+          <Icon name="steering" size={26} color="#C9A84C" style={{ marginRight: 12 }} />
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={styles.activeTripTitle}>Trip in progress</Text>
             <Text style={styles.activeTripSub} numberOfLines={1}>
@@ -720,23 +722,29 @@ const styles = StyleSheet.create({
     color: G.accent,
   },
   scheduledBanner: {
-    marginHorizontal: 12,
+    marginHorizontal: 16,
     marginTop: 10,
     marginBottom: 10,
-    backgroundColor: 'rgba(201,168,76,0.08)',
+    backgroundColor: Platform.OS === 'android' ? '#1A1813' : 'rgba(201,168,76,0.08)',
     borderRadius: 16,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 14,
     borderWidth: 1.5,
-    borderColor: G.warning,
-    shadowColor: G.warning,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    elevation: 5,
+    borderColor: '#f59e0b',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#f59e0b',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 64,
+    minHeight: 68,
   },
   scheduledBannerTitle: {
     color: G.textPrimary,
@@ -769,22 +777,28 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   activeTripCard: {
-    marginHorizontal: 12,
+    marginHorizontal: 16,
     marginBottom: 10,
-    backgroundColor: G.glass3,
+    backgroundColor: Platform.OS === 'android' ? '#151518' : G.glass3,
     borderRadius: 16,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: G.borderAccent,
-    shadowColor: G.accent,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 6,
-    minHeight: 64,
+    borderColor: '#C9A84C',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#C9A84C',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+    minHeight: 68,
   },
   activeTripTitle: {
     color: G.textPrimary,

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * TripPhotoScreen — Capture before/after trip photos
  * ──────────────────────────────────────────────────
  * 4 photos per phase: front, back, left, right
@@ -125,7 +125,7 @@ const TripPhotoScreen = ({ navigation, route }: any) => {
 
   if (!screenReady) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top','bottom']}>
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" color="#C9A84C" />
         </View>
@@ -134,7 +134,7 @@ const TripPhotoScreen = ({ navigation, route }: any) => {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top','bottom']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Icon name="arrow-left" size={24} color="#C9A84C" />

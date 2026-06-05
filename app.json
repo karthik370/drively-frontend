@@ -82,7 +82,8 @@
           "cameraPermission": "Drively needs camera access to take document photos."
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-web-browser"
     ],
     "extra": {
       "eas": {
