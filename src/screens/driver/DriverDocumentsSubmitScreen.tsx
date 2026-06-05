@@ -206,6 +206,14 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
           setLoading(false);
           return;
         }
+
+        // Validate the date is real (e.g. reject day=75)
+        const parsed = new Date(dob);
+        if (isNaN(parsed.getTime())) {
+          showAlert('Invalid Date', 'Please enter a valid date of birth.');
+          setLoading(false);
+          return;
+        }
       }
 
       const status = await submitKycFallback({
@@ -232,10 +240,12 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
 
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ['images'] as any,
-        allowsEditing: false,
-        quality: 0.5,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.3,          // Low quality to keep base64 small
         base64: false,
         cameraType: ImagePicker.CameraType.front,
+        exif: false,
       });
 
       if (result.canceled) return;
@@ -260,9 +270,16 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
 
     setLoading(true);
     try {
-      // Read as base64
+      // Resize + compress image before base64 encoding to keep payload small
+      const ImageManipulator = require('expo-image-manipulator');
+      const compressed = await ImageManipulator.manipulateAsync(
+        selfieUri,
+        [{ resize: { width: 640 } }],   // Max 640px wide
+        { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG }
+      );
+
       const FileSystem = require('expo-file-system/legacy');
-      const base64 = await FileSystem.readAsStringAsync(selfieUri, {
+      const base64 = await FileSystem.readAsStringAsync(compressed.uri, {
         encoding: FileSystem.EncodingType.Base64,
       });
 
