@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated, Easing, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { G } from '../../constants/glassStyles';
@@ -9,14 +9,66 @@ interface Props {
     fare?: number;
     vehicleType?: string;
     onCancel?: () => void;
+    createdAt?: string | Date;
+    scheduledTime?: string | Date | null;
 }
 
-const SearchingForDriverCard = ({ pickupAddress, dropAddress, fare, vehicleType, onCancel }: Props) => {
+const STALE_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+const SearchingForDriverCard = ({ pickupAddress, dropAddress, fare, vehicleType, onCancel, createdAt, scheduledTime }: Props) => {
     // Radar pulse animations
     const pulse1 = useRef(new Animated.Value(0)).current;
     const pulse2 = useRef(new Animated.Value(0)).current;
     const pulse3 = useRef(new Animated.Value(0)).current;
     const dotSpin = useRef(new Animated.Value(0)).current;
+
+    // Timer for "no driver found" state
+    const [isStale, setIsStale] = useState(false);
+    const [elapsedText, setElapsedText] = useState('');
+
+    useEffect(() => {
+        if (!createdAt) return;
+        const created = new Date(createdAt).getTime();
+        if (isNaN(created)) return;
+
+        const update = () => {
+            const elapsed = Date.now() - created;
+            setIsStale(elapsed >= STALE_MS);
+
+            // Format elapsed time
+            const totalMin = Math.floor(elapsed / 60000);
+            if (totalMin < 60) {
+                setElapsedText(`${totalMin}m`);
+            } else {
+                const h = Math.floor(totalMin / 60);
+                const m = totalMin % 60;
+                setElapsedText(`${h}h ${m}m`);
+            }
+        };
+
+        update();
+        const timer = setInterval(update, 30000); // Update every 30s
+        return () => clearInterval(timer);
+    }, [createdAt]);
+
+    // Check scheduled bookings: stale if scheduledTime has passed + 30 min buffer
+    useEffect(() => {
+        if (!scheduledTime) return;
+        const schedMs = new Date(scheduledTime).getTime();
+        if (isNaN(schedMs)) return;
+
+        const update = () => {
+            const now = Date.now();
+            // 30 min after scheduled time with no driver = stale
+            if (now > schedMs + 30 * 60 * 1000) {
+                setIsStale(true);
+            }
+        };
+
+        update();
+        const timer = setInterval(update, 30000);
+        return () => clearInterval(timer);
+    }, [scheduledTime]);
 
     useEffect(() => {
         const createPulse = (anim: Animated.Value, delay: number) =>
@@ -50,6 +102,7 @@ const SearchingForDriverCard = ({ pickupAddress, dropAddress, fare, vehicleType,
         <Animated.View
             style={[
                 styles.pulseRing,
+                isStale ? { borderColor: '#ef4444' } : {},
                 {
                     opacity: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.6, 0.2, 0] }),
                     transform: [{ scale: anim.interpolate({ inputRange: [0, 1], outputRange: [1, 2.8] }) }],
@@ -67,15 +120,32 @@ const SearchingForDriverCard = ({ pickupAddress, dropAddress, fare, vehicleType,
                 {renderPulse(pulse1)}
                 {renderPulse(pulse2)}
                 {renderPulse(pulse3)}
-                <View style={styles.radarCenter}>
+                <View style={[styles.radarCenter, isStale ? { backgroundColor: '#ef4444' } : {}]}>
                     <Animated.View style={{ transform: [{ rotate: spinRotate }] }}>
-                        <Icon name="car-connected" size={28} color="#ffffff" />
+                        <Icon name={isStale ? 'alert-circle' : 'car-connected'} size={28} color="#ffffff" />
                     </Animated.View>
                 </View>
             </View>
 
-            <Text style={styles.title}>Finding your driver</Text>
-            <Text style={styles.subtitle}>Connecting you with the nearest available driver...</Text>
+            {isStale ? (
+                <>
+                    <Text style={[styles.title, { color: '#ef4444' }]}>No driver took your booking</Text>
+                    <Text style={styles.subtitle}>
+                        {scheduledTime
+                            ? 'No driver was available for your scheduled ride. Please try again or adjust the time.'
+                            : `We've been searching for ${elapsedText} but no driver is available right now. Please try again later.`}
+                    </Text>
+                </>
+            ) : (
+                <>
+                    <Text style={styles.title}>Finding your driver</Text>
+                    <Text style={styles.subtitle}>
+                        {scheduledTime
+                            ? 'Looking for a driver for your scheduled ride...'
+                            : `Connecting you with the nearest available driver...${elapsedText ? ` (${elapsedText})` : ''}`}
+                    </Text>
+                </>
+            )}
 
             {/* Route summary */}
             <View style={styles.routeCard}>
@@ -115,18 +185,22 @@ const SearchingForDriverCard = ({ pickupAddress, dropAddress, fare, vehicleType,
             </View>
 
             {/* Safety tip */}
-            <View style={styles.safetyRow}>
-                <Icon name="information" size={16} color="#9ca3af" />
-                <Text style={styles.safetyText}>
-                    Share your ride OTP only with your assigned driver
-                </Text>
-            </View>
+            {!isStale ? (
+                <View style={styles.safetyRow}>
+                    <Icon name="information" size={16} color="#9ca3af" />
+                    <Text style={styles.safetyText}>
+                        Share your ride OTP only with your assigned driver
+                    </Text>
+                </View>
+            ) : null}
 
             {/* Cancel */}
             {onCancel ? (
-                <TouchableOpacity style={styles.cancelBtn} onPress={onCancel} activeOpacity={0.7}>
-                    <Icon name="close" size={16} color="#ef4444" />
-                    <Text style={styles.cancelText}>Cancel booking</Text>
+                <TouchableOpacity style={[styles.cancelBtn, isStale ? styles.cancelBtnStale : {}]} onPress={onCancel} activeOpacity={0.7}>
+                    <Icon name="close" size={16} color={isStale ? '#ffffff' : '#ef4444'} />
+                    <Text style={[styles.cancelText, isStale ? { color: '#ffffff' } : {}]}>
+                        {isStale ? 'Cancel & try again' : 'Cancel booking'}
+                    </Text>
                 </TouchableOpacity>
             ) : null}
         </View>
@@ -277,6 +351,10 @@ const styles = StyleSheet.create({
         borderWidth: 1.5,
         borderColor: '#fee2e2',
         backgroundColor: 'rgba(255,68,68,0.08)',
+    },
+    cancelBtnStale: {
+        backgroundColor: '#ef4444',
+        borderColor: '#ef4444',
     },
     cancelText: {
         fontSize: 13,

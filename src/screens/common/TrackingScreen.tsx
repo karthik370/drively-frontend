@@ -1777,6 +1777,8 @@ const TrackingScreen = ({ navigation, route }: any) => {
             dropAddress={(booking as any)?.dropAddress}
             fare={typeof booking?.totalAmount === 'number' ? booking.totalAmount : undefined}
             vehicleType={(booking as any)?.vehicleType}
+            createdAt={(booking as any)?.createdAt}
+            scheduledTime={(booking as any)?.scheduledTime}
             onCancel={canCustomerCancelSearching ? () => {
               if (!booking?.id) return;
               showAlert('Cancel booking?', 'Do you want to cancel this booking request?', [

@@ -97,6 +97,7 @@ const AppNavigator = () => {
     void (async () => {
       try {
         if (!Device.isDevice) {
+          console.log('[PushToken] Not a physical device, skipping push token registration');
           return;
         }
 
@@ -104,6 +105,7 @@ const AppNavigator = () => {
         if (!perm.granted && perm.ios?.status !== Notifications.IosAuthorizationStatus.PROVISIONAL) {
           const next = await Notifications.requestPermissionsAsync();
           if (!next.granted && next.ios?.status !== Notifications.IosAuthorizationStatus.PROVISIONAL) {
+            console.log('[PushToken] Notification permission denied, skipping');
             return;
           }
         }
@@ -111,21 +113,25 @@ const AppNavigator = () => {
         const projectId =
           (Constants as any)?.expoConfig?.extra?.eas?.projectId ||
           (Constants as any)?.easConfig?.projectId ||
-          undefined;
+          'f83fb1ee-b304-4120-bb2d-6d950b6f569a'; // fallback to known project ID
 
-        const tokenRes = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined);
+        console.log('[PushToken] Getting push token with projectId:', projectId);
+        const tokenRes = await Notifications.getExpoPushTokenAsync({ projectId });
         const token = String(tokenRes?.data || '').trim();
-        if (!token) return;
-
-        const prev = (await SecureStore.getItemAsync(EXPO_PUSH_TOKEN_KEY)) || '';
-        if (prev === token) {
+        if (!token) {
+          console.log('[PushToken] No token received');
           return;
         }
 
+        console.log('[PushToken] Got token:', token.substring(0, 40) + '...');
+
         if (!active) return;
+        // Always register to backend — deduplicated server-side by upsert
         await registerExpoPushToken({ token, platform: Device.osName ? String(Device.osName).toLowerCase() : undefined });
+        console.log('[PushToken] Registered successfully to backend');
         await SecureStore.setItemAsync(EXPO_PUSH_TOKEN_KEY, token);
-      } catch {
+      } catch (err) {
+        console.log('[PushToken] Error:', err);
       }
     })();
 

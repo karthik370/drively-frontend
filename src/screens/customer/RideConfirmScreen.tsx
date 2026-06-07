@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { InteractionManager } from 'react-native';
 import {
@@ -10,6 +10,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -25,7 +26,7 @@ import { useAppDispatch, useAppSelector } from '../../redux/store';
 import { BookingStatus, PaymentMethod, TransmissionType, TripType, VehicleType } from '../../types';
 import { decodePolyline } from '../../utils/decodePolyline';
 import { setCurrentBooking } from '../../redux/slices/bookingSlice';
-import { calculateRoute, getNearbyDrivers, type NearbyDriver, validatePromoCode } from '../../services/api';
+import { calculateRoute, getActiveBooking, getNearbyDrivers, type NearbyDriver, validatePromoCode } from '../../services/api';
 import {
   setDropAddress,
   setDropLocation,
@@ -129,6 +130,7 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
   const [vehicleType, setVehicleType] = useState<VehicleType>(VehicleType.CAR);
   const [transmissionType, setTransmissionType] = useState<TransmissionType>(TransmissionType.MANUAL);
   const [requestedHours, setRequestedHours] = useState<number>(1);
+  const [hoursInputText, setHoursInputText] = useState<string>('1');
   const [promoCode, setPromoCode] = useState<string>('');
   const [promoInfo, setPromoInfo] = useState<{ code: string; discountAmount: number; finalAmount: number } | null>(null);
   const [requireExperienced, setRequireExperienced] = useState(false);
@@ -870,6 +872,9 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
     setMapSelectTarget('drop');
   }, [dropLocation, outstationTripType, pickupLocation, tripType]);
 
+  // Guard: prevent duplicate bookings if one was just created
+  const bookingCreatedRef = useRef(false);
+
   const requestDriver = async () => {
     if (!user) {
       showAlert('Error', 'User not loaded');
@@ -920,6 +925,21 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
     }
 
     if (isSubmitting) return;
+
+    // Block duplicate requests if a booking was just created
+    if (bookingCreatedRef.current) {
+      // Check redux store for an active booking
+      try {
+        const active = await getActiveBooking();
+        if (active?.id) {
+          navigation.navigate('Tracking', { bookingId: String(active.id) });
+          return;
+        }
+      } catch {}
+      // Reset if no active booking found
+      bookingCreatedRef.current = false;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -950,6 +970,9 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
 
       const res = await api.post('/bookings', payload);
       const created = (res.data?.data ?? res.data) as any;
+
+      // Mark booking as created to prevent duplicates
+      bookingCreatedRef.current = true;
 
       const now = new Date().toISOString();
 
@@ -987,6 +1010,36 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
 
       navigation.navigate('Tracking', { bookingId });
     } catch (e: any) {
+      // On network error, the booking may have been created server-side
+      // Check for active booking before showing error
+      try {
+        const active = await getActiveBooking();
+        if (active?.id) {
+          bookingCreatedRef.current = true;
+          const now = new Date().toISOString();
+          dispatch(
+            setCurrentBooking({
+              id: String(active.id),
+              bookingNumber: String((active as any)?.bookingNumber ?? ''),
+              status: ((active as any)?.status ?? BookingStatus.SEARCHING) as any,
+              customer: user,
+              pickupLocation,
+              pickupAddress: pickupAddress ?? 'Pickup location',
+              dropLocation: effectiveDropLocation ?? pickupLocation,
+              dropAddress: effectiveDropAddress ?? pickupAddress ?? 'Destination',
+              vehicleType,
+              tripType: tripType!,
+              totalAmount: Number((active as any)?.totalAmount || estimate.total || 0),
+              paymentMethod: PaymentMethod.CASH,
+              createdAt: (active as any)?.createdAt ? String((active as any).createdAt) : now,
+              updatedAt: now,
+            })
+          );
+          navigation.navigate('Tracking', { bookingId: String(active.id) });
+          return;
+        }
+      } catch {}
+
       showAlert('Booking', e?.response?.data?.message || e?.message || 'Failed to create booking');
     } finally {
       setIsSubmitting(false);
@@ -1388,6 +1441,7 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
             </View>
           ) : (
             <View style={styles.hoursRow}>
+              {/* Decrease button */}
               <TouchableOpacity
                 style={styles.hoursBtn}
                 onPress={() => {
@@ -1395,21 +1449,55 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
                     const idx = LOCAL_PACKAGES.indexOf(Math.max(1, Math.round(requestedHours || 1)));
                     const next = idx <= 0 ? LOCAL_PACKAGES[0] : LOCAL_PACKAGES[idx - 1];
                     setRequestedHours(next);
+                    setHoursInputText(String(next));
                     return;
                   }
-                  setRequestedHours((h) => Math.max(1, Number(h || 1) - 1));
+                  const next = Math.max(1, Math.round(requestedHours || 1) - 1);
+                  setRequestedHours(next);
+                  setHoursInputText(String(next));
                 }}
               >
                 <Text style={styles.hoursBtnText}>-</Text>
               </TouchableOpacity>
+
+              {/* Hours value — editable text or static for ONE_WAY */}
               <View style={styles.hoursValue}>
-                <Text style={styles.hoursValueText}>
-                  {tripType === TripType.ONE_WAY
-                    ? `${(estimate as any).packageHours || 1} hr package`
-                    : `${Math.max(1, Math.round(requestedHours || 1))} hr`}
-                </Text>
-                <Text style={styles.hoursHintText}>{estimate.label}</Text>
+                {tripType === TripType.ONE_WAY ? (
+                  <>
+                    <Text style={styles.hoursValueText}>
+                      {`${(estimate as any).packageHours || 1} hr package`}
+                    </Text>
+                    <Text style={styles.hoursHintText}>{estimate.label}</Text>
+                  </>
+                ) : (
+                  <>
+                    <View style={styles.hoursInputRow}>
+                      <TextInput
+                        style={styles.hoursInput}
+                        keyboardType="number-pad"
+                        value={hoursInputText}
+                        onChangeText={(txt) => {
+                          // Allow typing freely; only clamp on blur
+                          setHoursInputText(txt.replace(/[^0-9]/g, ''));
+                        }}
+                        onBlur={() => {
+                          const parsed = parseInt(hoursInputText, 10);
+                          const clamped = Number.isFinite(parsed) ? Math.max(1, Math.min(12, parsed)) : 1;
+                          setRequestedHours(clamped);
+                          setHoursInputText(String(clamped));
+                        }}
+                        selectTextOnFocus
+                        maxLength={2}
+                        returnKeyType="done"
+                      />
+                      <Text style={styles.hoursInputSuffix}>hr</Text>
+                    </View>
+                    <Text style={styles.hoursHintText}>{estimate.label}</Text>
+                  </>
+                )}
               </View>
+
+              {/* Increase button */}
               <TouchableOpacity
                 style={styles.hoursBtn}
                 onPress={() => {
@@ -1418,9 +1506,12 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
                     const next =
                       idx >= LOCAL_PACKAGES.length - 1 ? LOCAL_PACKAGES[LOCAL_PACKAGES.length - 1] : LOCAL_PACKAGES[idx + 1];
                     setRequestedHours(next);
+                    setHoursInputText(String(next));
                     return;
                   }
-                  setRequestedHours((h) => Math.min(12, Number(h || 1) + 1));
+                  const next = Math.min(12, Math.round(requestedHours || 1) + 1);
+                  setRequestedHours(next);
+                  setHoursInputText(String(next));
                 }}
               >
                 <Text style={styles.hoursBtnText}>+</Text>
@@ -2101,6 +2192,19 @@ const styles = StyleSheet.create({
   hoursValue: { flex: 1, alignItems: 'center' },
   hoursValueText: { color: G.textPrimary, fontWeight: '900', fontSize: 16 },
   hoursHintText: { marginTop: 2, color: G.textSecondary, fontWeight: '700', fontSize: 12 },
+  hoursInputRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  hoursInput: {
+    color: G.textPrimary,
+    fontWeight: '900',
+    fontSize: 22,
+    textAlign: 'center',
+    minWidth: 48,
+    paddingVertical: 2,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1.5,
+    borderBottomColor: G.accent,
+  },
+  hoursInputSuffix: { color: G.textSecondary, fontWeight: '700', fontSize: 14 },
 
   fareCardPro: {
     backgroundColor: G.bg,
