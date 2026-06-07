@@ -38,6 +38,7 @@ class SocketService {
   private globalHandlersRegistered = false;
   private lastLocationUpdateTs = 0;
   private lastLocation: { latitude: number; longitude: number } | null = null;
+  private lastAcceptedBookingId = ''; // Dedup for booking:accepted — reset on SEARCHING/cancel
 
   private distanceApproxMeters(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) {
     const dLat = a.latitude - b.latitude;
@@ -122,6 +123,8 @@ class SocketService {
       // Scheduling one here too would cause a double notification for customers.
 
       if (status === 'SEARCHING' || status === 'REQUESTED') {
+        // Reset accepted-dedup so a new driver can accept the same bookingId
+        this.lastAcceptedBookingId = '';
         const current = store.getState().booking.currentBooking;
         if (!current || String(current.id) !== bookingId) return;
         store.dispatch(clearDriverLocation());
@@ -225,13 +228,12 @@ class SocketService {
     });
 
     // Dedup: customer receives booking:accepted from both user: room and booking: room
-    let lastAcceptedId = '';
     this.socket.on('booking:accepted', (data: any) => {
       const bookingId = String(data?.bookingId ?? '');
       if (!bookingId) return;
-      // Skip duplicate events for the same booking
-      if (lastAcceptedId === bookingId) return;
-      lastAcceptedId = bookingId;
+      // Skip duplicate events for the same booking (but allow re-accepts after cancel)
+      if (this.lastAcceptedBookingId === bookingId) return;
+      this.lastAcceptedBookingId = bookingId;
 
       store.dispatch(updateBookingStatus({ id: bookingId, status: 'ACCEPTED' }));
 
@@ -368,6 +370,8 @@ class SocketService {
       // If driver cancelled and this is the customer's active booking,
       // reset to SEARCHING so the "Finding driver" screen shows again
       if (isMyBooking && cancelledBy === 'DRIVER' && isCustomer) {
+        // Reset accepted-dedup so a new driver can accept the same bookingId
+        this.lastAcceptedBookingId = '';
         store.dispatch(updateBookingStatus({ id: bookingId, status: 'SEARCHING' }));
         store.dispatch(clearRoute());
         store.dispatch(setDriverLocation(null as any));

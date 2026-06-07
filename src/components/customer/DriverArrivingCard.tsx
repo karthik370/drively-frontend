@@ -17,6 +17,7 @@ interface Props {
     onCall?: () => void;
     onChat?: () => void;
     onShare?: () => void;
+    onDriverPress?: () => void;
 }
 
 const DriverArrivingCard = ({
@@ -33,6 +34,7 @@ const DriverArrivingCard = ({
     onChat,
     onShare,
     shareUrl,
+    onDriverPress,
 }: Props) => {
     const [pulseAnim] = useState(new Animated.Value(1));
 
@@ -109,7 +111,7 @@ const DriverArrivingCard = ({
             </View>
 
             {/* Driver info */}
-            <View style={styles.driverSection}>
+            <TouchableOpacity style={styles.driverSection} onPress={onDriverPress} activeOpacity={onDriverPress ? 0.7 : 1} disabled={!onDriverPress}>
                 <View style={styles.driverAvatar}>
                     {driverPhoto ? (
                         <Image source={{ uri: driverPhoto }} style={styles.driverPhoto} />
@@ -135,17 +137,19 @@ const DriverArrivingCard = ({
                         <Text style={styles.maskedPhoneText}>{maskedPhone}</Text>
                     ) : null}
                 </View>
-            </View>
+                {onDriverPress ? <Icon name="chevron-right" size={20} color="#8A8A8A" /> : null}
+            </TouchableOpacity>
 
-            {/* Action buttons — hidden once trip starts */}
-            {status !== 'STARTED' && status !== 'IN_PROGRESS' && status !== 'COMPLETED' && (
+            {/* Action buttons — always visible */}
             <View style={styles.actions}>
+                {(onCall || phoneNumber) ? (
                 <TouchableOpacity style={styles.actionBtn} onPress={handleCall}>
                     <View style={[styles.actionIcon, { backgroundColor: G.glass2 }]}>
                         <Icon name="phone" size={18} color="#16a34a" />
                     </View>
                     <Text style={styles.actionLabel}>Call</Text>
                 </TouchableOpacity>
+                ) : null}
 
                 {onChat && (
                     <TouchableOpacity style={styles.actionBtn} onPress={onChat}>
@@ -163,7 +167,6 @@ const DriverArrivingCard = ({
                     <Text style={styles.actionLabel}>Share</Text>
                 </TouchableOpacity>
             </View>
-            )}
         </View>
     );
 };

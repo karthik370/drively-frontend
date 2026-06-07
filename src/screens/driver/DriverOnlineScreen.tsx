@@ -27,6 +27,7 @@ const DriverOnlineScreen = ({ navigation }: any) => {
   const currentBooking = useAppSelector((s) => s.booking.currentBooking);
   const driverLocation = useAppSelector((s) => s.location.currentLocation);
   const onlineToggleInFlightRef = useRef<boolean>(false);
+  const permissionGrantedRef = useRef<boolean>(false); // Prevents disclosure re-show after grant
   const [activeBookingId, setActiveBookingId] = useState<string | null>(null);
   const [tripFilter, setTripFilter] = useState<'ALL' | 'ONE_WAY' | 'ROUND_TRIP' | 'OUTSTATION'>('ALL');
   const [showDisclosure, setShowDisclosure] = useState(false);
@@ -103,14 +104,15 @@ const DriverOnlineScreen = ({ navigation }: any) => {
         return;
       }
       
-      const bg = await Location.requestBackgroundPermissionsAsync();
-      if (bg.status !== 'granted') {
-        showAlert('Permission Required', 'Background location permission is needed to receive bookings while the app is closed.');
-        setShowDisclosure(false);
-        return;
+      // Background location is nice-to-have but NOT required (Expo Go doesn't support it)
+      try {
+        await Location.requestBackgroundPermissionsAsync();
+      } catch {
+        // Silently continue — background location not available in Expo Go
       }
 
       setShowDisclosure(false);
+      permissionGrantedRef.current = true;
       await setOnlineState(true);
     } catch (e) {
       setShowDisclosure(false);
@@ -119,11 +121,18 @@ const DriverOnlineScreen = ({ navigation }: any) => {
 
   const handleToggleSwitch = async (v: boolean) => {
     if (v) {
-      const bgStatus = await Location.getBackgroundPermissionsAsync();
-      if (bgStatus.status !== 'granted') {
-        setShowDisclosure(true);
-        return;
+      // Skip disclosure if permissions were already confirmed this session
+      if (!permissionGrantedRef.current) {
+        const fgStatus = await Location.getForegroundPermissionsAsync();
+        if (fgStatus.status !== 'granted') {
+          setShowDisclosure(true);
+          return;
+        }
+        permissionGrantedRef.current = true;
       }
+    } else {
+      // Reset when going offline so next online attempt re-checks
+      permissionGrantedRef.current = false;
     }
     void setOnlineState(Boolean(v));
   };

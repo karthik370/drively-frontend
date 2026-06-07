@@ -132,6 +132,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
   const [shareUrl, setShareUrl] = React.useState<string | null>(null);
   const [isSharing, setIsSharing] = React.useState(false);
   const [isFavDriver, setIsFavDriver] = React.useState(false);
+  const [showDriverStatsModal, setShowDriverStatsModal] = React.useState(false);
   const [statusUpdating, setStatusUpdating] = React.useState(false); // Loading overlay for status transitions
   const [isMapPanned, setIsMapPanned] = React.useState(false); // Suspends auto-camera when user moves map
   const isMapPannedRef = useRef(false);
@@ -679,6 +680,13 @@ const TrackingScreen = ({ navigation, route }: any) => {
     [BookingStatus.ACCEPTED, BookingStatus.DRIVER_ARRIVING, BookingStatus.ARRIVED].includes(booking.status as any)
   );
 
+  const canCustomerCancelAfterAccept = Boolean(
+    !isDriverMode &&
+    booking?.id &&
+    booking?.status &&
+    [BookingStatus.ACCEPTED, BookingStatus.DRIVER_ARRIVING, BookingStatus.ARRIVED].includes(booking.status as any)
+  );
+
   const handleDriverStatusUpdate = async (nextStatus: BookingStatus) => {
     const bookingId = booking?.id;
     if (!bookingId) return;
@@ -1044,15 +1052,42 @@ const TrackingScreen = ({ navigation, route }: any) => {
       return;
     }
 
-    // ── Always fitToCoordinates driver + target + poly samples ──
-    // Matches RideConfirmScreen's proven behavior: clean, predictable zoom
+    const isTripPhase = status === 'STARTED' || status === 'IN_PROGRESS';
+
+    // ── During trip: follow driver with ~3km lookahead (Uber-style) ──
+    if (isTripPhase && remainingRoute && remainingRoute.length >= 2) {
+      // Gather points within ~3km ahead of driver along the route
+      const lookaheadKm = 3;
+      let accDist = 0;
+      const aheadPoints: { latitude: number; longitude: number }[] = [driverPos];
+      for (let i = 1; i < remainingRoute.length; i++) {
+        const prev = remainingRoute[i - 1];
+        const curr = remainingRoute[i];
+        const segKm = distanceApproxMeters(prev, curr) / 1000;
+        accDist += segKm;
+        aheadPoints.push(curr);
+        if (accDist >= lookaheadKm) break;
+      }
+      // Always include target if it's close enough (< 3km)
+      const distToTarget = distanceApproxMeters(driverPos, targetPos) / 1000;
+      if (distToTarget <= lookaheadKm + 1) {
+        aheadPoints.push(targetPos);
+      }
+      mapRef.current?.fitToCoordinates(
+        aheadPoints,
+        { edgePadding: FIT_PADDING, animated: true },
+      );
+      return;
+    }
+
+    // ── Pre-trip or no remaining route: fit full route ──
     const polySamples = getPolylineSamples();
     const pointsToFit: { latitude: number; longitude: number }[] = [driverPos, targetPos, ...polySamples];
     mapRef.current?.fitToCoordinates(
       pointsToFit,
       { edgePadding: FIT_PADDING, animated: true },
     );
-  }, [driverLocation, getPolylineSamples]);
+  }, [driverLocation, getPolylineSamples, remainingRoute]);
   // Store fitMapToRoute in a ref so effects don't depend on it
   // (fitMapToRoute changes every time driverLocation updates, which was killing the timeouts!)
   const fitMapToRouteRef = useRef(fitMapToRoute);
@@ -1213,8 +1248,8 @@ const TrackingScreen = ({ navigation, route }: any) => {
     const prev = lastCameraDriverRef.current;
     const movedMeters = prev ? distanceApproxMeters(prev, driverPos) : Number.POSITIVE_INFINITY;
 
-    // Recenter when driver moves >15m or every 3s — smooth continuous tracking
-    if (movedMeters >= 15 || now - lastCameraTimestampRef.current >= 3000) {
+    // Recenter when driver moves >10m or every 3s — smooth continuous tracking
+    if (movedMeters >= 10 || now - lastCameraTimestampRef.current >= 3000) {
       lastCameraTimestampRef.current = now;
       lastCameraDriverRef.current = { latitude: driverPos.latitude, longitude: driverPos.longitude };
       fitMapToRouteRef.current();
@@ -1622,13 +1657,14 @@ const TrackingScreen = ({ navigation, route }: any) => {
                 (booking as any)?.driver?.contactNumber
               ))}
               shareUrl={shareUrl}
-              onCall={booking?.status === 'STARTED' || booking?.status === 'IN_PROGRESS' || booking?.status === 'COMPLETED' ? undefined : callOtherParty}
-              onChat={booking?.status === 'STARTED' || booking?.status === 'IN_PROGRESS' || booking?.status === 'COMPLETED' ? undefined : () => {
+              onCall={callOtherParty}
+              onChat={() => {
                 if (booking?.id) {
                   setUnreadChatCount(0);
                   navigation.navigate('Chat', { bookingId: booking.id });
                 }
               }}
+              onDriverPress={!isDriverMode ? () => setShowDriverStatsModal(true) : undefined}
               onShare={async () => {
                 if (!booking?.id) return;
                 try {
@@ -1700,6 +1736,38 @@ const TrackingScreen = ({ navigation, route }: any) => {
                 </Text>
               </TouchableOpacity>
             ) : null}
+
+            {/* Cancel ride button for customer after driver accepted */}
+            {canCustomerCancelAfterAccept ? (
+              <TouchableOpacity
+                style={styles.customerCancelBtn}
+                onPress={() => {
+                  if (!booking?.id) return;
+                  showAlert('Cancel ride?', 'Are you sure you want to cancel this ride? Cancellation fees may apply if the driver has already started traveling.', [
+                    { text: 'No', style: 'cancel' },
+                    {
+                      text: 'Yes, cancel',
+                      style: 'destructive',
+                      onPress: async () => {
+                        try {
+                          isCancellingRef.current = true;
+                          await cancelBooking(booking.id, 'Cancelled by customer', 'CUSTOMER');
+                          dispatch(updateBookingStatus({ id: booking.id, status: 'CANCELLED' }));
+                          dispatch(clearCurrentBooking());
+                          navigation.navigate('Tabs');
+                        } catch (e: any) {
+                          isCancellingRef.current = false;
+                          showAlert('Cancel ride', e?.message || 'Failed to cancel ride');
+                        }
+                      },
+                    },
+                  ]);
+                }}
+              >
+                <Icon name="close-circle-outline" size={16} color="#ef4444" />
+                <Text style={styles.customerCancelText}>Cancel Ride</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         ) : null}
 
@@ -1731,6 +1799,132 @@ const TrackingScreen = ({ navigation, route }: any) => {
             } : undefined}
           />
         ) : null}
+
+        {/* ── Driver Stats Modal ── */}
+        <Modal
+          visible={showDriverStatsModal}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowDriverStatsModal(false)}
+        >
+          <View style={styles.otpModalOverlay}>
+            <View style={[styles.otpModalCard, { maxHeight: '70%' }]}>
+              <TouchableOpacity
+                style={{ position: 'absolute', top: 12, right: 12, zIndex: 10 }}
+                onPress={() => setShowDriverStatsModal(false)}
+              >
+                <Icon name="close" size={22} color="#8A8A8A" />
+              </TouchableOpacity>
+
+              <Text style={[styles.otpModalTitle, { marginBottom: 16 }]}>Driver Profile</Text>
+
+              {/* Photo + Name + Rating */}
+              <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                {(booking as any)?.driver?.profileImage ? (
+                  <Image
+                    source={{ uri: (booking as any).driver.profileImage }}
+                    style={{ width: 72, height: 72, borderRadius: 36, marginBottom: 8, borderWidth: 2, borderColor: '#C9A84C' }}
+                  />
+                ) : (
+                  <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: '#2A2A3E', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+                    <Icon name="account" size={36} color="#8A8A8A" />
+                  </View>
+                )}
+                <Text style={{ fontSize: 20, fontWeight: '800', color: '#fff' }}>
+                  {`${(booking as any)?.driver?.firstName ?? ''} ${(booking as any)?.driver?.lastName ?? ''}`.trim() || 'Driver'}
+                </Text>
+                {(() => {
+                  const r = parseFloat(String((booking as any)?.driver?.rating ?? (booking as any)?.driver?.avgRating ?? 0));
+                  return r > 0 ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                      <Icon name="star" size={16} color="#f59e0b" />
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: '#f59e0b' }}>{r.toFixed(1)}</Text>
+                    </View>
+                  ) : null;
+                })()}
+              </View>
+
+              {/* Stats Grid */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 16, paddingVertical: 12, backgroundColor: 'rgba(201,168,76,0.06)', borderRadius: 12 }}>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 20, fontWeight: '900', color: '#C9A84C' }}>
+                    {(booking as any)?.driver?.driverProfile?.totalTrips ?? 0}
+                  </Text>
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#8A8A8A', marginTop: 2 }}>Trips</Text>
+                </View>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 20, fontWeight: '900', color: '#C9A84C' }}>
+                    {(() => {
+                      const r = parseFloat(String((booking as any)?.driver?.rating ?? 0));
+                      return r > 0 ? r.toFixed(1) : '—';
+                    })()}
+                  </Text>
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#8A8A8A', marginTop: 2 }}>Rating</Text>
+                </View>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 20, fontWeight: '900', color: '#C9A84C' }}>
+                    {(() => {
+                      const created = (booking as any)?.driver?.createdAt ?? (booking as any)?.driver?.driverProfile?.createdAt;
+                      if (!created) return '—';
+                      const y = new Date(created).getFullYear();
+                      return isNaN(y) ? '—' : String(y);
+                    })()}
+                  </Text>
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#8A8A8A', marginTop: 2 }}>Since</Text>
+                </View>
+              </View>
+
+              {/* Vehicle Details */}
+              {(booking as any)?.driver?.driverProfile ? (
+                <View style={{ marginBottom: 12 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#CCCCCC', marginBottom: 6 }}>Vehicle</Text>
+                  <View style={{ backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: 12, gap: 4 }}>
+                    {(() => {
+                      const dp = (booking as any).driver.driverProfile;
+                      const make = dp.vehicleMake ?? '';
+                      const model = dp.vehicleModel ?? '';
+                      const plate = dp.licensePlate ?? '';
+                      const vType = dp.vehicleType ?? (booking as any)?.vehicleType ?? '';
+                      return (
+                        <>
+                          {(make || model) ? <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>{`${make} ${model}`.trim()}</Text> : null}
+                          {plate ? <Text style={{ fontSize: 13, fontWeight: '800', color: '#C9A84C', letterSpacing: 1.5 }}>{plate}</Text> : null}
+                          {vType ? <Text style={{ fontSize: 12, color: '#8A8A8A', textTransform: 'capitalize' }}>{vType}</Text> : null}
+                        </>
+                      );
+                    })()}
+                  </View>
+                </View>
+              ) : null}
+
+              {/* Skill Badges */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {Number((booking as any)?.driver?.driverProfile?.totalTrips ?? 0) >= 50 ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(245,158,11,0.1)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
+                    <Icon name="trophy" size={14} color="#f59e0b" />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#f59e0b' }}>Experienced</Text>
+                  </View>
+                ) : null}
+                {parseFloat(String((booking as any)?.driver?.rating ?? 0)) >= 4.5 ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(16,185,129,0.1)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
+                    <Icon name="star-circle" size={14} color="#10b981" />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#10b981' }}>Top Rated</Text>
+                  </View>
+                ) : null}
+                {Number((booking as any)?.driver?.driverProfile?.totalTrips ?? 0) >= 100 ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(99,102,241,0.1)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
+                    <Icon name="shield-check" size={14} color="#6366f1" />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#6366f1' }}>Veteran</Text>
+                  </View>
+                ) : null}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(34,197,94,0.1)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
+                  <Icon name="check-decagram" size={14} color="#22c55e" />
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#22c55e' }}>Verified</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         <Modal
           visible={isRatingModalVisible}
@@ -2772,6 +2966,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: G.accent,
+  },
+  customerCancelBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(239,68,68,0.08)',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(239,68,68,0.3)',
+  },
+  customerCancelText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#ef4444',
   },
   recenterBtn: {
     position: 'absolute',
