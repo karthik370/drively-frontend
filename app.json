@@ -31,7 +31,7 @@
     "android": {
       "package": "com.drively.app",
       "versionCode": 7,
-      "googleServicesFile": "./android/app/google-services.json",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/drively_logo.png",
         "backgroundColor": "#0A0A0A"
