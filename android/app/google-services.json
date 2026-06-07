@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "58661165962",
+    "project_id": "drively-fdc98",
+    "storage_bucket": "drively-fdc98.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:58661165962:android:1087f51ade387198da0673",
+        "android_client_info": {
+          "package_name": "com.drively.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDh3SNVkDe8_MdmmOlyOyJ112aQF0NawPE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
