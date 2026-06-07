@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DrawerActions } from '@react-navigation/native';
 import { ActivityIndicator, Alert, ScrollView, View, Text, StyleSheet, TouchableOpacity, Animated, NativeScrollEvent, NativeSyntheticEvent, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -51,6 +51,10 @@ const HomeScreen = ({ navigation }: any) => {
   const lastCameraTsRef = useRef<number>(0);
   const nearbyFetchRef = useRef<{ inFlight: boolean; lastKey: string | null }>({ inFlight: false, lastKey: null });
 
+  // Refs to prevent infinite re-trigger of bootstrapLocation
+  const bootstrapInFlightRef = useRef(false);
+  const hasAutoBootstrappedRef = useRef(false);
+
   const setTargetFromCoords = useCallback(
     async (target: 'pickup' | 'drop', coords: { latitude: number; longitude: number }) => {
       if (target === 'pickup') {
@@ -74,7 +78,8 @@ const HomeScreen = ({ navigation }: any) => {
   );
 
   const bootstrapLocation = useCallback(async () => {
-    if (isBootstrappingLocation) return null;
+    // Use ref guard to prevent concurrent runs (avoids state-driven re-renders)
+    if (bootstrapInFlightRef.current) return null;
 
     if (userLocation) {
       if (!pickupLocation) {
@@ -83,6 +88,7 @@ const HomeScreen = ({ navigation }: any) => {
       return userLocation;
     }
 
+    bootstrapInFlightRef.current = true;
     setIsBootstrappingLocation(true);
     try {
       const servicesEnabled = await Location.hasServicesEnabledAsync();
@@ -137,9 +143,10 @@ const HomeScreen = ({ navigation }: any) => {
       showAlert('Location', 'Could not detect current location. You can select pickup manually.');
       return null;
     } finally {
+      bootstrapInFlightRef.current = false;
       setIsBootstrappingLocation(false);
     }
-  }, [dispatch, isBootstrappingLocation, pickupLocation, userLocation]);
+  }, [dispatch, pickupLocation, userLocation]);
 
   const centerOnCurrentLocation = useCallback(async () => {
     const coords = (await bootstrapLocation()) ?? userLocation;
@@ -165,9 +172,13 @@ const HomeScreen = ({ navigation }: any) => {
     }
   }, [bootstrapLocation, mapSelectTarget, setTargetFromCoords, userLocation]);
 
+  // Auto-bootstrap location ONCE on mount — never re-triggers on alert dismiss
   useEffect(() => {
+    if (hasAutoBootstrappedRef.current) return;
+    hasAutoBootstrappedRef.current = true;
     bootstrapLocation();
-  }, [bootstrapLocation]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const base = pickupLocation ?? userLocation;
