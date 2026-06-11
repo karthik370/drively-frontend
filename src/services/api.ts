@@ -1020,6 +1020,7 @@ export type CashfreeOrderPayload = {
   paymentSessionId?: string;
   amount?: number;
   currency?: string;
+  upiQrLink?: string | null; // Proper UPI deep link for QR scanning
 };
 
 export const createBookingPaymentOrder = async (bookingId: string): Promise<CashfreeOrderPayload> => {

@@ -232,6 +232,13 @@ const TrackingScreen = ({ navigation, route }: any) => {
   const lastRouteTargetRef = useRef<{ latitude: number; longitude: number } | null>(null);
   const lastFollowCameraTsRef = useRef<number>(0);
   const lastFollowCameraCoordRef = useRef<{ latitude: number; longitude: number } | null>(null);
+  // BUG 2 FIX: Track "just started" window — show full route for first 10s after STARTED
+  const justStartedRef = useRef<boolean>(false);
+  // BUG 1 FIX: Debounce competing fitToCoordinates calls (last one wins)
+  const lastFitCallTsRef = useRef<number>(0);
+  const pendingFitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // "Show full route" button state for mid-trip
+  const [showFullRouteBtn, setShowFullRouteBtn] = useState(false);
   const didEndNavigateRef = useRef<boolean>(false);
   const didPromptRatingRef = useRef<boolean>(false);
 
@@ -902,6 +909,11 @@ const TrackingScreen = ({ navigation, route }: any) => {
       lastDispatchedEtaRef.current = null;
       lastDispatchedDistRef.current = null;
 
+      // BUG 2 FIX: Mark "just started" — first 10s show full route, not 3km truncated
+      justStartedRef.current = true;
+      setShowFullRouteBtn(true);
+      setTimeout(() => { justStartedRef.current = false; }, 10000);
+
       // Clear the old pickup route from Redux immediately
       dispatch(clearRoute());
     }
@@ -989,8 +1001,16 @@ const TrackingScreen = ({ navigation, route }: any) => {
   const lastCameraDriverRef = useRef<{ latitude: number; longitude: number } | null>(null);
   const lastCameraTimestampRef = useRef<number>(0);
 
-  // Edge padding for fitToCoordinates — accounts for header (top) and bottom sheet
-  const FIT_PADDING = { top: 250, bottom: 350, left: 60, right: 60 };
+  // BUG 1 FIX: Phase-based edge padding — trip phase gets extra top padding
+  // so the drop pin clears the header (pin anchor is at bottom, icon body extends UP)
+  const FIT_PADDING_PRETRIP = { top: 250, bottom: 350, left: 60, right: 60 };
+  const FIT_PADDING_TRIP    = { top: 300, bottom: 280, left: 60, right: 60 };
+  // Dynamic getter based on current booking status
+  const getFitPadding = React.useCallback(() => {
+    const status = bookingStatusRef.current;
+    const isTripPhase = status && ['STARTED', 'IN_PROGRESS'].includes(status);
+    return isTripPhase ? FIT_PADDING_TRIP : FIT_PADDING_PRETRIP;
+  }, []);
 
   // Helper: sample key polyline waypoints for fitToCoordinates
   // (fitting to all 500+ polyline points is wasteful; 10 evenly-spaced samples is enough)
@@ -1015,6 +1035,26 @@ const TrackingScreen = ({ navigation, route }: any) => {
     const isActive = Boolean(status && ['ACCEPTED', 'DRIVER_ARRIVING', 'ARRIVED', 'STARTED', 'IN_PROGRESS', 'COMPLETED'].includes(status));
     if (!isActive) return;
 
+    // BUG 1 FIX: Debounce competing fit calls — cancel any pending fit, only the
+    // latest call within 500ms executes (prevents onMapReady + status-change racing)
+    const now = Date.now();
+    if (pendingFitTimerRef.current) {
+      clearTimeout(pendingFitTimerRef.current);
+      pendingFitTimerRef.current = null;
+    }
+    // If another fit call happened < 500ms ago, schedule this one with a 500ms delay
+    // so only the LAST call with the most complete point set wins
+    if (now - lastFitCallTsRef.current < 500) {
+      pendingFitTimerRef.current = setTimeout(() => {
+        pendingFitTimerRef.current = null;
+        fitMapToRouteRef.current(overrideDriver, overrideTarget);
+      }, 500);
+      return;
+    }
+    lastFitCallTsRef.current = now;
+
+    const FIT_PADDING = getFitPadding();
+
     const driverFallback = isDriverModeRef.current ? (currentLocation ?? driverLocation) : (driverLocation ?? currentLocation);
     let driverPos = overrideDriver ?? routeStartRef.current ?? driverFallback ?? null;
     const targetPos = overrideTarget ?? routeTargetRef.current ?? null;
@@ -1028,6 +1068,38 @@ const TrackingScreen = ({ navigation, route }: any) => {
         driverPos = null; // treat as unknown until real GPS arrives
       }
     }
+
+    // BUG 1 FIX: Guard — if status just changed and either endpoint is missing,
+    // retry up to 5 times every 300ms until both are available
+    if (!driverPos || !targetPos) {
+      const retryCountKey = `__fitRetry_${status}`;
+      const retryCount = (fitMapToRouteRef as any)[retryCountKey] ?? 0;
+      if (retryCount < 5) {
+        (fitMapToRouteRef as any)[retryCountKey] = retryCount + 1;
+        console.log('[MAP-FIT] Missing endpoint, retry', retryCount + 1, '/5 —',
+          'driver:', !!driverPos, 'target:', !!targetPos, 'status:', status);
+        setTimeout(() => fitMapToRouteRef.current(overrideDriver, overrideTarget), 300);
+        return;
+      }
+      // Exhausted retries — reset counter and fall through with what we have
+      (fitMapToRouteRef as any)[retryCountKey] = 0;
+    }
+
+    // Reset retry counter on successful call
+    if (driverPos && targetPos) {
+      (fitMapToRouteRef as any)[`__fitRetry_${status}`] = 0;
+    }
+
+    console.log('[MAP-FIT] fitToCoordinates —', {
+      status,
+      driverPos: driverPos ? `${driverPos.latitude.toFixed(5)},${driverPos.longitude.toFixed(5)}` : null,
+      targetPos: targetPos ? `${targetPos.latitude.toFixed(5)},${targetPos.longitude.toFixed(5)}` : null,
+      remainingRouteLen: remainingRoute?.length ?? 0,
+      decodedRouteLen: decodedRoute?.length ?? 0,
+      justStarted: justStartedRef.current,
+      edgePadding: FIT_PADDING,
+      timestamp: now,
+    });
 
     // Round trips in progress: no target — fit driver + pickup
     if (!targetPos) {
@@ -1054,9 +1126,30 @@ const TrackingScreen = ({ navigation, route }: any) => {
 
     const isTripPhase = status === 'STARTED' || status === 'IN_PROGRESS';
 
-    // ── During trip: follow driver with ~3km lookahead (Uber-style) ──
-    if (isTripPhase && remainingRoute && remainingRoute.length >= 2) {
-      // Gather points within ~3km ahead of driver along the route
+    // ── During trip phase ──
+    if (isTripPhase) {
+      // BUG 2 FIX: For the first 10s after STARTED, or if remainingRoute is
+      // not yet populated (stale/empty), show the FULL route instead of 3km truncated
+      const hasValidRemaining = remainingRoute && remainingRoute.length >= 2;
+      const remainingIsStale = hasValidRemaining && remainingRoute[0] &&
+        distanceApproxMeters(driverPos, remainingRoute[0]) > 500; // >500m away = stale
+
+      if (justStartedRef.current || !hasValidRemaining || remainingIsStale) {
+        // First fit after trip start — show EVERYTHING (driver + drop + full polyline)
+        const polySamples = getPolylineSamples();
+        const fallbackRoute = (decodedRoute && decodedRoute.length >= 2) ? decodedRoute : [];
+        const routePoints = polySamples.length > 0 ? polySamples : fallbackRoute;
+        console.log('[MAP-FIT] Full route view (justStarted or stale remaining) —',
+          'justStarted:', justStartedRef.current, 'hasRemaining:', hasValidRemaining,
+          'remainingStale:', remainingIsStale, 'routePoints:', routePoints.length);
+        mapRef.current?.fitToCoordinates(
+          [driverPos, targetPos, ...routePoints],
+          { edgePadding: FIT_PADDING, animated: true },
+        );
+        return;
+      }
+
+      // Normal 3km lookahead for subsequent updates
       const lookaheadKm = 3;
       let accDist = 0;
       const aheadPoints: { latitude: number; longitude: number }[] = [driverPos];
@@ -1068,10 +1161,11 @@ const TrackingScreen = ({ navigation, route }: any) => {
         aheadPoints.push(curr);
         if (accDist >= lookaheadKm) break;
       }
-      // Always include target if it's close enough (< 3km)
+      // Always include target if it's close enough (< 4km)
       const distToTarget = distanceApproxMeters(driverPos, targetPos) / 1000;
       if (distToTarget <= lookaheadKm + 1) {
         aheadPoints.push(targetPos);
+        setShowFullRouteBtn(false); // Close enough to see both — hide button
       }
       mapRef.current?.fitToCoordinates(
         aheadPoints,
@@ -1087,7 +1181,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
       pointsToFit,
       { edgePadding: FIT_PADDING, animated: true },
     );
-  }, [driverLocation, getPolylineSamples, remainingRoute]);
+  }, [driverLocation, getPolylineSamples, remainingRoute, decodedRoute, getFitPadding]);
   // Store fitMapToRoute in a ref so effects don't depend on it
   // (fitMapToRoute changes every time driverLocation updates, which was killing the timeouts!)
   const fitMapToRouteRef = useRef(fitMapToRoute);
@@ -1144,15 +1238,21 @@ const TrackingScreen = ({ navigation, route }: any) => {
     lastCameraDriverRef.current = null;
     lastCameraTimestampRef.current = 0;
 
+    // GENERAL FIX: On STARTED, bypass throttle so first fit is immediate
+    if (status === 'STARTED') {
+      lastFitCallTsRef.current = 0;
+    }
+
     console.log('[MAP-FIT] Status changed to:', status);
 
     // Step 1: Immediately fit map to show both driver + target
     // 600ms delay ensures route target refs have updated after status-change resets
     const t1 = setTimeout(() => {
       const { driverPos, target } = getMapEndpoints();
-      console.log('[MAP-FIT] Step1 fit — driver:', driverPos, 'target:', target);
+      console.log('[MAP-FIT] Step1 fit — driver:', driverPos, 'target:', target, 'status:', status);
       setIsMapPanned(false);
       if (pannedTimerRef.current) clearTimeout(pannedTimerRef.current);
+      lastFitCallTsRef.current = 0; // bypass debounce for status-change fit
       fitMapToRouteRef.current(driverPos, target);
     }, 600);
 
@@ -1184,6 +1284,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
           // Step 3: Refit with polyline in view
           setTimeout(() => {
             const pts = getMapEndpoints();
+            lastFitCallTsRef.current = 0; // bypass debounce
             fitMapToRouteRef.current(pts.driverPos, pts.target);
           }, 500);
         })
@@ -1497,7 +1598,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
                 if (driverPos && target) {
                   const polySamples = getPolylineSamples();
                   mapRef.current?.fitToCoordinates([driverPos, target, ...polySamples], {
-                    edgePadding: FIT_PADDING,
+                    edgePadding: getFitPadding(),
                     animated: true,
                   });
                 } else if (target) {
@@ -1537,6 +1638,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
               zIndex={5}
               title="Pickup"
               pinColor="green"
+              anchor={{ x: 0.5, y: 1 }}
             />
           ) : null}
           {stableDropCoord && !isRoundTripStarted ? (
@@ -1546,6 +1648,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
               zIndex={5}
               title="Drop"
               pinColor="red"
+              anchor={{ x: 0.5, y: 1 }}
             />
           ) : null}
           {!isDriverMode && isWaitingForDriver
@@ -1579,19 +1682,56 @@ const TrackingScreen = ({ navigation, route }: any) => {
           ) : null}
         </MapView>
 
-        {/* Uber-style Recenter Button when map is panned */}
-        {isMapPanned ? (
-          <TouchableOpacity 
-            style={[styles.recenterBtn, { bottom: mapEdgePadding.bottom + 20 }]} 
-            onPress={() => {
-              if (pannedTimerRef.current) clearTimeout(pannedTimerRef.current);
-              setIsMapPanned(false);
-              fitMapToRoute();
-            }}
-          >
-            <Icon name="crosshairs-gps" size={24} color="#C9A84C" />
-          </TouchableOpacity>
-        ) : null}
+        {/* Single unified map action button — Recenter (when panned) or Full Route (during trip) */}
+        {(() => {
+          const isTripActive = bookingStatus && ['STARTED', 'IN_PROGRESS'].includes(bookingStatus);
+          // Priority 1: Recenter when user has panned the map
+          if (isMapPanned) {
+            return (
+              <TouchableOpacity
+                style={[styles.recenterBtn, { bottom: mapEdgePadding.bottom + 20 }]}
+                onPress={() => {
+                  if (pannedTimerRef.current) clearTimeout(pannedTimerRef.current);
+                  setIsMapPanned(false);
+                  lastFitCallTsRef.current = 0;
+                  fitMapToRoute();
+                }}
+              >
+                <Icon name="crosshairs-gps" size={24} color="#C9A84C" />
+              </TouchableOpacity>
+            );
+          }
+          // Priority 2: Show full route during active trip (3km lookahead hides drop)
+          if (showFullRouteBtn && isTripActive) {
+            return (
+              <TouchableOpacity
+                style={[styles.recenterBtn, { bottom: mapEdgePadding.bottom + 20 }]}
+                onPress={() => {
+                  const { driverPos, target } = getMapEndpoints();
+                  if (driverPos && target) {
+                    const polySamples = getPolylineSamples();
+                    console.log('[MAP-FIT] Show full route pressed — fitting all points');
+                    lastFitCallTsRef.current = 0;
+                    mapRef.current?.fitToCoordinates(
+                      [driverPos, target, ...polySamples],
+                      { edgePadding: getFitPadding(), animated: true },
+                    );
+                  }
+                  setShowFullRouteBtn(false);
+                  // Auto-re-show after 15s so the user can tap again later
+                  setTimeout(() => {
+                    if (['STARTED', 'IN_PROGRESS'].includes(bookingStatusRef.current ?? '')) {
+                      setShowFullRouteBtn(true);
+                    }
+                  }, 15000);
+                }}
+              >
+                <Icon name="map-marker-path" size={22} color="#C9A84C" />
+              </TouchableOpacity>
+            );
+          }
+          return null;
+        })()}
       </View>
 
       {/* Status transition overlay — shows spinner during Arrived/Start Trip/Complete */}
@@ -2133,8 +2273,11 @@ const TrackingScreen = ({ navigation, route }: any) => {
                       showAlert('Payment', 'Already paid!');
                       return;
                     }
-                    const cfEnv = __DEV__ ? 'sandbox' : 'api';
-                    const payUrl = `https://${cfEnv}.cashfree.com/pg/orders/sessions/${order.paymentSessionId}`;
+                    // Prefer the UPI deep link from backend (upi://pay?...) — scannable by UPI apps.
+                    // Fallback checkout URL always points to production — environment is
+                    // controlled by backend CASHFREE_ENV var, not by the mobile __DEV__ flag.
+                    const checkoutUrl = `https://api.cashfree.com/pg/orders/sessions/${order.paymentSessionId}`;
+                    const payUrl = order.upiQrLink || checkoutUrl;
                     setQrPayUrl(payUrl);
                     setQrOrderId(order.orderId ?? null);
                     setShowQrModal(true);
