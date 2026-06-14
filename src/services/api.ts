@@ -1590,6 +1590,16 @@ export const getDriverPayoutHistory = async (): Promise<any[]> => {
   }
 };
 
+/** Save / update driver's UPI ID (for QR code payments). Stores to driver_profiles.upiId. */
+export const saveDriverUpiId = async (upiId: string): Promise<{ upiId: string }> => {
+  try {
+    const res = await api.patch<ApiResponse<{ upiId: string }>>('/driver-wallet/upi', { upiId });
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
 // Backwards-compatible aliases
 export const updateBookingStatusApi = updateBookingStatus;
 
