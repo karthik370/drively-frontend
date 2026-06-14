@@ -257,7 +257,7 @@ const DriverWalletScreen = ({ navigation }: any) => {
                             style={styles.addMethodBtn}
                             onPress={() => { setUpiInput(''); setShowUpiModal(true); }}
                         >
-                            <Icon name="cellphone-plus" size={18} color="#6366f1" />
+                            <Icon name="qrcode-scan" size={18} color="#6366f1" />
                             <Text style={styles.addMethodText}>Add UPI ID for QR Payments</Text>
                             <Icon name="chevron-right" size={16} color="#6366f1" />
                         </TouchableOpacity>
@@ -277,7 +277,7 @@ const DriverWalletScreen = ({ navigation }: any) => {
                                 setShowPayoutModal(true);
                             }}
                         >
-                            <Icon name="bank-plus" size={18} color={G.accent} />
+                            <Icon name="bank-outline" size={18} color={G.accent} />
                             <Text style={[styles.addMethodText, { color: G.accent }]}>Add Bank Account</Text>
                             <Icon name="chevron-right" size={16} color={G.accent} />
                         </TouchableOpacity>
