@@ -122,6 +122,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
   const [showQrModal, setShowQrModal] = React.useState(false);
   const [qrPayUrl, setQrPayUrl] = React.useState<string | null>(null);
   const [qrOrderId, setQrOrderId] = React.useState<string | null>(null);
+  const [qrDriverUpiId, setQrDriverUpiId] = React.useState<string | null>(null);
   const [qrLoading, setQrLoading] = React.useState(false);
   const qrPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [nearbyDrivers, setNearbyDrivers] = React.useState<NearbyDriver[]>([]);
@@ -1775,11 +1776,11 @@ const TrackingScreen = ({ navigation, route }: any) => {
                 (booking as any)?.driver?.driverRating
               )}
               vehicleInfo={
-                (booking as any)?.driver?.driverProfile
-                  ? `${(booking as any).driver.driverProfile.vehicleMake ?? ''} ${(booking as any).driver.driverProfile.vehicleModel ?? ''}`.trim() || null
+                (booking as any)?.driver?.driverProfile?.currentVehicle
+                  ? `${(booking as any).driver.driverProfile.currentVehicle.make ?? ''} ${(booking as any).driver.driverProfile.currentVehicle.model ?? ''}`.trim() || null
                   : null
               }
-              licensePlate={(booking as any)?.driver?.driverProfile?.licensePlate ?? null}
+              licensePlate={(booking as any)?.driver?.driverProfile?.currentVehicle?.registrationNumber ?? null}
               etaMinutes={eta}
               status={String(booking.status)}
               phoneNumber={normalizePhone(
@@ -2016,54 +2017,49 @@ const TrackingScreen = ({ navigation, route }: any) => {
                 </View>
               </View>
 
-              {/* Vehicle Details */}
-              {(booking as any)?.driver?.driverProfile ? (
-                <View style={{ marginBottom: 12 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#CCCCCC', marginBottom: 6 }}>Vehicle</Text>
-                  <View style={{ backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: 12, gap: 4 }}>
-                    {(() => {
-                      const dp = (booking as any).driver.driverProfile;
-                      const make = dp.vehicleMake ?? '';
-                      const model = dp.vehicleModel ?? '';
-                      const plate = dp.licensePlate ?? '';
-                      const vType = dp.vehicleType ?? (booking as any)?.vehicleType ?? '';
-                      return (
-                        <>
-                          {(make || model) ? <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>{`${make} ${model}`.trim()}</Text> : null}
-                          {plate ? <Text style={{ fontSize: 13, fontWeight: '800', color: '#C9A84C', letterSpacing: 1.5 }}>{plate}</Text> : null}
-                          {vType ? <Text style={{ fontSize: 12, color: '#8A8A8A', textTransform: 'capitalize' }}>{vType}</Text> : null}
-                        </>
-                      );
-                    })()}
+              {/* Quiz-Earned Skill Badges — top 3 earned by driver */}
+              {(() => {
+                const earnedBadges = (booking as any)?.driver?.driverBadges;
+                const hasEarned = Array.isArray(earnedBadges) && earnedBadges.length > 0;
+                return (
+                  <View style={{ marginBottom: 4 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#CCCCCC', marginBottom: 8 }}>
+                      🏅 Earned Badges
+                    </Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                      {hasEarned ? (
+                        earnedBadges.slice(0, 3).map((eb: any, i: number) => {
+                          const b = eb?.badge;
+                          if (!b) return null;
+                          const badgeColor = b.color || '#C9A84C';
+                          return (
+                            <View
+                              key={i}
+                              style={{
+                                flexDirection: 'row', alignItems: 'center', gap: 6,
+                                backgroundColor: badgeColor + '18',
+                                borderWidth: 1, borderColor: badgeColor + '55',
+                                paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10,
+                              }}
+                            >
+                              <Icon name={(b.icon || 'shield-star') as any} size={15} color={badgeColor} />
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: badgeColor }}>{b.title}</Text>
+                            </View>
+                          );
+                        })
+                      ) : (
+                        <Text style={{ fontSize: 12, color: '#666' }}>No badges earned yet</Text>
+                      )}
+                      {/* Always show Verified badge */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(34,197,94,0.1)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(34,197,94,0.3)' }}>
+                        <Icon name="check-decagram" size={14} color="#22c55e" />
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#22c55e' }}>Verified</Text>
+                      </View>
+                    </View>
                   </View>
-                </View>
-              ) : null}
+                );
+              })()}
 
-              {/* Skill Badges */}
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                {Number((booking as any)?.driver?.driverProfile?.totalTrips ?? 0) >= 50 ? (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(245,158,11,0.1)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
-                    <Icon name="trophy" size={14} color="#f59e0b" />
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#f59e0b' }}>Experienced</Text>
-                  </View>
-                ) : null}
-                {parseFloat(String((booking as any)?.driver?.rating ?? 0)) >= 4.5 ? (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(16,185,129,0.1)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
-                    <Icon name="star-circle" size={14} color="#10b981" />
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#10b981' }}>Top Rated</Text>
-                  </View>
-                ) : null}
-                {Number((booking as any)?.driver?.driverProfile?.totalTrips ?? 0) >= 100 ? (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(99,102,241,0.1)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
-                    <Icon name="shield-check" size={14} color="#6366f1" />
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#6366f1' }}>Veteran</Text>
-                  </View>
-                ) : null}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(34,197,94,0.1)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
-                  <Icon name="check-decagram" size={14} color="#22c55e" />
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#22c55e' }}>Verified</Text>
-                </View>
-              </View>
             </View>
           </View>
         </Modal>
@@ -2273,13 +2269,17 @@ const TrackingScreen = ({ navigation, route }: any) => {
                       showAlert('Payment', 'Already paid!');
                       return;
                     }
-                    // Prefer the UPI deep link from backend (upi://pay?...) — scannable by UPI apps.
-                    // Fallback checkout URL always points to production — environment is
-                    // controlled by backend CASHFREE_ENV var, not by the mobile __DEV__ flag.
-                    const checkoutUrl = `https://api.cashfree.com/pg/orders/sessions/${order.paymentSessionId}`;
-                    const payUrl = order.upiQrLink || checkoutUrl;
-                    setQrPayUrl(payUrl);
+                    // Check if driver hasn't set up their UPI ID
+                    if ((order as any).driverHasNoUpi || !order.upiQrLink) {
+                      showAlert(
+                        'UPI Not Set Up',
+                        'The driver has not configured their UPI ID yet. Please collect cash payment instead.',
+                      );
+                      return;
+                    }
+                    setQrPayUrl(order.upiQrLink);
                     setQrOrderId(order.orderId ?? null);
+                    setQrDriverUpiId((order as any).driverUpiId ?? null);
                     setShowQrModal(true);
                   } catch (e: any) {
                     showAlert('QR Code', e?.message || 'Could not generate QR code');
@@ -2611,7 +2611,8 @@ const TrackingScreen = ({ navigation, route }: any) => {
             <Text style={{ fontSize: 20, fontWeight: '800', color: '#111', marginBottom: 4 }}>Scan to Pay</Text>
             <Text style={{ fontSize: 14, color: '#666', marginBottom: 20 }}>Customer, scan this QR with any UPI app</Text>
 
-            {qrPayUrl ? (
+            {/* QR Code — only show if we have a proper UPI deep link */}
+            {qrPayUrl && qrPayUrl.startsWith('upi://') ? (
               <View style={{ backgroundColor: '#fff', padding: 16, borderRadius: 12, borderWidth: 2, borderColor: '#E5E5E5' }}>
                 <Image
                   source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrPayUrl)}` }}
@@ -2619,11 +2620,29 @@ const TrackingScreen = ({ navigation, route }: any) => {
                   resizeMode="contain"
                 />
               </View>
+            ) : qrPayUrl ? (
+              // Non-UPI URL (checkout page) — show as QR but note it needs browser
+              <View style={{ backgroundColor: '#fff', padding: 16, borderRadius: 12, borderWidth: 2, borderColor: '#E5E5E5' }}>
+                <Image
+                  source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrPayUrl)}` }}
+                  style={{ width: 220, height: 220 }}
+                  resizeMode="contain"
+                />
+                <Text style={{ fontSize: 11, color: '#999', textAlign: 'center', marginTop: 8 }}>Open in browser if UPI app doesn't work</Text>
+              </View>
             ) : (
               <ActivityIndicator size="large" color="#C9A84C" />
             )}
 
             <Text style={{ fontSize: 28, fontWeight: '900', color: '#111', marginTop: 20 }}>₹{Number(booking?.totalAmount || 0).toFixed(0)}</Text>
+
+            {/* Driver UPI ID as text fallback — customer can also type this manually */}
+            {qrDriverUpiId && (
+              <View style={{ marginTop: 14, backgroundColor: '#f8f8f8', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10, width: '100%', alignItems: 'center' }}>
+                <Text style={{ fontSize: 11, color: '#999', marginBottom: 2 }}>Or pay directly to UPI ID</Text>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#111', letterSpacing: 0.5 }}>{qrDriverUpiId}</Text>
+              </View>
+            )}
 
             {paymentDone || (booking as any)?.paymentStatus === 'PAID' ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12, backgroundColor: '#ecfdf5', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 }}>

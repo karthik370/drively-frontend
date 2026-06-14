@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
@@ -44,6 +44,8 @@ const RideReceiptScreen = ({ navigation, route }: Props) => {
 
     const payMethodIcon = paymentMethod === 'CASH' ? 'cash' : paymentMethod === 'UPI' ? 'cellphone' : paymentMethod === 'WALLET' ? 'wallet' : 'credit-card';
     const payMethodLabel = paymentMethod === 'CASH' ? 'Cash' : paymentMethod === 'UPI' ? 'UPI' : paymentMethod === 'WALLET' ? 'Wallet' : 'Card';
+    const paymentStatus = String(booking?.paymentStatus || 'PENDING').toUpperCase();
+    const isPaid = paymentStatus === 'PAID';
 
     // ─────────────────────────────────────────────────────────────────────────
     // EXACT fare formula (verified against backend pricing.ts):
@@ -153,13 +155,16 @@ const RideReceiptScreen = ({ navigation, route }: Props) => {
             <ScrollView contentContainerStyle={styles.content}>
                 {/* ── TOTAL CARD ─────────────────────────────────────── */}
                 <View style={[styles.totalCard, isDriver && { borderColor: '#10b981', borderWidth: 1.5 }]}>
-                    <Icon name={isDriver ? 'wallet' : 'check-circle'} size={40} color="#10b981" />
-                    <Text style={styles.totalLabel}>{isDriver ? 'Your Earnings' : 'Total Paid'}</Text>
+                    <Icon name={isDriver ? 'wallet' : (isPaid ? 'check-circle' : 'clock-outline')} size={40} color={isPaid ? '#10b981' : '#f59e0b'} />
+                    <Text style={styles.totalLabel}>{isDriver ? 'Your Earnings' : (isPaid ? 'Total Paid' : 'Total Due')}</Text>
                     <Text style={styles.totalAmount}>₹{Math.round(isDriver ? driverEarnings : displayTotal)}</Text>
-                    <View style={styles.payMethodChip}>
-                        <Icon name={payMethodIcon} size={14} color="#6366f1" />
-                        <Text style={styles.payMethodText}>
-                            {isDriver ? `Customer paid via ${payMethodLabel}` : `Paid via ${payMethodLabel}`}
+                    <View style={[styles.payMethodChip, !isPaid && { backgroundColor: 'rgba(245,158,11,0.12)' }]}>
+                        <Icon name={isPaid ? payMethodIcon : 'alert-circle-outline'} size={14} color={isPaid ? '#6366f1' : '#f59e0b'} />
+                        <Text style={[styles.payMethodText, !isPaid && { color: '#f59e0b' }]}>
+                            {isDriver
+                              ? (isPaid ? `Customer paid via ${payMethodLabel}` : `${payMethodLabel} — Payment Pending`)
+                              : (isPaid ? `Paid via ${payMethodLabel}` : `${payMethodLabel} — Payment Pending`)
+                            }
                         </Text>
                     </View>
                 </View>
