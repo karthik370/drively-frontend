@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     RefreshControl, ActivityIndicator, Alert, Modal, TextInput,
@@ -9,6 +9,7 @@ import {
     getDriverWalletSummary,
     getDriverWalletTransactions,
     requestDriverPayout,
+    saveDriverUpiId,
 } from '../../services/api';
 import { showAlert } from '../../components/common/CustomAlert';
 import { G } from '../../constants/glassStyles';
@@ -27,6 +28,11 @@ const DriverWalletScreen = ({ navigation }: any) => {
     const [bankName, setBankName] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isEditingPayoutMethod, setIsEditingPayoutMethod] = useState(false);
+
+    // UPI save modal (separate from payout modal)
+    const [showUpiModal, setShowUpiModal] = useState(false);
+    const [upiInput, setUpiInput] = useState('');
+    const [savingUpi, setSavingUpi] = useState(false);
 
     const fetchData = useCallback(async () => {
         try {
@@ -134,7 +140,12 @@ const DriverWalletScreen = ({ navigation }: any) => {
                     <Icon name="arrow-left" size={22} color="#C9A84C" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Wallet</Text>
-                <View style={{ width: 40 }} />
+                <TouchableOpacity
+                    style={styles.backBtn}
+                    onPress={() => navigation.navigate('PayoutSettings')}
+                >
+                    <Icon name="cog" size={22} color="#C9A84C" />
+                </TouchableOpacity>
             </View>
 
             <ScrollView
@@ -240,13 +251,36 @@ const DriverWalletScreen = ({ navigation }: any) => {
                         </View>
                     )}
 
-                    {!summary?.payoutMethods?.bank && !summary?.payoutMethods?.upiId && (
-                        <View style={styles.methodRow}>
-                            <View style={[styles.methodIcon, { backgroundColor: G.glass2 }]}>
-                                <Icon name="alert-circle-outline" size={18} color="#fbbf24" />
-                            </View>
-                            <Text style={styles.methodTitle}>No payout method set</Text>
-                        </View>
+                    {/* Add UPI button — always shown if no UPI saved */}
+                    {!summary?.payoutMethods?.upiId && (
+                        <TouchableOpacity
+                            style={styles.addMethodBtn}
+                            onPress={() => { setUpiInput(''); setShowUpiModal(true); }}
+                        >
+                            <Icon name="cellphone-plus" size={18} color="#6366f1" />
+                            <Text style={styles.addMethodText}>Add UPI ID for QR Payments</Text>
+                            <Icon name="chevron-right" size={16} color="#6366f1" />
+                        </TouchableOpacity>
+                    )}
+
+                    {/* Add Bank button — always shown if no bank saved */}
+                    {!summary?.payoutMethods?.bank && (
+                        <TouchableOpacity
+                            style={[styles.addMethodBtn, { marginTop: summary?.payoutMethods?.upiId ? 8 : 4, borderColor: 'rgba(201,168,76,0.3)', backgroundColor: 'rgba(201,168,76,0.06)' }]}
+                            onPress={() => {
+                                setPayoutMethod('BANK');
+                                setBankAcc('');
+                                setBankIfsc('');
+                                setBankName('');
+                                setIsEditingPayoutMethod(true);
+                                setPayoutAmount('100');
+                                setShowPayoutModal(true);
+                            }}
+                        >
+                            <Icon name="bank-plus" size={18} color={G.accent} />
+                            <Text style={[styles.addMethodText, { color: G.accent }]}>Add Bank Account</Text>
+                            <Icon name="chevron-right" size={16} color={G.accent} />
+                        </TouchableOpacity>
                     )}
                 </View>
 
@@ -397,6 +431,72 @@ const DriverWalletScreen = ({ navigation }: any) => {
                     </View>
                 </View>
             </Modal>
+
+            {/* UPI Save Modal */}
+            <Modal visible={showUpiModal} transparent animationType="slide">
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalCard}>
+                        <Text style={styles.modalTitle}>Add UPI ID</Text>
+                        <Text style={styles.modalHint}>
+                            Customers will scan your QR code and pay directly to this UPI ID after a ride.
+                        </Text>
+
+                        <TextInput
+                            style={[styles.modalInput, { fontSize: 15 }]}
+                            placeholder="e.g. 9999999999@ybl  or  name@okicici"
+                            placeholderTextColor="#555"
+                            value={upiInput}
+                            onChangeText={setUpiInput}
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                            keyboardType="email-address"
+                            returnKeyType="done"
+                            editable={!savingUpi}
+                            autoFocus
+                        />
+
+                        <View style={styles.modalActions}>
+                            <TouchableOpacity
+                                style={styles.modalCancelBtn}
+                                onPress={() => { if (!savingUpi) setShowUpiModal(false); }}
+                            >
+                                <Text style={styles.modalCancelText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.modalConfirmBtn, { backgroundColor: '#6366f1' }, savingUpi && { opacity: 0.6 }]}
+                                disabled={savingUpi}
+                                onPress={async () => {
+                                    const trimmed = upiInput.trim();
+                                    if (!trimmed) {
+                                        showAlert('Required', 'Please enter your UPI ID');
+                                        return;
+                                    }
+                                    if (!trimmed.includes('@')) {
+                                        showAlert('Invalid UPI ID', 'Must contain @ — e.g. name@okicici or 9999999999@ybl');
+                                        return;
+                                    }
+                                    setSavingUpi(true);
+                                    try {
+                                        await saveDriverUpiId(trimmed);
+                                        setShowUpiModal(false);
+                                        showAlert('✅ UPI ID Saved!', `Customers can now pay you via QR scan to\n${trimmed}`);
+                                        fetchData(); // Refresh wallet summary to show new UPI
+                                    } catch (e: any) {
+                                        showAlert('Save Failed', e?.message || 'Could not save UPI ID. Try again.');
+                                    } finally {
+                                        setSavingUpi(false);
+                                    }
+                                }}
+                            >
+                                {savingUpi
+                                    ? <ActivityIndicator size="small" color="#fff" />
+                                    : <Text style={styles.modalConfirmText}>Save UPI ID</Text>
+                                }
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 };
@@ -456,6 +556,13 @@ const styles = StyleSheet.create({
         borderWidth: 1, borderColor: G.borderAccent,
     },
     editBtnText: { fontSize: 12, fontWeight: '700', color: G.accent },
+
+    addMethodBtn: {
+        flexDirection: 'row', alignItems: 'center', gap: 10,
+        backgroundColor: 'rgba(99,102,241,0.08)', borderRadius: 12, padding: 14,
+        borderWidth: 1, borderColor: 'rgba(99,102,241,0.25)', marginTop: 4,
+    },
+    addMethodText: { flex: 1, fontSize: 13, fontWeight: '700', color: '#6366f1' },
 
     // Empty & Transactions
     emptyCard: {
