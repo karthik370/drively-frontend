@@ -1,4 +1,4 @@
-﻿import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ActivityIndicator,
@@ -190,7 +190,7 @@ const EditProfileScreen = ({ navigation }: any) => {
             autoCapitalize="none"
             autoCorrect={false}
           />
-          <Text style={styles.emailHint}>Used for payment receipts from Cashfree</Text>
+          <Text style={styles.emailHint}>Used for account notifications</Text>
         </View>
 
         <TouchableOpacity

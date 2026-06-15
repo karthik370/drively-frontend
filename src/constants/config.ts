@@ -43,7 +43,7 @@ export const MSG91_TOKEN_AUTH = process.env.EXPO_PUBLIC_MSG91_TOKEN_AUTH || '';
 export const APP_CONFIG = {
   name: 'Drively',
   version: '1.0.0',
-  supportEmail: 'support.drively@gmil.com',
+  supportEmail: 'support.drively@gmail.com',
   supportPhone: '+916304767391',
 };
 

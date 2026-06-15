@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
@@ -16,6 +16,7 @@ import { useAppDispatch } from '../../redux/store';
 import { signup } from '../../redux/slices/authSlice';
 import { showAlert } from '../../components/common/CustomAlert';
 import { G } from '../../constants/glassStyles';
+import { applyReferralCode } from '../../services/api';
 
 const SignupScreen = ({ route, navigation }: any) => {
   const { phoneNumber, userType, msg91AccessToken, otpSignupToken } = route.params;
@@ -26,6 +27,7 @@ const SignupScreen = ({ route, navigation }: any) => {
     lastName: '',
     email: '',
   });
+  const [referralCode, setReferralCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSignup = async () => {
@@ -36,7 +38,7 @@ const SignupScreen = ({ route, navigation }: any) => {
 
     const email = formData.email.trim();
     if (!email) {
-      showAlert('Email Required', 'Please enter your email address. It is used for payment receipts and notifications.');
+      showAlert('Email Required', 'Please enter your email address for account notifications.');
       return;
     }
 
@@ -59,12 +61,20 @@ const SignupScreen = ({ route, navigation }: any) => {
         msg91AccessToken,
       };
 
-
-
       const emailVal = formData.email.trim().toLowerCase();
       payload.email = emailVal;
 
       await dispatch(signup(payload)).unwrap();
+
+      // Apply referral code silently after signup (non-blocking)
+      const code = referralCode.trim().toUpperCase();
+      if (code) {
+        try {
+          await applyReferralCode(code);
+        } catch {
+          // Silently ignore — referral errors should never block signup
+        }
+      }
     } catch (err: any) {
       showAlert('Error', err || 'Signup failed');
     } finally {
@@ -124,7 +134,7 @@ const SignupScreen = ({ route, navigation }: any) => {
               keyboardType="email-address"
               autoCapitalize="none"
             />
-            <Text style={styles.emailHint}>Used for payment receipts and notifications</Text>
+            <Text style={styles.emailHint}>Used for account notifications</Text>
           </View>
 
           <View style={styles.inputGroup}>
@@ -136,6 +146,21 @@ const SignupScreen = ({ route, navigation }: any) => {
             />
           </View>
 
+          {/* Referral Code — optional */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Referral Code <Text style={{ color: G.textSecondary, fontWeight: '400' }}>(optional)</Text></Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter referral code"
+              placeholderTextColor="#555"
+              value={referralCode}
+              onChangeText={(t) => setReferralCode(t.toUpperCase())}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              maxLength={12}
+            />
+            <Text style={styles.emailHint}>Have a referral code? Enter it to earn rewards 🎁</Text>
+          </View>
 
         </View>
 

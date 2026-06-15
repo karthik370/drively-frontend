@@ -1,7 +1,9 @@
-﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
+  ActivityIndicator,
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -49,6 +51,7 @@ const SupportChatScreen = ({ navigation, route }: any) => {
 
   const [text, setText] = useState<string>('');
   const [messages, setMessages] = useState<SupportMessage[]>([]);
+  const [isHydrating, setIsHydrating] = useState(true);
   const listRef = useRef<FlatList<SupportMessage> | null>(null);
 
   const isAdmin = useMemo(() => {
@@ -69,16 +72,19 @@ const SupportChatScreen = ({ navigation, route }: any) => {
 
   useEffect(() => {
     let active = true;
+    setIsHydrating(true);
 
     const hydrate = async () => {
-      if (!bookingId) return;
-      if (!effectiveThreadUserId) return;
+      if (!bookingId) { setIsHydrating(false); return; }
+      if (!effectiveThreadUserId) { setIsHydrating(false); return; }
 
       try {
         const items = await listSupportMessages(bookingId, isAdmin ? effectiveThreadUserId : undefined);
         if (!active) return;
         setMessages((Array.isArray(items) ? items : []).slice(-300));
       } catch {
+      } finally {
+        if (active) setIsHydrating(false);
       }
     };
 
@@ -160,6 +166,7 @@ const SupportChatScreen = ({ navigation, route }: any) => {
 
     setMessages((prev) => [...prev, optimistic].slice(-300));
     setText('');
+    Keyboard.dismiss();
 
     try {
       await socketService.connect();
@@ -199,30 +206,37 @@ const SupportChatScreen = ({ navigation, route }: any) => {
 
       <KeyboardAvoidingView
         style={styles.body}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 76 : 0}
       >
         <View style={styles.listWrap}>
-          <FlatList
-          removeClippedSubviews={true}
-          maxToRenderPerBatch={8}
-          windowSize={5}
-          initialNumToRender={8}
-            ref={(r) => {
-              listRef.current = r;
-            }}
-            data={messages}
-            keyExtractor={(item) => item.id}
-            renderItem={renderItem}
-            contentContainerStyle={messages.length ? styles.messages : styles.messagesEmpty}
-            ListEmptyComponent={<Text style={styles.emptyText}>Send a message to our support team.</Text>}
-            onContentSizeChange={() => {
-              try {
-                listRef.current?.scrollToEnd({ animated: true });
-              } catch {
-              }
-            }}
-          />
+          {isHydrating ? (
+            <View style={styles.messagesEmpty}>
+              <ActivityIndicator size="small" color="#C9A84C" />
+              <Text style={[styles.emptyText, { marginTop: 10 }]}>Loading messages…</Text>
+            </View>
+          ) : (
+            <FlatList
+              removeClippedSubviews={true}
+              maxToRenderPerBatch={8}
+              windowSize={5}
+              initialNumToRender={8}
+              ref={(r) => {
+                listRef.current = r;
+              }}
+              data={messages}
+              keyExtractor={(item) => item.id}
+              renderItem={renderItem}
+              contentContainerStyle={messages.length ? styles.messages : styles.messagesEmpty}
+              ListEmptyComponent={<Text style={styles.emptyText}>Send a message to our support team.</Text>}
+              onContentSizeChange={() => {
+                try {
+                  listRef.current?.scrollToEnd({ animated: true });
+                } catch {
+                }
+              }}
+            />
+          )}
         </View>
 
         <View style={styles.inputRow}>
@@ -233,8 +247,11 @@ const SupportChatScreen = ({ navigation, route }: any) => {
             placeholderTextColor="#444444"
             style={styles.input}
             multiline
+            blurOnSubmit={false}
+            returnKeyType="send"
+            onSubmitEditing={() => { void send(); }}
           />
-          <TouchableOpacity onPress={send} disabled={!canSend} style={[styles.sendBtn, { opacity: canSend ? 1 : 0.5 }]}>
+          <TouchableOpacity onPress={() => void send()} disabled={!canSend} style={[styles.sendBtn, { opacity: canSend ? 1 : 0.5 }]}>
             <Icon name="send" size={20} color="#ffffff" />
           </TouchableOpacity>
         </View>

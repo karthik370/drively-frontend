@@ -1360,26 +1360,42 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
             })}
           </View>
 
-          <Text style={styles.sectionTitle}>Trip Type</Text>
-          <View style={styles.tripRow}>
-            {[TripType.ONE_WAY, TripType.ROUND_TRIP, TripType.OUTSTATION].map((t) => {
-              const active = tripType === t;
-              const label = t === TripType.ONE_WAY ? 'One Way' : t === TripType.ROUND_TRIP ? 'Round Trip' : 'Outstation';
-              return (
-                <TouchableOpacity
-                  key={t}
-                  onPress={() => {
-                    setTripType(t);
-                    if (t === TripType.OUTSTATION) {
-                      setRequestedHours(12);
-                    }
-                  }}
-                  style={[styles.tripPill, active ? styles.tripPillActive : styles.tripPillInactive]}
-                >
-                  <Text style={[styles.tripText, active ? styles.tripTextActive : styles.tripTextInactive]}>{label}</Text>
-                </TouchableOpacity>
-              );
-            })}
+          {/* Trip Type — REQUIRED */}
+          <View style={[
+            styles.tripTypeSection,
+            !tripType && styles.tripTypeSectionRequired,
+          ]}>
+            <View style={styles.tripTypeTitleRow}>
+              <Text style={[styles.sectionTitle, { marginTop: 0 }]}>Trip Type</Text>
+              {!tripType ? (
+                <View style={styles.requiredBadge}>
+                  <Text style={styles.requiredBadgeText}>Required ✱</Text>
+                </View>
+              ) : null}
+            </View>
+            <View style={[styles.tripRow, { marginTop: 8 }]}>
+              {[TripType.ONE_WAY, TripType.ROUND_TRIP, TripType.OUTSTATION].map((t) => {
+                const active = tripType === t;
+                const label = t === TripType.ONE_WAY ? 'One Way' : t === TripType.ROUND_TRIP ? 'Round Trip' : 'Outstation';
+                return (
+                  <TouchableOpacity
+                    key={t}
+                    onPress={() => {
+                      setTripType(t);
+                      if (t === TripType.OUTSTATION) {
+                        setRequestedHours(12);
+                      }
+                    }}
+                    style={[styles.tripPill, active ? styles.tripPillActive : styles.tripPillInactive]}
+                  >
+                    <Text style={[styles.tripText, active ? styles.tripTextActive : styles.tripTextInactive]}>{label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {!tripType ? (
+              <Text style={styles.tripTypeHint}>👆 Select a trip type to enable the Request button</Text>
+            ) : null}
           </View>
 
           {tripType === TripType.OUTSTATION ? (
@@ -2005,6 +2021,43 @@ const styles = StyleSheet.create({
   tripText: { fontWeight: '700', fontSize: 12 },
   tripTextActive: { color: G.accent },
   tripTextInactive: { color: G.textSecondary },
+  tripTypeSection: {
+    borderRadius: 14,
+    padding: 12,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    backgroundColor: 'transparent',
+  },
+  tripTypeSectionRequired: {
+    borderColor: '#f59e0b',
+    backgroundColor: 'rgba(245,158,11,0.06)',
+  },
+  tripTypeTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  requiredBadge: {
+    backgroundColor: 'rgba(245,158,11,0.15)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(245,158,11,0.35)',
+  },
+  requiredBadgeText: {
+    color: '#f59e0b',
+    fontWeight: '800',
+    fontSize: 11,
+  },
+  tripTypeHint: {
+    color: '#f59e0b',
+    fontWeight: '700',
+    fontSize: 12,
+    marginTop: 6,
+  },
   cta: {
     backgroundColor: G.accent,
     borderRadius: 14,
