@@ -1,11 +1,12 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { listSupportThreads, type SupportThread } from '../../services/api';
 import { G } from '../../constants/glassStyles';
 
-const AdminNeedHelpInboxScreen = ({ navigation }: any) => {
+const AdminNeedHelpInboxScreen = ({ navigation, route }: any) => {
+  const filterBookingId = typeof route?.params?.filterBookingId === 'string' ? route.params.filterBookingId : '';
   const [loading, setLoading] = useState(false);
   const [threads, setThreads] = useState<SupportThread[]>([]);
 
@@ -25,6 +26,19 @@ const AdminNeedHelpInboxScreen = ({ navigation }: any) => {
     void load();
   }, []);
 
+  // Threads visible after optional bookingId filter
+  const visibleThreads = useMemo(() => {
+    if (!filterBookingId) return threads;
+    return threads.filter((t) => String(t.bookingId) === String(filterBookingId));
+  }, [threads, filterBookingId]);
+
+  // Booking number for filtered view header
+  const filteredBookingNumber = useMemo(() => {
+    if (!filterBookingId) return '';
+    const t = threads.find((t) => String(t.bookingId) === String(filterBookingId));
+    return t?.booking?.bookingNumber ? `#${String(t.booking.bookingNumber).slice(0, 12)}` : `#${filterBookingId.slice(0, 8)}`;
+  }, [threads, filterBookingId]);
+
   const headerRight = useMemo(() => {
     return (
       <TouchableOpacity
@@ -42,8 +56,18 @@ const AdminNeedHelpInboxScreen = ({ navigation }: any) => {
     <SafeAreaView style={styles.container} edges={['top','bottom']}>
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
+          {filterBookingId ? (
+            <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 4 }}>
+              <Icon name="arrow-left" size={20} color="#C9A84C" />
+            </TouchableOpacity>
+          ) : null}
           <Icon name="headset" size={22} color="#C9A84C" />
-          <Text style={styles.title}>Need Help</Text>
+          <View>
+            <Text style={styles.title}>Need Help</Text>
+            {filterBookingId ? (
+              <Text style={styles.subtitle}>Threads for booking {filteredBookingNumber}</Text>
+            ) : null}
+          </View>
         </View>
         {headerRight}
       </View>
@@ -60,14 +84,20 @@ const AdminNeedHelpInboxScreen = ({ navigation }: any) => {
           maxToRenderPerBatch={8}
           windowSize={5}
           initialNumToRender={8}
-        data={threads}
+        data={visibleThreads}
         keyExtractor={(item) => `${item.bookingId}:${item.threadUserId}`}
-        contentContainerStyle={threads.length ? styles.list : styles.listEmpty}
+        contentContainerStyle={visibleThreads.length ? styles.list : styles.listEmpty}
         ListEmptyComponent={
           !loading ? (
             <View style={styles.emptyCard}>
-              <Text style={styles.emptyTitle}>No help requests</Text>
-              <Text style={styles.emptySub}>When customers or drivers tap “Need Help”, chats will appear here.</Text>
+              <Text style={styles.emptyTitle}>
+                {filterBookingId ? 'No help requests for this booking' : 'No help requests'}
+              </Text>
+              <Text style={styles.emptySub}>
+                {filterBookingId
+                  ? 'Neither the customer nor driver has sent a help message for this booking yet.'
+                  : 'When customers or drivers tap "Need Help", chats will appear here.'}
+              </Text>
             </View>
           ) : null
         }
@@ -82,7 +112,11 @@ const AdminNeedHelpInboxScreen = ({ navigation }: any) => {
           const driverId = b?.driver?.id ? String(b.driver.id) : '';
           const senderRole = threadUserId && customerId && threadUserId === customerId ? 'Customer' : threadUserId && driverId && threadUserId === driverId ? 'Driver' : 'User';
           const senderName = senderRole === 'Customer' ? customerName : senderRole === 'Driver' ? driverName : 'User';
-          const subtitle = `${senderName} • ${senderRole}`;
+          // Icon colour differs by role so admin can instantly tell who is asking
+          const roleColor = senderRole === 'Customer' ? '#2563eb' : senderRole === 'Driver' ? '#059669' : '#6b7280';
+          const subtitle = filterBookingId
+            ? `${senderName} (${senderRole})` // booking already shown in header
+            : `${bookingNumber} • ${senderName} (${senderRole})`;
 
           return (
             <TouchableOpacity
@@ -107,8 +141,8 @@ const AdminNeedHelpInboxScreen = ({ navigation }: any) => {
                 }
               }}
             >
-              <View style={styles.itemIcon}>
-                <Icon name="chat-processing" size={18} color="#1e40af" />
+              <View style={[styles.itemIcon, { borderColor: roleColor + '40', backgroundColor: roleColor + '18' }]}>
+                <Icon name={senderRole === 'Customer' ? 'account' : senderRole === 'Driver' ? 'car' : 'chat-processing'} size={18} color={roleColor} />
               </View>
               <View style={styles.itemBody}>
                 <View style={styles.itemTopRow}>
@@ -156,6 +190,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+  },
+  subtitle: {
+    fontSize: 12,
+    color: G.textSecondary,
+    marginTop: 2,
   },
   title: {
     fontSize: 20,

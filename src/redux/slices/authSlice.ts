@@ -4,6 +4,7 @@ import { authService } from '../../services/authService';
 import { User, AuthState } from '../../types';
 
 const ROLE_OVERRIDE_KEY = 'roleOverride';
+const PENDING_SIGNUP_KEY = 'pendingSignupData';
 
 const initialState: AuthState = {
   user: null,
@@ -112,6 +113,21 @@ export const verifyMsg91AccessToken = createAsyncThunk(
         if (data?.accessToken && data?.refreshToken) {
           await SecureStore.setItemAsync('accessToken', data.accessToken);
           await SecureStore.setItemAsync('refreshToken', data.refreshToken);
+          // Clear any pending signup data since user is now fully logged in
+          await SecureStore.deleteItemAsync(PENDING_SIGNUP_KEY);
+        }
+
+        // If user doesn't exist yet (new signup needed), persist the signup state
+        // so they can resume from UserTypeSelection if they close the app
+        const userExistsRaw = data?.userExists;
+        const userExistsStr = String(userExistsRaw).toLowerCase();
+        if (userExistsRaw === false || userExistsRaw === 0 || userExistsStr === 'false' || userExistsStr === '0') {
+          const pendingData = JSON.stringify({
+            phoneNumber: phoneNumber || '',
+            msg91AccessToken: accessToken,
+            otpSignupToken: data?.otpSignupToken || '',
+          });
+          await SecureStore.setItemAsync(PENDING_SIGNUP_KEY, pendingData);
         }
 
         return data;
@@ -135,6 +151,8 @@ export const signup = createAsyncThunk(
       const response = await authService.signup(data);
       await SecureStore.setItemAsync('accessToken', response.data.data.accessToken);
       await SecureStore.setItemAsync('refreshToken', response.data.data.refreshToken);
+      // Clear pending signup data — signup is complete
+      await SecureStore.deleteItemAsync(PENDING_SIGNUP_KEY);
 
       return { ...response.data.data };
     } catch (error: any) {
@@ -213,6 +231,20 @@ export const loadUser = createAsyncThunk(
       const roleOverrideRaw = await SecureStore.getItemAsync(ROLE_OVERRIDE_KEY);
 
       if (!accessToken || !refreshToken) {
+        // No auth tokens — check if there's a pending signup (OTP verified but didn't finish signup)
+        const pendingRaw = await SecureStore.getItemAsync(PENDING_SIGNUP_KEY);
+        if (pendingRaw) {
+          try {
+            const pending = JSON.parse(pendingRaw);
+            if (pending?.phoneNumber && pending?.msg91AccessToken) {
+              return rejectWithValue({
+                message: 'Pending signup',
+                tokensStillExist: false,
+                pendingSignup: pending,
+              });
+            }
+          } catch {}
+        }
         throw new Error('No tokens found');
       }
 

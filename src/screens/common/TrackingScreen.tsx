@@ -701,10 +701,10 @@ const TrackingScreen = ({ navigation, route }: any) => {
     if (statusUpdating) return; // Prevent double-tap
 
     if (nextStatus === BookingStatus.COMPLETED) {
-      showAlert('Complete trip?', 'Are you sure you want to complete this trip?', [
+      showAlert('End Trip', 'Are you sure you want to end this trip? The final fare will be calculated.', [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Yes, complete',
+          text: 'End Trip',
           style: 'destructive',
           onPress: () => {
             void (async () => {
@@ -927,7 +927,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
     if (bookingStatus === 'DRIVER_ARRIVING') return { text: 'Driver arriving soon', color: '#f59e0b', bg: '#fffbeb', icon: 'car-side' as const };
     if (bookingStatus === 'ARRIVED') return { text: 'Driver arrived at pickup', color: '#10b981', bg: '#f0fdf4', icon: 'map-marker-check' as const };
     if (bookingStatus === 'STARTED' || bookingStatus === 'IN_PROGRESS') return { text: 'Trip in progress', color: G.accent, bg: '#eff6ff', icon: 'navigation-variant' as const };
-    if (bookingStatus === 'COMPLETED') return { text: 'Trip completed', color: '#059669', bg: '#f0fdf4', icon: 'check-circle' as const };
+    if (bookingStatus === 'COMPLETED') return { text: 'Ride Completed ✓', color: '#059669', bg: '#f0fdf4', icon: 'check-circle' as const };
     if (bookingStatus === 'CANCELLED') return { text: 'Booking cancelled', color: '#ef4444', bg: '#fef2f2', icon: 'close-circle' as const };
     return { text: `Status: ${bookingStatus}`, color: G.textSecondary, bg: '#f9fafb', icon: 'information' as const };
   }, [bookingStatus]);
@@ -2239,11 +2239,11 @@ const TrackingScreen = ({ navigation, route }: any) => {
 
         {showFinalFare ? (
           <View style={styles.finalFareCard}>
-            <Text style={styles.finalFareTitle}>Final price</Text>
+            <Text style={styles.finalFareTitle}>Trip Summary</Text>
             <Text style={styles.finalFareValue}>₹{Number(booking?.totalAmount || 0).toFixed(0)}</Text>
             <Text style={styles.finalFareHint}>
               {isDriverMode
-                ? 'Trip completed'
+                ? (paymentDone || (booking as any)?.paymentStatus === 'PAID') ? 'Ride completed — payment received ✓' : 'Ride completed — collect payment'
                 : (booking as any)?.paymentMethod === 'CASH'
                   ? (paymentDone || (booking as any)?.paymentStatus === 'PAID') ? 'Paid via QR ✓' : 'Pay driver in cash or scan QR'
                   : (booking as any)?.paymentMethod === 'WALLET'
@@ -2458,7 +2458,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
                 backgroundColor: 'rgba(5,150,105,0.12)', borderRadius: 12, paddingVertical: 10,
                 paddingHorizontal: 16, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(5,150,105,0.3)' }}>
                 <Icon name="check-circle" size={18} color="#059669" />
-                <Text style={{ fontSize: 14, fontWeight: '700', color: '#059669' }}>Payment Confirmed ✓</Text>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#059669' }}>Payment Successful ✓</Text>
               </View>
             ) : null}
 
@@ -2495,11 +2495,11 @@ const TrackingScreen = ({ navigation, route }: any) => {
                 {!paymentDone && (booking as any)?.paymentStatus !== 'PAID'
                   ? isDriverMode
                     ? (booking as any)?.paymentMethod === 'CASH'
-                      ? 'Collect cash first'
-                      : 'Awaiting customer payment...'
+                      ? 'Collect payment to continue'
+                      : 'Waiting for payment...'
                     : (booking as any)?.paymentMethod === 'CASH'
-                      ? 'Awaiting cash collection...'
-                      : 'Pay to proceed'
+                      ? 'Driver will collect payment'
+                      : 'Complete payment to continue'
                   : 'Done'}
               </Text>
             </TouchableOpacity>
@@ -2540,8 +2540,8 @@ const TrackingScreen = ({ navigation, route }: any) => {
                 style={[styles.tripActionButton, styles.tripActionDanger]}
                 onPress={() => handleDriverStatusUpdate(BookingStatus.COMPLETED)}
               >
-                <Icon name="flag-checkered" size={18} color="#ffffff" />
-                <Text style={styles.tripActionTextPrimary}>Complete</Text>
+                <Icon name="map-marker-check-outline" size={18} color="#ffffff" />
+                <Text style={styles.tripActionTextPrimary}>End Trip</Text>
               </TouchableOpacity>
             ) : null}
           </View>

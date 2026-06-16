@@ -235,9 +235,30 @@ const AppNavigator = () => {
   };
 
   useEffect(() => {
-    dispatch(loadUser()).finally(() => {
-      setIsBootLoading(false);
-    });
+    dispatch(loadUser())
+      .unwrap()
+      .catch((err: any) => {
+        // If there's pending signup data (OTP verified but user left before completing signup),
+        // navigate directly to UserTypeSelection so they don't have to re-verify phone
+        const pending = err?.pendingSignup;
+        if (pending?.phoneNumber && pending?.msg91AccessToken && navigationRef.isReady()) {
+          setTimeout(() => {
+            try {
+              (navigationRef as any).navigate('Auth', {
+                screen: 'UserTypeSelection',
+                params: {
+                  phoneNumber: pending.phoneNumber,
+                  msg91AccessToken: pending.msg91AccessToken,
+                  otpSignupToken: pending.otpSignupToken || '',
+                },
+              });
+            } catch {}
+          }, 100);
+        }
+      })
+      .finally(() => {
+        setIsBootLoading(false);
+      });
   }, [dispatch]);
 
   useEffect(() => {

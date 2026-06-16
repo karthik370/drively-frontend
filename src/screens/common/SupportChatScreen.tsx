@@ -15,7 +15,7 @@ import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { Text } from 'react-native-paper';
 import socketService from '../../services/socketService';
 import { useAppSelector } from '../../redux/store';
-import { listSupportMessages } from '../../services/api';
+import { listSupportMessages, getBookingDetails } from '../../services/api';
 import { G } from '../../constants/glassStyles';
 
 type SupportMessage = {
@@ -52,6 +52,8 @@ const SupportChatScreen = ({ navigation, route }: any) => {
   const [text, setText] = useState<string>('');
   const [messages, setMessages] = useState<SupportMessage[]>([]);
   const [isHydrating, setIsHydrating] = useState(true);
+  // resolvedThreadUserId: for admin without threadUserId param, auto-resolved from booking
+  const [resolvedThreadUserId, setResolvedThreadUserId] = useState<string>('');
   const listRef = useRef<FlatList<SupportMessage> | null>(null);
 
   const isAdmin = useMemo(() => {
@@ -62,9 +64,25 @@ const SupportChatScreen = ({ navigation, route }: any) => {
   }, [user?.phoneNumber]);
 
   const effectiveThreadUserId = useMemo(() => {
-    if (isAdmin) return String(threadUserIdParam || '');
+    if (isAdmin) return String(threadUserIdParam || resolvedThreadUserId || '');
     return String(userId || '');
-  }, [isAdmin, threadUserIdParam, userId]);
+  }, [isAdmin, threadUserIdParam, resolvedThreadUserId, userId]);
+
+  // If admin and no threadUserId param, auto-resolve from booking
+  useEffect(() => {
+    if (!isAdmin) return;
+    if (threadUserIdParam) return; // already have it
+    if (!bookingId) return;
+    let active = true;
+    void (async () => {
+      try {
+        const b = await getBookingDetails(bookingId);
+        const customerId = String((b as any)?.customer?.id || (b as any)?.customerId || '');
+        if (active && customerId) setResolvedThreadUserId(customerId);
+      } catch {}
+    })();
+    return () => { active = false; };
+  }, [isAdmin, bookingId, threadUserIdParam]);
 
   const canSend = useMemo(() => {
     return Boolean(bookingId) && Boolean(effectiveThreadUserId) && text.trim().length > 0;

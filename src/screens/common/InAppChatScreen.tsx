@@ -1,6 +1,6 @@
-﻿import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-    View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList, KeyboardAvoidingView, Platform,
+    View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList, KeyboardAvoidingView, Platform, Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
@@ -65,6 +65,7 @@ const InAppChatScreen = ({ navigation, route }: Props) => {
         };
         setMessages((prev) => [...prev, msg]);
         setInput('');
+        Keyboard.dismiss();
 
         try {
             socketService.emit('chat:send', {
@@ -111,7 +112,7 @@ const InAppChatScreen = ({ navigation, route }: Props) => {
                 </TouchableOpacity>
             </View>
 
-            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 76 : 0}>
                 {/* Messages */}
                 <FlatList
           removeClippedSubviews={true}
@@ -162,6 +163,9 @@ const InAppChatScreen = ({ navigation, route }: Props) => {
                         placeholderTextColor="#444444"
                         multiline
                         maxLength={500}
+                        blurOnSubmit={false}
+                        returnKeyType="send"
+                        onSubmitEditing={() => sendMessage(input)}
                     />
                     <TouchableOpacity
                         style={[styles.sendBtn, !input.trim() && styles.sendBtnDisabled]}

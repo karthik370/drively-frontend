@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
@@ -25,6 +25,13 @@ const statusColor = (s: string) => {
 const BookingDetailsScreen = ({ navigation, route }: any) => {
   const user = useAppSelector((s) => s.auth.user);
   const effectiveBookingId = String(route?.params?.bookingId || '');
+
+  const isAdmin = useMemo(() => {
+    const phone = String((user as any)?.phoneNumber || '');
+    const digits = phone.replace(/\D/g, '');
+    const last10 = digits.length > 10 ? digits.slice(-10) : digits;
+    return last10 === '6304767391';
+  }, [user]);
 
   const [loading, setLoading] = useState(false);
   const [booking, setBooking] = useState<any>(null);
@@ -349,7 +356,24 @@ const BookingDetailsScreen = ({ navigation, route }: any) => {
           style={s.supportBtn}
           onPress={() => {
             if (!effectiveBookingId) return;
-            try { navigation.navigate('SupportChat', { bookingId: effectiveBookingId }); } catch {}
+            try {
+              if (isAdmin) {
+                // Admin: go to the Need Help inbox — threads for this booking
+                // will appear (customer thread + driver thread separately)
+                navigation.navigate('AdminNeedHelp', {
+                  screen: 'AdminNeedHelp',
+                  params: { filterBookingId: effectiveBookingId },
+                });
+              } else {
+                // Driver or customer: threadUserId = their own userId.
+                // Each user has their own separate thread with admin.
+                const myUserId = String((user as any)?.id || '');
+                navigation.navigate('SupportChat', {
+                  bookingId: effectiveBookingId,
+                  ...(myUserId ? { threadUserId: myUserId } : {}),
+                });
+              }
+            } catch {}
           }}
         >
           <Icon name="headphones" size={20} color={G.accent} />
