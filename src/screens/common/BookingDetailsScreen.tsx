@@ -7,6 +7,7 @@ import { getBookingDetails } from '../../services/api';
 import { useAppSelector } from '../../redux/store';
 import { showAlert } from '../../components/common/CustomAlert';
 import { G, glass, gText } from '../../constants/glassStyles';
+import { isAdminPhone } from '../../constants/adminConfig';
 
 /* ───────────── helpers ─────────────────────────────── */
 const fmt = (v: number) => `₹${Number(v || 0).toFixed(0)}`;
@@ -26,12 +27,7 @@ const BookingDetailsScreen = ({ navigation, route }: any) => {
   const user = useAppSelector((s) => s.auth.user);
   const effectiveBookingId = String(route?.params?.bookingId || '');
 
-  const isAdmin = useMemo(() => {
-    const phone = String((user as any)?.phoneNumber || '');
-    const digits = phone.replace(/\D/g, '');
-    const last10 = digits.length > 10 ? digits.slice(-10) : digits;
-    return last10 === '6304767391';
-  }, [user]);
+  const isAdmin = useMemo(() => isAdminPhone(String((user as any)?.phoneNumber || '')), [user]);
 
   const [loading, setLoading] = useState(false);
   const [booking, setBooking] = useState<any>(null);

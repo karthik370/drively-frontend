@@ -82,7 +82,7 @@ const EXPO_PUSH_TOKEN_KEY = 'expoPushToken';
 
 const AppNavigator = () => {
   const dispatch = useAppDispatch();
-  const { isAuthenticated, user } = useAppSelector((state) => state.auth);
+  const { isAuthenticated, user, pendingSignup } = useAppSelector((state) => state.auth);
   const booking = useAppSelector((state) => state.booking.currentBooking);
   const [isBootLoading, setIsBootLoading] = useState(true);
   const hydrateRef = useRef(false);
@@ -236,26 +236,6 @@ const AppNavigator = () => {
 
   useEffect(() => {
     dispatch(loadUser())
-      .unwrap()
-      .catch((err: any) => {
-        // If there's pending signup data (OTP verified but user left before completing signup),
-        // navigate directly to UserTypeSelection so they don't have to re-verify phone
-        const pending = err?.pendingSignup;
-        if (pending?.phoneNumber && pending?.msg91AccessToken && navigationRef.isReady()) {
-          setTimeout(() => {
-            try {
-              (navigationRef as any).navigate('Auth', {
-                screen: 'UserTypeSelection',
-                params: {
-                  phoneNumber: pending.phoneNumber,
-                  msg91AccessToken: pending.msg91AccessToken,
-                  otpSignupToken: pending.otpSignupToken || '',
-                },
-              });
-            } catch {}
-          }, 100);
-        }
-      })
       .finally(() => {
         setIsBootLoading(false);
       });
@@ -328,7 +308,16 @@ const AppNavigator = () => {
         {isAuthenticated ? (
           <Stack.Screen name="Main" component={DrawerNavigator} />
         ) : (
-          <Stack.Screen name="Auth" component={AuthNavigator} />
+          <Stack.Screen
+            name="Auth"
+            component={AuthNavigator}
+            initialParams={pendingSignup ? {
+              initialRoute: 'UserTypeSelection',
+              phoneNumber: pendingSignup.phoneNumber,
+              msg91AccessToken: pendingSignup.msg91AccessToken,
+              otpSignupToken: pendingSignup.otpSignupToken,
+            } : undefined}
+          />
         )}
       </Stack.Navigator>
     </NavigationContainer>

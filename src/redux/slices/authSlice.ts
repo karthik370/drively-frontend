@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import * as SecureStore from 'expo-secure-store';
 import { authService } from '../../services/authService';
-import { User, AuthState } from '../../types';
+import { User, AuthState, PendingSignup } from '../../types';
 
 const ROLE_OVERRIDE_KEY = 'roleOverride';
 const PENDING_SIGNUP_KEY = 'pendingSignupData';
@@ -14,6 +14,7 @@ const initialState: AuthState = {
   isLoading: false,
   error: null,
   roleOverride: null,
+  pendingSignup: null,
 };
 
 export const verifyMsg91AccessToken = createAsyncThunk(
@@ -327,6 +328,7 @@ const authSlice = createSlice({
         state.accessToken = action.payload.accessToken;
         state.refreshToken = action.payload.refreshToken;
         state.isAuthenticated = true;
+        state.pendingSignup = null; // clear — signup complete
       })
       .addCase(signup.rejected, (state, action) => {
         state.isLoading = false;
@@ -382,14 +384,16 @@ const authSlice = createSlice({
       })
       .addCase(loadUser.rejected, (state, action) => {
         state.isLoading = false;
-        // Only force logout if tokens were actually deleted (401).
-        // If it's just a transient network error during Expo reload,
-        // keep the user authenticated so they don't get kicked to login.
         const payload = action.payload as any;
         const tokensStillExist = payload?.tokensStillExist === true;
         if (!tokensStillExist) {
           state.isAuthenticated = false;
           state.roleOverride = null;
+        }
+        // If OTP was verified but signup not completed, surface pendingSignup in Redux state
+        // so AppNavigator can render UserTypeSelection as the initial screen (no race conditions)
+        if (payload?.pendingSignup) {
+          state.pendingSignup = payload.pendingSignup as PendingSignup;
         }
       });
   },

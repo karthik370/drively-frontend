@@ -88,6 +88,12 @@ export interface Booking {
   updatedAt: string;
 }
 
+export interface PendingSignup {
+  phoneNumber: string;
+  msg91AccessToken: string;
+  otpSignupToken: string;
+}
+
 export interface AuthState {
   user: User | null;
   accessToken: string | null;
@@ -96,6 +102,8 @@ export interface AuthState {
   isLoading: boolean;
   error: string | null;
   roleOverride: UserType | null;
+  /** Set when OTP is verified but user closed app before completing signup */
+  pendingSignup: PendingSignup | null;
 }
 
 export interface ApiResponse<T = any> {

@@ -234,9 +234,11 @@ export const listSupportThreads = async (): Promise<SupportThread[]> => {
 
 export const listSupportMessages = async (bookingId: string, threadUserId?: string): Promise<SupportMessage[]> => {
   try {
-    const res = await api.get<ApiResponse<SupportMessage[]>>(`/support/threads/${bookingId}/messages`, {
-      params: threadUserId ? { threadUserId } : undefined,
-    });
+    const params: Record<string, string> = {
+      _t: String(Date.now()), // cache-buster: prevents okhttp from serving 304 cached responses
+    };
+    if (threadUserId) params.threadUserId = threadUserId;
+    const res = await api.get<ApiResponse<SupportMessage[]>>(`/support/threads/${bookingId}/messages`, { params });
     return unwrap(res);
   } catch (error) {
     return handleAxiosError(error);

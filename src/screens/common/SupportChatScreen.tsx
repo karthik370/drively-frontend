@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ActivityIndicator,
@@ -17,6 +18,7 @@ import socketService from '../../services/socketService';
 import { useAppSelector } from '../../redux/store';
 import { listSupportMessages, getBookingDetails } from '../../services/api';
 import { G } from '../../constants/glassStyles';
+import { isAdminPhone } from '../../constants/adminConfig';
 
 type SupportMessage = {
   id: string;
@@ -56,12 +58,7 @@ const SupportChatScreen = ({ navigation, route }: any) => {
   const [resolvedThreadUserId, setResolvedThreadUserId] = useState<string>('');
   const listRef = useRef<FlatList<SupportMessage> | null>(null);
 
-  const isAdmin = useMemo(() => {
-    const phone = String(user?.phoneNumber || '');
-    const digits = phone.replace(/\D/g, '');
-    const last10 = digits.length > 10 ? digits.slice(-10) : digits;
-    return last10 === '6304767391';
-  }, [user?.phoneNumber]);
+  const isAdmin = useMemo(() => isAdminPhone(String(user?.phoneNumber || '')), [user?.phoneNumber]);
 
   const effectiveThreadUserId = useMemo(() => {
     if (isAdmin) return String(threadUserIdParam || resolvedThreadUserId || '');
@@ -88,30 +85,34 @@ const SupportChatScreen = ({ navigation, route }: any) => {
     return Boolean(bookingId) && Boolean(effectiveThreadUserId) && text.trim().length > 0;
   }, [bookingId, effectiveThreadUserId, text]);
 
-  useEffect(() => {
-    let active = true;
+  // hydrate fn — called on mount and every time screen is focused
+  const hydrate = useCallback(async () => {
+    if (!bookingId) { setIsHydrating(false); return; }
+    if (!effectiveThreadUserId) { setIsHydrating(false); return; }
     setIsHydrating(true);
+    try {
+      // Always pass threadUserId so backend query is fully explicit
+      const items = await listSupportMessages(bookingId, effectiveThreadUserId);
+      setMessages((Array.isArray(items) ? items : []).slice(-300));
+      // Scroll to bottom after loading history
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 100);
+    } catch {
+    } finally {
+      setIsHydrating(false);
+    }
+  }, [bookingId, effectiveThreadUserId]);
 
-    const hydrate = async () => {
-      if (!bookingId) { setIsHydrating(false); return; }
-      if (!effectiveThreadUserId) { setIsHydrating(false); return; }
-
-      try {
-        const items = await listSupportMessages(bookingId, isAdmin ? effectiveThreadUserId : undefined);
-        if (!active) return;
-        setMessages((Array.isArray(items) ? items : []).slice(-300));
-      } catch {
-      } finally {
-        if (active) setIsHydrating(false);
-      }
-    };
-
+  // Initial load
+  useEffect(() => {
     void hydrate();
+  }, [hydrate]);
 
-    return () => {
-      active = false;
-    };
-  }, [bookingId, effectiveThreadUserId, isAdmin]);
+  // Re-hydrate every time the screen comes back into focus (e.g. user navigated away and returned)
+  useFocusEffect(
+    useCallback(() => {
+      void hydrate();
+    }, [hydrate])
+  );
 
   useEffect(() => {
     let active = true;

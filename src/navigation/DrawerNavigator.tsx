@@ -24,6 +24,7 @@ import { useAppDispatch, useAppSelector } from '../redux/store';
 import { logout } from '../redux/slices/authSlice';
 import MainNavigator from './MainNavigator';
 import AdminNavigator from './AdminNavigator';
+import { isAdminPhone } from '../constants/adminConfig';
 
 import NotificationsScreen from '../screens/common/NotificationsScreen';
 import SupportScreen from '../screens/common/SupportScreen';
@@ -94,12 +95,7 @@ const CustomDrawerContent = (props: any) => {
 const DrawerNavigator = () => {
   const { user, roleOverride } = useAppSelector((s) => s.auth);
 
-  const isAdmin = (() => {
-    const phone = String((user as any)?.phoneNumber || '');
-    const digits = phone.replace(/\D/g, '');
-    const last10 = digits.length > 10 ? digits.slice(-10) : digits;
-    return last10 === '6304767391';
-  })();
+  const isAdmin = isAdminPhone(String((user as any)?.phoneNumber || ''));
 
   return (
     <Drawer.Navigator
