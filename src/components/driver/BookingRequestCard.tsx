@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, StyleSheet, Vibration, View } from 'react-native';
+import { StyleSheet, Vibration, View } from 'react-native';
 import { Button, Card, Text, useTheme } from 'react-native-paper';
 import * as Haptics from 'expo-haptics';
 import * as Notifications from 'expo-notifications';
@@ -182,68 +182,53 @@ const BookingRequestCard = ({
           : undefined
       }
     >
-      <Card.Content>
-        <View style={styles.rowBetween}>
-          <Text variant="titleMedium">New request</Text>
-          <Text variant="labelLarge" style={{ color: theme.colors.primary }}>
-            Active
-          </Text>
-        </View>
-
-        <View style={styles.block}>
-          <Text variant="labelSmall">Booking Type</Text>
-          <Text variant="bodyMedium" style={{ fontWeight: '700' }}>
-            {hoursLabel ? `${tripTypeLabel} • ${hoursLabel}` : tripTypeLabel}
-          </Text>
-        </View>
-
-        <View style={styles.block}>
-          <Text variant="labelSmall">Vehicle</Text>
-          <Text variant="bodyMedium" style={{ fontWeight: '700' }}>
-            {String(request.vehicleType || 'CAR')}
-            {request.transmissionType ? ` • ${String(request.transmissionType)}` : ''}
-          </Text>
-        </View>
-
-        {scheduledLabel ? (
-          <View style={styles.block}>
-            <Text variant="labelSmall">Scheduled Time</Text>
-            <Text variant="bodyMedium" style={{ fontWeight: '700' }}>
-              {scheduledLabel}
+      <Card.Content style={styles.content}>
+        {/* Top row: "New request" + "Active" with fare underneath */}
+        <View style={styles.topRow}>
+          <View>
+            <Text variant="titleMedium" style={styles.titleText}>New request</Text>
+            <Text style={styles.typeText}>
+              {hoursLabel ? `${tripTypeLabel} • ${hoursLabel}` : tripTypeLabel}
             </Text>
+          </View>
+          <View style={styles.activeWrap}>
+            <Text style={styles.activeLabel}>Active</Text>
+            <Text style={styles.fareText}>
+              ₹{request.fare ? Math.round(request.fare) : '—'}
+            </Text>
+          </View>
+        </View>
+
+        {/* Scheduled time if any */}
+        {scheduledLabel ? (
+          <View style={styles.scheduledRow}>
+            <Text style={styles.scheduledIcon}>📅</Text>
+            <Text style={styles.scheduledText}>{scheduledLabel}</Text>
           </View>
         ) : null}
 
-        <View style={styles.block}>
-          <Text variant="labelSmall">Pickup</Text>
-          <Text variant="bodyMedium" numberOfLines={2}>
-            {request.pickup?.address || '—'}
-          </Text>
-          {typeof pickupDistanceKm === 'number' ? (
-            <Text variant="labelSmall">{pickupDistanceKm.toFixed(1)} km away</Text>
-          ) : null}
-        </View>
-
-        <View style={styles.block}>
-          <Text variant="labelSmall">Drop</Text>
-          <Text variant="bodyMedium" numberOfLines={2}>
-            {request.drop?.address || '—'}
-          </Text>
-        </View>
-
-        <View style={styles.rowBetween}>
-          <View>
-            <Text variant="labelSmall">Trip</Text>
-            <Text variant="bodyMedium">
-              {typeof request.distanceKm === 'number' ? `${request.distanceKm.toFixed(1)} km` : '—'}
-              {typeof request.etaMin === 'number' ? ` • ${Math.round(request.etaMin)} min` : ''}
+        {/* Pickup + Vehicle + Distance in a compact row */}
+        <View style={styles.infoRow}>
+          <View style={styles.pickupWrap}>
+            <Text style={styles.labelText}>Pickup</Text>
+            <Text style={styles.addressText} numberOfLines={1}>
+              {request.pickup?.address || '—'}
             </Text>
           </View>
-          <View style={styles.earningsWrap}>
-            <Text variant="labelSmall">Earnings</Text>
-            <Text variant="titleLarge" style={{ color: theme.colors.primary }}>
-              ₹{request.fare ? Math.round(request.fare) : '—'}
+          <View style={styles.metaWrap}>
+            <Text style={styles.metaText}>
+              {String(request.vehicleType || 'CAR')}
+              {request.transmissionType ? ` • ${String(request.transmissionType)}` : ''}
             </Text>
+            {typeof pickupDistanceKm === 'number' ? (
+              <Text style={styles.distanceText}>{pickupDistanceKm.toFixed(1)} km away</Text>
+            ) : null}
+            {typeof request.distanceKm === 'number' ? (
+              <Text style={styles.distanceText}>
+                Trip: {request.distanceKm.toFixed(1)} km
+                {typeof request.etaMin === 'number' ? ` • ${Math.round(request.etaMin)} min` : ''}
+              </Text>
+            ) : null}
           </View>
         </View>
 
@@ -277,23 +262,101 @@ const BookingRequestCard = ({
 const styles = StyleSheet.create({
   card: {
     marginHorizontal: 12,
-    marginTop: 12,
+    marginTop: 10,
+    borderRadius: 14,
   },
-  rowBetween: {
+  content: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
-  block: {
-    marginTop: 10,
+  titleText: {
+    fontWeight: '800',
   },
-  earningsWrap: {
+  typeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#8A8A8A',
+    marginTop: 2,
+  },
+  activeWrap: {
     alignItems: 'flex-end',
+  },
+  activeLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#34C759',
+  },
+  fareText: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#C9A84C',
+    marginTop: 1,
+  },
+  scheduledRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    backgroundColor: 'rgba(245,158,11,0.08)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  scheduledIcon: {
+    fontSize: 13,
+  },
+  scheduledText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#f59e0b',
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginTop: 10,
+    gap: 12,
+  },
+  pickupWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  labelText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#8A8A8A',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  addressText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#CCCCCC',
+    marginTop: 2,
+  },
+  metaWrap: {
+    alignItems: 'flex-end',
+  },
+  metaText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#8A8A8A',
+  },
+  distanceText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#8A8A8A',
+    marginTop: 1,
   },
   buttonsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 12,
+    marginTop: 10,
     gap: 10,
   },
   button: {

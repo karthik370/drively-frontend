@@ -1,21 +1,21 @@
 /**
  * DriverMarker — Production-grade car marker (Uber/Rapido style).
  *
- * ══ KEY FIX: NATIVE IMAGE PROP ══
- * Using Marker's `image` prop instead of a child <Image> view.
- * Child views require bitmap capture (tracksViewChanges), which causes:
- *   - Marker invisible when tracksViewChanges=false from start
- *   - Marker drifts at different zoom levels due to bitmap projection bugs
- *   - Marker shifts during map pan while tracksViewChanges=true
- * The `image` prop renders entirely in native Google Maps SDK — zero drift.
+ * ══ WHY image PROP (NOT child <Image>) ══
+ * Using Marker's `image` prop renders via native BitmapDescriptorFactory in Google Maps SDK.
+ * Child <Image> views require React Native bitmap capture (tracksViewChanges) which causes:
+ *   - Marker clipped/cut on Android — native Marker container clips child view before capture
+ *   - Marker invisible if tracksViewChanges=false before image finishes layout
+ *   - Bitmap capture timing issues on slow/budget Android devices
+ * The `image` prop bypasses all of this — zero clipping, works on every device/density.
+ * PNG is 64×64px → correct size at all screen densities (21dp on 3x, 43dp on 1.5x).
  *
- * ══ FULL PIPELINE ══
+ * ══ PIPELINE ══
  * Raw GPS → Snap to polyline → Clamp forward-only → Segment bearing →
  * Lerp bearing (wraparound safe) → RAF lerp coordinate → trim polyline
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Platform } from 'react-native';
 import { Marker } from 'react-native-maps';
 
 // ─────────────────────────────────────────────────────────────────────
@@ -146,12 +146,12 @@ const DriverMarker = React.memo(
     const [rotation, setRotation] = useState(0);
 
     // ── Persistent refs ──
-    const prevCoordRef    = useRef<Coord>({ latitude, longitude });
-    const prevBearingRef  = useRef(0);
-    const lastSegIdxRef   = useRef(0);
-    const animFrameRef    = useRef<number | null>(null);
-    const isFirstRef      = useRef(true);
-    const prevPolyRef     = useRef(routeCoordinates);
+    const prevCoordRef   = useRef<Coord>({ latitude, longitude });
+    const prevBearingRef = useRef(0);
+    const lastSegIdxRef  = useRef(0);
+    const animFrameRef   = useRef<number | null>(null);
+    const isFirstRef     = useRef(true);
+    const prevPolyRef    = useRef(routeCoordinates);
 
     // Reset forward-clamp when polyline changes
     useEffect(() => {
@@ -162,7 +162,7 @@ const DriverMarker = React.memo(
       }
     }, [routeCoordinates]);
 
-    // Cleanup
+    // Cleanup animation frame on unmount
     useEffect(
       () => () => {
         if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
@@ -177,7 +177,7 @@ const DriverMarker = React.memo(
       const poly =
         routeCoordinates && routeCoordinates.length >= 2 ? routeCoordinates : null;
 
-      // Skip stale/emulator coords
+      // Skip stale/emulator coords (>50km from route start)
       if (poly && poly[0]) {
         const dLat = Math.abs(latitude - poly[0].latitude);
         const dLng = Math.abs(longitude - poly[0].longitude);
@@ -256,7 +256,6 @@ const DriverMarker = React.memo(
         flat
         tracksViewChanges={false}
         image={CAR_IMAGE}
-        style={{ width: 32, height: 32 }}
         zIndex={10}
         onPress={onPress}
       />

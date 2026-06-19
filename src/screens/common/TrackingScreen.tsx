@@ -134,6 +134,8 @@ const TrackingScreen = ({ navigation, route }: any) => {
   const [isSharing, setIsSharing] = React.useState(false);
   const [isFavDriver, setIsFavDriver] = React.useState(false);
   const [showDriverStatsModal, setShowDriverStatsModal] = React.useState(false);
+  const [driverProfileData, setDriverProfileData] = React.useState<any>(null);
+  const [driverProfileLoading, setDriverProfileLoading] = React.useState(false);
   const [statusUpdating, setStatusUpdating] = React.useState(false); // Loading overlay for status transitions
   const [isMapPanned, setIsMapPanned] = React.useState(false); // Suspends auto-camera when user moves map
   const isMapPannedRef = useRef(false);
@@ -254,6 +256,23 @@ const TrackingScreen = ({ navigation, route }: any) => {
   useRealTimeLocation(Boolean(trackingBookingId), 'foreground', trackingBookingId);
 
   useDriverTracking(trackingBookingId);
+
+  // Fetch fresh driver profile data when modal opens — booking Redux state only has
+  // basic driver fields from socket. Full profile (rating, createdAt, badges) needs API.
+  useEffect(() => {
+    const fetchId = booking?.id ? String(booking.id) : trackingBookingId;
+    if (!showDriverStatsModal || !fetchId) return;
+    setDriverProfileLoading(true);
+    void (async () => {
+      try {
+        const raw = await getBookingDetails(fetchId);
+        setDriverProfileData((raw as any)?.driver ?? null);
+      } catch {
+      } finally {
+        setDriverProfileLoading(false);
+      }
+    })();
+  }, [showDriverStatsModal, booking?.id, trackingBookingId]);
 
   useEffect(() => {
     if (!trackingBookingId) return;
@@ -1004,8 +1023,11 @@ const TrackingScreen = ({ navigation, route }: any) => {
 
   // BUG 1 FIX: Phase-based edge padding — trip phase gets extra top padding
   // so the drop pin clears the header (pin anchor is at bottom, icon body extends UP)
-  const FIT_PADDING_PRETRIP = { top: 250, bottom: 350, left: 60, right: 60 };
-  const FIT_PADDING_TRIP    = { top: 300, bottom: 280, left: 60, right: 60 };
+  // Edge padding: must be LESS than mapWrap height (45% of screen, ~360dp on typical phone).
+  // Padding values below leave ~160dp vertical space for fitToCoordinates to work correctly.
+  // Previous values (top:300+bottom:280=580dp) EXCEEDED map height, causing tight-zoom bug.
+  const FIT_PADDING_PRETRIP = { top: 50, bottom: 50, left: 50, right: 50 };
+  const FIT_PADDING_TRIP    = { top: 50, bottom: 50, left: 50, right: 50 };
   // Dynamic getter based on current booking status
   const getFitPadding = React.useCallback(() => {
     const status = bookingStatusRef.current;
@@ -1056,7 +1078,9 @@ const TrackingScreen = ({ navigation, route }: any) => {
 
     const FIT_PADDING = getFitPadding();
 
-    const driverFallback = isDriverModeRef.current ? (currentLocation ?? driverLocation) : (driverLocation ?? currentLocation);
+    const driverFallback = isDriverModeRef.current
+      ? (currentLocationRef.current ?? driverLocationRef.current)
+      : (driverLocationRef.current ?? currentLocationRef.current);
     let driverPos = overrideDriver ?? routeStartRef.current ?? driverFallback ?? null;
     const targetPos = overrideTarget ?? routeTargetRef.current ?? null;
 
@@ -1065,7 +1089,11 @@ const TrackingScreen = ({ navigation, route }: any) => {
       const dLat = Math.abs(driverPos.latitude - targetPos.latitude);
       const dLng = Math.abs(driverPos.longitude - targetPos.longitude);
       const roughKm = Math.sqrt(dLat * dLat + dLng * dLng) * 111;
+      console.log('[fitMapToRoute] stale-check roughKm:', roughKm.toFixed(1),
+        'driverPos:', `${driverPos.latitude.toFixed(5)},${driverPos.longitude.toFixed(5)}`,
+        'targetPos:', `${targetPos.latitude.toFixed(5)},${targetPos.longitude.toFixed(5)}`);
       if (roughKm > 500) {
+        console.warn('[fitMapToRoute] driverPos nulled — stale/emulator coords >500km from target');
         driverPos = null; // treat as unknown until real GPS arrives
       }
     }
@@ -1086,9 +1114,10 @@ const TrackingScreen = ({ navigation, route }: any) => {
       (fitMapToRouteRef as any)[retryCountKey] = 0;
     }
 
-    // Reset retry counter on successful call
+    // Reset retry counters on successful call
     if (driverPos && targetPos) {
       (fitMapToRouteRef as any)[`__fitRetry_${status}`] = 0;
+      (fitMapToRouteRef as any)['__driverPosRetry'] = 0;
     }
 
     console.log('[MAP-FIT] fitToCoordinates —', {
@@ -1104,25 +1133,57 @@ const TrackingScreen = ({ navigation, route }: any) => {
 
     // Round trips in progress: no target — fit driver + pickup
     if (!targetPos) {
+      console.log('[fitMapToRoute] BRANCH=no-target (round-trip)', {
+        driverPos: driverPos ? `${driverPos.latitude.toFixed(5)},${driverPos.longitude.toFixed(5)}` : null,
+        bookingStatus: status, isDriverMode: isDriverModeRef.current, timestamp: Date.now(),
+      });
       if (!driverPos) return;
       const pickup = effectivePickupRef.current;
       if (pickup) {
         mapRef.current?.fitToCoordinates(
           [driverPos, pickup],
-          { edgePadding: FIT_PADDING, animated: true },
+          { edgePadding: FIT_PADDING, animated: false },
         );
       }
       return;
     }
 
     if (!driverPos) {
-      mapRef.current?.animateToRegion({
-        latitude: targetPos.latitude,
-        longitude: targetPos.longitude,
-        latitudeDelta: 0.006,
-        longitudeDelta: 0.006,
-      }, 600);
-      return;
+      console.log('[fitMapToRoute] BRANCH=no-driverPos', {
+          driverPos: null,
+          targetPos: targetPos ? `${targetPos.latitude.toFixed(5)},${targetPos.longitude.toFixed(5)}` : null,
+          bookingStatus: status,
+          isDriverMode: isDriverModeRef.current,
+          driverLocation: driverLocation ? `${driverLocation.latitude.toFixed(5)},${driverLocation.longitude.toFixed(5)}` : null,
+          routeStart: routeStartRef.current ? `${routeStartRef.current.latitude.toFixed(5)},${routeStartRef.current.longitude.toFixed(5)}` : null,
+          timestamp: Date.now(),
+        });
+        // RETRY: driverPos temporarily null (driver GPS not yet in Redux).
+        // Do NOT tight-zoom — retry every 400ms up to 8 times waiting for real data.
+        const driverPosRetryKey = '__driverPosRetry';
+        const retryCount = (fitMapToRouteRef as any)[driverPosRetryKey] ?? 0;
+        if (retryCount < 8) {
+          (fitMapToRouteRef as any)[driverPosRetryKey] = retryCount + 1;
+          console.log('[fitMapToRoute] driverPos null — retry', retryCount + 1, '/8');
+          setTimeout(() => fitMapToRouteRef.current(overrideDriver, overrideTarget), 400);
+          return;
+        }
+        // After 8 retries (~3.2s) still no driver — show wide view of target + pickup
+        (fitMapToRouteRef as any)[driverPosRetryKey] = 0;
+        console.log('[fitMapToRoute] driverPos exhausted retries — wide fallback');
+        const pickup = effectivePickupRef.current;
+        const fallbackPoints = pickup ? [targetPos, pickup] : [targetPos];
+        if (fallbackPoints.length > 1) {
+          mapRef.current?.fitToCoordinates(fallbackPoints, { edgePadding: FIT_PADDING, animated: false });
+        } else {
+          mapRef.current?.animateToRegion({
+            latitude: targetPos.latitude,
+            longitude: targetPos.longitude,
+            latitudeDelta: 0.05,
+            longitudeDelta: 0.05,
+          }, 600);
+        }
+        return;
     }
 
     const isTripPhase = status === 'STARTED' || status === 'IN_PROGRESS';
@@ -1145,7 +1206,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
           'remainingStale:', remainingIsStale, 'routePoints:', routePoints.length);
         mapRef.current?.fitToCoordinates(
           [driverPos, targetPos, ...routePoints],
-          { edgePadding: FIT_PADDING, animated: true },
+          { edgePadding: FIT_PADDING, animated: false },
         );
         return;
       }
@@ -1170,7 +1231,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
       }
       mapRef.current?.fitToCoordinates(
         aheadPoints,
-        { edgePadding: FIT_PADDING, animated: true },
+        { edgePadding: FIT_PADDING, animated: false },
       );
       return;
     }
@@ -1180,9 +1241,9 @@ const TrackingScreen = ({ navigation, route }: any) => {
     const pointsToFit: { latitude: number; longitude: number }[] = [driverPos, targetPos, ...polySamples];
     mapRef.current?.fitToCoordinates(
       pointsToFit,
-      { edgePadding: FIT_PADDING, animated: true },
+      { edgePadding: FIT_PADDING, animated: false },
     );
-  }, [driverLocation, getPolylineSamples, remainingRoute, decodedRoute, getFitPadding]);
+  }, [getPolylineSamples, remainingRoute, decodedRoute, getFitPadding]);
   // Store fitMapToRoute in a ref so effects don't depend on it
   // (fitMapToRoute changes every time driverLocation updates, which was killing the timeouts!)
   const fitMapToRouteRef = useRef(fitMapToRoute);
@@ -1600,7 +1661,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
                   const polySamples = getPolylineSamples();
                   mapRef.current?.fitToCoordinates([driverPos, target, ...polySamples], {
                     edgePadding: getFitPadding(),
-                    animated: true,
+                    animated: false,
                   });
                 } else if (target) {
                   mapRef.current?.animateToRegion({
@@ -1961,11 +2022,11 @@ const TrackingScreen = ({ navigation, route }: any) => {
 
               <Text style={[styles.otpModalTitle, { marginBottom: 16 }]}>Driver Profile</Text>
 
-              {/* Photo + Name + Rating */}
+              {/* Photo + Name — use booking.driver for name/photo (always in Redux state) */}
               <View style={{ alignItems: 'center', marginBottom: 16 }}>
-                {(booking as any)?.driver?.profileImage ? (
+                {((booking as any)?.driver?.profileImage || driverProfileData?.profileImage) ? (
                   <Image
-                    source={{ uri: (booking as any).driver.profileImage }}
+                    source={{ uri: driverProfileData?.profileImage ?? (booking as any).driver.profileImage }}
                     style={{ width: 72, height: 72, borderRadius: 36, marginBottom: 8, borderWidth: 2, borderColor: '#C9A84C' }}
                   />
                 ) : (
@@ -1974,10 +2035,10 @@ const TrackingScreen = ({ navigation, route }: any) => {
                   </View>
                 )}
                 <Text style={{ fontSize: 20, fontWeight: '800', color: '#fff' }}>
-                  {`${(booking as any)?.driver?.firstName ?? ''} ${(booking as any)?.driver?.lastName ?? ''}`.trim() || 'Driver'}
+                  {`${driverProfileData?.firstName ?? (booking as any)?.driver?.firstName ?? ''} ${driverProfileData?.lastName ?? (booking as any)?.driver?.lastName ?? ''}`.trim() || 'Driver'}
                 </Text>
                 {(() => {
-                  const r = parseFloat(String((booking as any)?.driver?.rating ?? (booking as any)?.driver?.avgRating ?? 0));
+                  const r = parseFloat(String(driverProfileData?.rating ?? (booking as any)?.driver?.rating ?? 0));
                   return r > 0 ? (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
                       <Icon name="star" size={16} color="#f59e0b" />
@@ -1987,78 +2048,106 @@ const TrackingScreen = ({ navigation, route }: any) => {
                 })()}
               </View>
 
-              {/* Stats Grid */}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 16, paddingVertical: 12, backgroundColor: 'rgba(201,168,76,0.06)', borderRadius: 12 }}>
-                <View style={{ alignItems: 'center' }}>
-                  <Text style={{ fontSize: 20, fontWeight: '900', color: '#C9A84C' }}>
-                    {(booking as any)?.driver?.driverProfile?.totalTrips ?? 0}
-                  </Text>
-                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#8A8A8A', marginTop: 2 }}>Trips</Text>
+              {/* Loading spinner while fetching fresh data */}
+              {driverProfileLoading ? (
+                <View style={{ alignItems: 'center', paddingVertical: 20 }}>
+                  <Icon name="loading" size={28} color="#C9A84C" />
+                  <Text style={{ fontSize: 12, color: '#8A8A8A', marginTop: 8 }}>Loading profile…</Text>
                 </View>
-                <View style={{ alignItems: 'center' }}>
-                  <Text style={{ fontSize: 20, fontWeight: '900', color: '#C9A84C' }}>
-                    {(() => {
-                      const r = parseFloat(String((booking as any)?.driver?.rating ?? 0));
-                      return r > 0 ? r.toFixed(1) : '—';
-                    })()}
-                  </Text>
-                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#8A8A8A', marginTop: 2 }}>Rating</Text>
-                </View>
-                <View style={{ alignItems: 'center' }}>
-                  <Text style={{ fontSize: 20, fontWeight: '900', color: '#C9A84C' }}>
-                    {(() => {
-                      const created = (booking as any)?.driver?.createdAt ?? (booking as any)?.driver?.driverProfile?.createdAt;
-                      if (!created) return '—';
-                      const y = new Date(created).getFullYear();
-                      return isNaN(y) ? '—' : String(y);
-                    })()}
-                  </Text>
-                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#8A8A8A', marginTop: 2 }}>Since</Text>
-                </View>
-              </View>
-
-              {/* Quiz-Earned Skill Badges — top 3 earned by driver */}
-              {(() => {
-                const earnedBadges = (booking as any)?.driver?.driverBadges;
-                const hasEarned = Array.isArray(earnedBadges) && earnedBadges.length > 0;
-                return (
-                  <View style={{ marginBottom: 4 }}>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#CCCCCC', marginBottom: 8 }}>
-                      🏅 Earned Badges
-                    </Text>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                      {hasEarned ? (
-                        earnedBadges.slice(0, 3).map((eb: any, i: number) => {
-                          const b = eb?.badge;
-                          if (!b) return null;
-                          const badgeColor = b.color || '#C9A84C';
-                          return (
-                            <View
-                              key={i}
-                              style={{
-                                flexDirection: 'row', alignItems: 'center', gap: 6,
-                                backgroundColor: badgeColor + '18',
-                                borderWidth: 1, borderColor: badgeColor + '55',
-                                paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10,
-                              }}
-                            >
-                              <Icon name={(b.icon || 'shield-star') as any} size={15} color={badgeColor} />
-                              <Text style={{ fontSize: 11, fontWeight: '700', color: badgeColor }}>{b.title}</Text>
-                            </View>
-                          );
-                        })
-                      ) : (
-                        <Text style={{ fontSize: 12, color: '#666' }}>No badges earned yet</Text>
-                      )}
-                      {/* Always show Verified badge */}
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(34,197,94,0.1)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(34,197,94,0.3)' }}>
-                        <Icon name="check-decagram" size={14} color="#22c55e" />
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#22c55e' }}>Verified</Text>
-                      </View>
+              ) : (
+                <>
+                  {/* Stats Grid — Trips, Badges, Since (from fresh API data) */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 16, paddingVertical: 12, backgroundColor: 'rgba(201,168,76,0.06)', borderRadius: 12 }}>
+                    <View style={{ alignItems: 'center' }}>
+                      <Text style={{ fontSize: 20, fontWeight: '900', color: '#C9A84C' }}>
+                        {driverProfileData?.driverProfile?.totalTrips ?? 0}
+                      </Text>
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#8A8A8A', marginTop: 2 }}>Trips</Text>
+                    </View>
+                    <View style={{ alignItems: 'center' }}>
+                      <Text style={{ fontSize: 20, fontWeight: '900', color: '#C9A84C' }}>
+                        {Array.isArray(driverProfileData?.driverBadges) ? driverProfileData.driverBadges.length : 0}
+                      </Text>
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#8A8A8A', marginTop: 2 }}>Badges</Text>
+                    </View>
+                    <View style={{ alignItems: 'center' }}>
+                      <Text style={{ fontSize: 13, fontWeight: '900', color: '#C9A84C' }}>
+                        {(() => {
+                          const raw = driverProfileData?.createdAt;
+                          if (!raw) return '—';
+                          const d = new Date(String(raw));
+                          if (!Number.isFinite(d.getTime())) return '—';
+                          const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                          return `${months[d.getMonth()]} ${d.getFullYear()}`;
+                        })()}
+                      </Text>
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#8A8A8A', marginTop: 2 }}>Since</Text>
                     </View>
                   </View>
-                );
-              })()}
+
+                  {/* Expertise & Badges */}
+                  {(() => {
+                    const earnedBadges = driverProfileData?.driverBadges;
+                    const hasEarned = Array.isArray(earnedBadges) && earnedBadges.length > 0;
+                    const trips = driverProfileData?.driverProfile?.totalTrips ?? 0;
+                    const rating = parseFloat(String(driverProfileData?.rating ?? 0));
+                    return (
+                      <View style={{ marginBottom: 4 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: '#CCCCCC', marginBottom: 10 }}>
+                          Expertise & Badges
+                        </Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                          {/* Verified badge */}
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(34,197,94,0.1)', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(34,197,94,0.3)' }}>
+                            <Icon name="check-decagram" size={14} color="#22c55e" />
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: '#22c55e' }}>Verified</Text>
+                          </View>
+                          {/* Trip milestone badge */}
+                          {trips >= 100 && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(201,168,76,0.1)', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(201,168,76,0.3)' }}>
+                              <Icon name="trophy" size={14} color="#C9A84C" />
+                              <Text style={{ fontSize: 12, fontWeight: '700', color: '#C9A84C' }}>100+ Trips</Text>
+                            </View>
+                          )}
+                          {trips >= 50 && trips < 100 && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(201,168,76,0.1)', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(201,168,76,0.3)' }}>
+                              <Icon name="medal" size={14} color="#C9A84C" />
+                              <Text style={{ fontSize: 12, fontWeight: '700', color: '#C9A84C' }}>50+ Trips</Text>
+                            </View>
+                          )}
+                          {trips >= 10 && trips < 50 && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(201,168,76,0.08)', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(201,168,76,0.2)' }}>
+                              <Icon name="star-circle" size={14} color="#C9A84C" />
+                              <Text style={{ fontSize: 12, fontWeight: '700', color: '#C9A84C' }}>10+ Trips</Text>
+                            </View>
+                          )}
+                          {/* Top rated badge */}
+                          {rating >= 4.5 && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(245,158,11,0.1)', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(245,158,11,0.3)' }}>
+                              <Icon name="star" size={14} color="#f59e0b" />
+                              <Text style={{ fontSize: 12, fontWeight: '700', color: '#f59e0b' }}>Top Rated</Text>
+                            </View>
+                          )}
+                          {/* Quiz skill badges */}
+                          {hasEarned && earnedBadges.slice(0, 3).map((eb: any, i: number) => {
+                            const b = eb?.badge;
+                            if (!b) return null;
+                            const badgeColor = b.color || '#C9A84C';
+                            return (
+                              <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: badgeColor + '15', borderWidth: 1, borderColor: badgeColor + '40', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20 }}>
+                                <Icon name={(b.icon || 'shield-star') as any} size={14} color={badgeColor} />
+                                <Text style={{ fontSize: 12, fontWeight: '700', color: badgeColor }}>{b.title}</Text>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    );
+                  })()}
+                </>
+              )}
+
+
 
             </View>
           </View>

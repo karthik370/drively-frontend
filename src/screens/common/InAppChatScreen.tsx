@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-    View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList, KeyboardAvoidingView, Platform, Keyboard,
+    View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList,
+    Platform, Keyboard, KeyboardEvent,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import socketService from '../../services/socketService';
 import { G } from '../../constants/glassStyles';
@@ -23,15 +24,33 @@ const InAppChatScreen = ({ navigation, route }: Props) => {
     const bookingId = route?.params?.bookingId;
     const userType = route?.params?.userType || 'customer';
     const otherName = route?.params?.otherName || (userType === 'customer' ? 'Driver' : 'Customer');
+    const insets = useSafeAreaInsets();
 
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState('');
+    // Direct keyboard height measurement — most reliable approach on Android
+    const [keyboardHeight, setKeyboardHeight] = useState(0);
     const flatListRef = useRef<FlatList>(null);
 
-    // Quick reply options
     const quickReplies = userType === 'customer'
         ? ['Where are you?', 'I\'m waiting at gate', 'Please come to basement parking', 'I\'ll be out in 5 mins']
         : ['On my way', 'Reached location', 'Please share exact pin', 'Will be there in 5 mins'];
+
+    // Listen to keyboard height directly — works on ALL Android versions/devices
+    useEffect(() => {
+        const onShow = (e: KeyboardEvent) => {
+            setKeyboardHeight(e.endCoordinates.height);
+            setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+        };
+        const onHide = () => setKeyboardHeight(0);
+
+        const show = Keyboard.addListener('keyboardDidShow', onShow);
+        const hide = Keyboard.addListener('keyboardDidHide', onHide);
+        return () => {
+            show.remove();
+            hide.remove();
+        };
+    }, []);
 
     useEffect(() => {
         if (!bookingId) return;
@@ -65,7 +84,6 @@ const InAppChatScreen = ({ navigation, route }: Props) => {
         };
         setMessages((prev) => [...prev, msg]);
         setInput('');
-        Keyboard.dismiss();
 
         try {
             socketService.emit('chat:send', {
@@ -92,8 +110,13 @@ const InAppChatScreen = ({ navigation, route }: Props) => {
         );
     };
 
+    // On iOS use the system bottom inset. On Android use measured keyboard height.
+    // This bypasses KeyboardAvoidingView entirely — direct and reliable on all devices.
+    const bottomOffset = Platform.OS === 'ios' ? insets.bottom : 0;
+
     return (
-        <SafeAreaView style={styles.container} edges={['top','bottom']}>
+        <View style={[styles.container, { paddingTop: insets.top }]}>
+            {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
                     <Icon name="arrow-left" size={22} color="#C9A84C" />
@@ -112,34 +135,40 @@ const InAppChatScreen = ({ navigation, route }: Props) => {
                 </TouchableOpacity>
             </View>
 
-            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 76 : 0}>
+            {/* Main content area — padded up by keyboard height on Android */}
+            <View style={[styles.body, { paddingBottom: keyboardHeight + bottomOffset }]}>
                 {/* Messages */}
-                <FlatList
-          removeClippedSubviews={true}
-          maxToRenderPerBatch={8}
-          windowSize={5}
-          initialNumToRender={8}
-                    ref={flatListRef}
-                    data={messages}
-                    keyExtractor={(m) => m.id}
-                    renderItem={renderMessage}
-                    contentContainerStyle={styles.messagesList}
-                    ListEmptyComponent={
-                        <View style={styles.emptyWrap}>
-                            <Icon name="chat-outline" size={40} color="#d1d5db" />
-                            <Text style={styles.emptyText}>No messages yet</Text>
-                            <Text style={styles.emptySubtext}>Send a message or use quick replies below</Text>
-                        </View>
-                    }
-                />
+                <View style={styles.listWrap}>
+                    <FlatList
+                        removeClippedSubviews={true}
+                        maxToRenderPerBatch={8}
+                        windowSize={5}
+                        initialNumToRender={8}
+                        ref={flatListRef}
+                        data={messages}
+                        keyExtractor={(m) => m.id}
+                        renderItem={renderMessage}
+                        contentContainerStyle={messages.length ? styles.messagesList : styles.messagesEmpty}
+                        onContentSizeChange={() => {
+                            try { flatListRef.current?.scrollToEnd({ animated: false }); } catch {}
+                        }}
+                        ListEmptyComponent={
+                            <View style={styles.emptyWrap}>
+                                <Icon name="chat-outline" size={40} color="#d1d5db" />
+                                <Text style={styles.emptyText}>No messages yet</Text>
+                                <Text style={styles.emptySubtext}>Send a message or use quick replies below</Text>
+                            </View>
+                        }
+                    />
+                </View>
 
                 {/* Quick replies */}
                 <View style={styles.quickReplyWrap}>
                     <FlatList
-          removeClippedSubviews={true}
-          maxToRenderPerBatch={8}
-          windowSize={5}
-          initialNumToRender={8}
+                        removeClippedSubviews={true}
+                        maxToRenderPerBatch={8}
+                        windowSize={5}
+                        initialNumToRender={8}
                         data={quickReplies}
                         horizontal
                         showsHorizontalScrollIndicator={false}
@@ -153,13 +182,13 @@ const InAppChatScreen = ({ navigation, route }: Props) => {
                     />
                 </View>
 
-                {/* Input */}
+                {/* Input row */}
                 <View style={styles.inputRow}>
                     <TextInput
                         style={styles.input}
                         value={input}
                         onChangeText={setInput}
-                        placeholder="Type a message..."
+                        placeholder="Type a message"
                         placeholderTextColor="#444444"
                         multiline
                         maxLength={500}
@@ -172,17 +201,19 @@ const InAppChatScreen = ({ navigation, route }: Props) => {
                         onPress={() => sendMessage(input)}
                         disabled={!input.trim()}
                     >
-                        <Icon name="send" size={18} color="#ffffff" />
+                        <Icon name="send" size={20} color="#ffffff" />
                     </TouchableOpacity>
                 </View>
-            </KeyboardAvoidingView>
-        </SafeAreaView>
+            </View>
+        </View>
     );
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: G.bgAlt },
-
+    container: {
+        flex: 1,
+        backgroundColor: G.bgAlt,
+    },
     header: {
         flexDirection: 'row', alignItems: 'center', gap: 10,
         paddingHorizontal: 16, paddingVertical: 10, backgroundColor: G.bg,
@@ -200,7 +231,10 @@ const styles = StyleSheet.create({
         alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#bbf7d0',
     },
 
-    messagesList: { padding: 16, paddingBottom: 8, flexGrow: 1, justifyContent: 'flex-end' },
+    body: { flex: 1 },
+    listWrap: { flex: 1, paddingHorizontal: 14, paddingTop: 10 },
+    messagesList: { paddingBottom: 12, gap: 8 },
+    messagesEmpty: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 12 },
 
     msgRow: { marginBottom: 8, alignItems: 'flex-start' },
     msgRowMe: { alignItems: 'flex-end' },
@@ -225,20 +259,20 @@ const styles = StyleSheet.create({
     quickReplyText: { fontSize: 12, fontWeight: '600', color: G.accent },
 
     inputRow: {
-        flexDirection: 'row', alignItems: 'flex-end', gap: 8,
+        flexDirection: 'row', alignItems: 'flex-end', gap: 10,
         paddingHorizontal: 12, paddingVertical: 10, backgroundColor: G.bg,
         borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.3)',
     },
     input: {
-        flex: 1, backgroundColor: G.glass2, borderRadius: 20, paddingHorizontal: 16,
-        paddingVertical: 10, fontSize: 14, fontWeight: '500', color: G.textPrimary,
-        maxHeight: 80,
+        flex: 1, minHeight: 42, maxHeight: 120, backgroundColor: G.glass2, borderRadius: 14,
+        paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, fontWeight: '700',
+        color: G.textPrimary,
     },
     sendBtn: {
-        width: 40, height: 40, borderRadius: 20, backgroundColor: G.accent,
+        width: 44, height: 44, borderRadius: 14, backgroundColor: G.accent,
         alignItems: 'center', justifyContent: 'center',
     },
-    sendBtnDisabled: { backgroundColor: '#93c5fd' },
+    sendBtnDisabled: { opacity: 0.5 },
 });
 
 export default InAppChatScreen;
