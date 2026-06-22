@@ -39,6 +39,9 @@ class SocketService {
   private lastLocationUpdateTs = 0;
   private lastLocation: { latitude: number; longitude: number } | null = null;
   private lastAcceptedBookingId = ''; // Dedup for booking:accepted — reset on SEARCHING/cancel
+  // Dedup guard: prevent duplicate in-app notifications for the same booking offer.
+  // Cleared when offer is removed/accepted/cancelled so fresh offers always get through.
+  private seenOfferIds = new Set<string>();
 
   private distanceApproxMeters(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) {
     const dLat = a.latitude - b.latitude;
@@ -89,14 +92,23 @@ class SocketService {
         return;
       }
 
+      const offerId = String(data?.bookingId ?? data?.id ?? '');
+
+      // Dedup: addBookingRequest is idempotent (Redux ignores duplicates by id),
+      // but addNotification is NOT — guard it so the bell only rings once per offer.
+      const isNew = offerId && !this.seenOfferIds.has(offerId);
+      if (isNew) this.seenOfferIds.add(offerId);
+
       store.dispatch(addBookingRequest(data));
-      store.dispatch(
-        addNotification({
-          type: 'booking_request',
-          message: 'New booking request received',
-          bookingId: String(data?.bookingId ?? data?.id ?? ''),
-        })
-      );
+      if (isNew) {
+        store.dispatch(
+          addNotification({
+            type: 'booking_request',
+            message: 'New booking request received',
+            bookingId: offerId,
+          })
+        );
+      }
       // NOTE: No local push here — backend already sends Expo push notification.
       // Scheduling one here too would cause a double notification for drivers.
     });
@@ -362,6 +374,9 @@ class SocketService {
       if (!bookingId) return;
       const cancelledBy = String(data?.cancelledBy ?? '').toUpperCase();
 
+      // Clear seenOfferIds so the same booking can trigger a fresh notification if re-offered
+      this.seenOfferIds.delete(bookingId);
+
       const currentId = store.getState().booking.currentBooking?.id;
       const isMyBooking = currentId && String(currentId) === bookingId;
       const userType = String((store.getState().auth.user as any)?.userType ?? '').toUpperCase();
@@ -468,6 +483,8 @@ class SocketService {
     this.socket.on('booking:offer-removed', (data: any) => {
       const bookingId = String(data?.bookingId ?? '');
       if (!bookingId) return;
+      // Allow this booking to trigger a fresh notification if re-offered
+      this.seenOfferIds.delete(bookingId);
       store.dispatch(removeBookingRequest(bookingId));
     });
 

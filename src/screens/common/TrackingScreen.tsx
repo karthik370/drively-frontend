@@ -144,8 +144,12 @@ const TrackingScreen = ({ navigation, route }: any) => {
   // Auto-reset panned flag after 10s so camera resumes following driver
   const handleMapPan = React.useCallback(() => {
     setIsMapPanned(true);
+    isMapPannedRef.current = true;
     if (pannedTimerRef.current) clearTimeout(pannedTimerRef.current);
-    pannedTimerRef.current = setTimeout(() => setIsMapPanned(false), 10000);
+    pannedTimerRef.current = setTimeout(() => {
+      setIsMapPanned(false);
+      isMapPannedRef.current = false;
+    }, 10000);
   }, []);
   useEffect(() => { return () => { if (pannedTimerRef.current) clearTimeout(pannedTimerRef.current); }; }, []);
   
@@ -257,21 +261,39 @@ const TrackingScreen = ({ navigation, route }: any) => {
 
   useDriverTracking(trackingBookingId);
 
-  // Fetch fresh driver profile data when modal opens — booking Redux state only has
-  // basic driver fields from socket. Full profile (rating, createdAt, badges) needs API.
+  // Fetch fresh driver profile data when modal opens.
+  // Uses booking.driver from Redux as immediate fallback, then enriches with fresh API data.
   useEffect(() => {
     const fetchId = booking?.id ? String(booking.id) : trackingBookingId;
-    if (!showDriverStatsModal || !fetchId) return;
+    if (!showDriverStatsModal) return;
+
+    // Step 1: Immediately seed the modal with whatever we already have in Redux
+    // so the user never sees 0/0/— while the API loads.
+    const reduxDriver = (booking as any)?.driver;
+    if (reduxDriver && !driverProfileData) {
+      setDriverProfileData(reduxDriver);
+    }
+
+    if (!fetchId) return;
+
     setDriverProfileLoading(true);
     void (async () => {
       try {
         const raw = await getBookingDetails(fetchId);
-        setDriverProfileData((raw as any)?.driver ?? null);
-      } catch {
+        const freshDriver = (raw as any)?.driver ?? null;
+        if (freshDriver) {
+          setDriverProfileData(freshDriver);
+        } else {
+          console.warn('[DriverStats] API returned no driver in booking', { fetchId, keys: Object.keys(raw ?? {}) });
+        }
+      } catch (err: any) {
+        console.warn('[DriverStats] Failed to fetch driver profile — using Redux fallback', err?.message || err);
+        // Keep whatever we already seeded from Redux
       } finally {
         setDriverProfileLoading(false);
       }
     })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showDriverStatsModal, booking?.id, trackingBookingId]);
 
   useEffect(() => {
@@ -1313,6 +1335,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
       const { driverPos, target } = getMapEndpoints();
       console.log('[MAP-FIT] Step1 fit — driver:', driverPos, 'target:', target, 'status:', status);
       setIsMapPanned(false);
+      isMapPannedRef.current = false;
       if (pannedTimerRef.current) clearTimeout(pannedTimerRef.current);
       lastFitCallTsRef.current = 0; // bypass debounce for status-change fit
       fitMapToRouteRef.current(driverPos, target);
@@ -1744,35 +1767,48 @@ const TrackingScreen = ({ navigation, route }: any) => {
           ) : null}
         </MapView>
 
-        {/* Single unified map action button — Recenter (when panned) or Full Route (during trip) */}
+        {/* Single map action button — fixed top-right in the map area */}
         {(() => {
           const isTripActive = bookingStatus && ['STARTED', 'IN_PROGRESS'].includes(bookingStatus);
-          // Priority 1: Recenter when user has panned the map
+          // Priority 1: Recentre when user has panned the map
           if (isMapPanned) {
             return (
               <TouchableOpacity
-                style={[styles.recenterBtn, { bottom: mapEdgePadding.bottom + 20 }]}
+                style={styles.recenterBtn}
                 onPress={() => {
                   if (pannedTimerRef.current) clearTimeout(pannedTimerRef.current);
+                  // Reset both state and ref immediately — don't wait for the useEffect sync
                   setIsMapPanned(false);
+                  isMapPannedRef.current = false;
                   lastFitCallTsRef.current = 0;
-                  fitMapToRoute();
+                  lastCameraTimestampRef.current = 0;
+                  // Animate camera to driver's live position
+                  const dl = driverLocation;
+                  if (dl && Number.isFinite(dl.latitude) && Number.isFinite(dl.longitude)) {
+                    mapRef.current?.animateToRegion({
+                      latitude: dl.latitude,
+                      longitude: dl.longitude,
+                      latitudeDelta: 0.012,
+                      longitudeDelta: 0.012,
+                    }, 600);
+                  } else {
+                    fitMapToRoute();
+                  }
                 }}
               >
-                <Icon name="crosshairs-gps" size={24} color="#C9A84C" />
+                <Icon name="crosshairs-gps" size={22} color="#C9A84C" />
               </TouchableOpacity>
             );
           }
-          // Priority 2: Show full route during active trip (3km lookahead hides drop)
+          // Priority 2: Show full route during active trip (driver position + drop)
           if (showFullRouteBtn && isTripActive) {
             return (
               <TouchableOpacity
-                style={[styles.recenterBtn, { bottom: mapEdgePadding.bottom + 20 }]}
+                style={styles.recenterBtn}
                 onPress={() => {
                   const { driverPos, target } = getMapEndpoints();
                   if (driverPos && target) {
                     const polySamples = getPolylineSamples();
-                    console.log('[MAP-FIT] Show full route pressed — fitting all points');
                     lastFitCallTsRef.current = 0;
                     mapRef.current?.fitToCoordinates(
                       [driverPos, target, ...polySamples],
@@ -1780,7 +1816,6 @@ const TrackingScreen = ({ navigation, route }: any) => {
                     );
                   }
                   setShowFullRouteBtn(false);
-                  // Auto-re-show after 15s so the user can tap again later
                   setTimeout(() => {
                     if (['STARTED', 'IN_PROGRESS'].includes(bookingStatusRef.current ?? '')) {
                       setShowFullRouteBtn(true);
@@ -3240,20 +3275,22 @@ const styles = StyleSheet.create({
   },
   recenterBtn: {
     position: 'absolute',
-    right: 20,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    top: 16,
+    right: 16,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     backgroundColor: '#1A1A2E',
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 6,
+    elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
     borderWidth: 1.5,
     borderColor: '#C9A84C',
+    zIndex: 10,
   },
   statusOverlay: {
     position: 'absolute',

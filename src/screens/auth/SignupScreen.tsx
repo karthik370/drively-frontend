@@ -7,28 +7,93 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { OTPWidget } from '@msg91comm/sendotp-react-native';
 import { useAppDispatch } from '../../redux/store';
 import { signup } from '../../redux/slices/authSlice';
 import { showAlert } from '../../components/common/CustomAlert';
 import { G } from '../../constants/glassStyles';
 import { applyReferralCode } from '../../services/api';
+import { MSG91_TOKEN_AUTH, MSG91_WIDGET_ID } from '../../constants/config';
 
 const SignupScreen = ({ route, navigation }: any) => {
-  const { phoneNumber, userType, msg91AccessToken, otpSignupToken } = route.params;
+  const {
+    phoneNumber,
+    userType,
+    msg91AccessToken,
+    otpSignupToken,
+    // Prefill params — passed back after re-verification from an expired session
+    prefillFirstName = '',
+    prefillLastName = '',
+    prefillEmail = '',
+    prefillReferralCode = '',
+  } = route.params;
   const dispatch = useAppDispatch();
-  
+
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
+    firstName: prefillFirstName || '',
+    lastName: prefillLastName || '',
+    email: prefillEmail || '',
   });
-  const [referralCode, setReferralCode] = useState('');
+  const [referralCode, setReferralCode] = useState(prefillReferralCode || '');
   const [isLoading, setIsLoading] = useState(false);
+
+  // ── Re-verification when otpSignupToken expires ────────────────────────────
+  // Sends a fresh OTP to the same phone, then navigates to OtpVerification
+  // carrying all the form data so the user continues from where they left off.
+  const reVerifyPhone = async () => {
+    const digits = String(phoneNumber || '').replace(/\D/g, '');
+    const last10 = digits.length > 10 ? digits.slice(-10) : digits;
+    const msg91Identifier = `91${last10}`;
+
+    const widgetId = String(MSG91_WIDGET_ID || '').trim();
+    const tokenAuth = String(MSG91_TOKEN_AUTH || '').trim();
+
+    setIsLoading(true);
+    try {
+      try { OTPWidget.initializeWidget(widgetId, tokenAuth); } catch {}
+
+      const resp: any = await OTPWidget.sendOTP({ identifier: msg91Identifier } as any);
+
+      // Extract reqId from MSG91 response
+      let reqId = '';
+      const candidates = [
+        resp?.reqId, resp?.reqid, resp?.req_id, resp?.requestId,
+        resp?.data?.reqId, resp?.data?.message,
+        typeof resp?.message === 'string' ? resp.message : '',
+      ];
+      for (const c of candidates) {
+        if (typeof c === 'string' && c.trim() && c.trim() !== 'AuthenticationFailure') {
+          reqId = c.trim();
+          break;
+        }
+      }
+
+      if (!reqId) throw new Error('Failed to send OTP. Please try again.');
+
+      // Navigate to OTP screen — pass signupReturnData so we return here after verify
+      navigation.navigate('OtpVerification', {
+        phoneNumber,
+        reqId,
+        msg91Identifier,
+        signupReturnData: {
+          userType,
+          firstName: formData.firstName.trim(),
+          lastName: formData.lastName.trim(),
+          email: formData.email.trim().toLowerCase(),
+          referralCode: referralCode.trim(),
+        },
+      });
+    } catch (err: any) {
+      const msg = typeof err === 'string' ? err : (err?.message || 'Failed to send OTP');
+      showAlert('Error', msg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSignup = async () => {
     if (!formData.firstName.trim() || !formData.lastName.trim()) {
@@ -48,8 +113,6 @@ const SignupScreen = ({ route, navigation }: any) => {
       return;
     }
 
-
-
     setIsLoading(true);
     try {
       const payload: any = {
@@ -59,24 +122,33 @@ const SignupScreen = ({ route, navigation }: any) => {
         lastName: formData.lastName.trim(),
         otpSignupToken,
         msg91AccessToken,
+        email: formData.email.trim().toLowerCase(),
       };
-
-      const emailVal = formData.email.trim().toLowerCase();
-      payload.email = emailVal;
 
       await dispatch(signup(payload)).unwrap();
 
       // Apply referral code silently after signup (non-blocking)
       const code = referralCode.trim().toUpperCase();
       if (code) {
-        try {
-          await applyReferralCode(code);
-        } catch {
-          // Silently ignore — referral errors should never block signup
-        }
+        try { await applyReferralCode(code); } catch { /* non-blocking */ }
       }
     } catch (err: any) {
-      showAlert('Error', err || 'Signup failed');
+      const msg = typeof err === 'string' ? err : (err?.message || '');
+      const isExpired =
+        msg.toLowerCase().includes('expired') ||
+        msg.toLowerCase().includes('jwt') ||
+        msg.toLowerCase().includes('token');
+
+      if (isExpired) {
+        // Re-send OTP to same phone, carry form data across — no data lost
+        showAlert(
+          'Session Expired',
+          'Your verification session has timed out. We\'ll send a new OTP to ' + phoneNumber + ' so you can continue.',
+          [{ text: 'Send OTP', onPress: reVerifyPhone }]
+        );
+      } else {
+        showAlert('Signup Failed', msg || 'Something went wrong. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }

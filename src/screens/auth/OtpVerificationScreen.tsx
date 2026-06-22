@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
@@ -21,7 +21,7 @@ import { showAlert } from '../../components/common/CustomAlert';
 import { G } from '../../constants/glassStyles';
 
 const OtpVerificationScreen = ({ route, navigation }: any) => {
-  const { phoneNumber, reqId, msg91Identifier } = route.params;
+  const { phoneNumber, reqId, msg91Identifier, signupReturnData } = route.params;
   const dispatch = useAppDispatch();
   const { isLoading } = useAppSelector((state) => state.auth);
   const [localLoading, setLocalLoading] = useState(false);
@@ -314,10 +314,29 @@ const OtpVerificationScreen = ({ route, navigation }: any) => {
       const userExistsRaw = (result as any)?.userExists;
       const userExistsStr = String(userExistsRaw).toLowerCase();
       if (userExistsRaw === false || userExistsRaw === 0 || userExistsStr === 'false' || userExistsStr === '0') {
+        const newOtpSignupToken = (result as any)?.otpSignupToken;
+
+        // If this is a re-verification from an expired signup session,
+        // return to Signup with all preserved form data + the new token.
+        if (signupReturnData && newOtpSignupToken) {
+          navigation.navigate('Signup', {
+            phoneNumber,
+            userType: signupReturnData.userType,
+            msg91AccessToken: String(msg91AccessToken),
+            otpSignupToken: newOtpSignupToken,
+            // Pre-filled form data — SignupScreen reads these from route.params
+            prefillFirstName: signupReturnData.firstName,
+            prefillLastName: signupReturnData.lastName,
+            prefillEmail: signupReturnData.email,
+            prefillReferralCode: signupReturnData.referralCode,
+          });
+          return;
+        }
+
         navigation.navigate('UserTypeSelection', {
           phoneNumber,
           msg91AccessToken: String(msg91AccessToken),
-          otpSignupToken: (result as any)?.otpSignupToken,
+          otpSignupToken: newOtpSignupToken,
         });
         return;
       }

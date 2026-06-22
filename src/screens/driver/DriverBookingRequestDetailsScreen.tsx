@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
@@ -311,18 +311,24 @@ const DriverBookingRequestDetailsScreen = ({ navigation, route }: any) => {
 
       {/* Details card */}
       <View style={styles.detailsWrap}>
-        {/* Fare badge */}
+        {/* Fare + trip info — large and clearly readable */}
         <View style={styles.fareRow}>
+          {/* Fare amount */}
           <View style={styles.fareChip}>
-            <Icon name="currency-inr" size={18} color="#16a34a" />
+            <Icon name="currency-inr" size={20} color="#16a34a" />
             <Text style={styles.fareValue}>₹{request?.fare ? Math.round(request.fare) : '—'}</Text>
           </View>
+
+          {/* Trip type */}
           <View style={styles.tripChip}>
+            <Icon name="road-variant" size={15} color={G.accent} />
             <Text style={styles.tripChipText}>{meta.tripTypeLabel}</Text>
           </View>
+
+          {/* Duration (round-trip / hourly packages) */}
           {meta.hoursLabel ? (
             <View style={styles.hourChip}>
-              <Icon name="clock-outline" size={13} color="#6366f1" />
+              <Icon name="clock-outline" size={15} color="#818cf8" />
               <Text style={styles.hourChipText}>{meta.hoursLabel}</Text>
             </View>
           ) : null}
@@ -451,21 +457,28 @@ const styles = StyleSheet.create({
   },
 
   // Fare row
-  fareRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
+  fareRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' },
   fareChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: G.glass2, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: 'rgba(22,163,74,0.12)', borderRadius: 14,
+    paddingHorizontal: 16, paddingVertical: 10,
+    borderWidth: 1, borderColor: 'rgba(22,163,74,0.25)',
   },
-  fareValue: { fontSize: 22, fontWeight: '900', color: '#16a34a' },
+  fareValue: { fontSize: 26, fontWeight: '900', color: '#22c55e' },
   tripChip: {
-    backgroundColor: G.glass2, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: 'rgba(201,168,76,0.1)', borderRadius: 14,
+    paddingHorizontal: 14, paddingVertical: 10,
+    borderWidth: 1, borderColor: 'rgba(201,168,76,0.3)',
   },
-  tripChipText: { fontSize: 11, fontWeight: '800', color: G.accent },
+  tripChipText: { fontSize: 14, fontWeight: '800', color: G.accent, letterSpacing: 0.2 },
   hourChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: 'rgba(139,92,246,0.1)', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: 'rgba(129,140,248,0.1)', borderRadius: 14,
+    paddingHorizontal: 14, paddingVertical: 10,
+    borderWidth: 1, borderColor: 'rgba(129,140,248,0.3)',
   },
-  hourChipText: { fontSize: 11, fontWeight: '800', color: '#6366f1' },
+  hourChipText: { fontSize: 14, fontWeight: '800', color: '#818cf8', letterSpacing: 0.2 },
 
   // Route card
   routeCard: {
