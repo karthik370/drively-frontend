@@ -28,6 +28,7 @@ import {
   submitKycFallback,
   submitKycSelfie,
   KycStatusResponse,
+  createOnboardingSupportTicket,
 } from '../../services/api';
 
 // ── Step Constants ──────────────────────────────────────────────────────────
@@ -95,6 +96,18 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
   useEffect(() => {
     dispatch(loadKycStatus());
   }, [dispatch]);
+
+  // Auto-fill DOB from Aadhaar once KYC status loads
+  // This prevents wrong DOB input that causes DL verification to fail (VAHAN mismatch)
+  useEffect(() => {
+    if (kyc?.aadhaarDob && !dobInput) {
+      // Convert YYYY-MM-DD → DD/MM/YYYY for display
+      const parts = kyc.aadhaarDob.split('-');
+      if (parts.length === 3) {
+        setDobInput(`${parts[2]}/${parts[1]}/${parts[0]}`);
+      }
+    }
+  }, [kyc?.aadhaarDob]);
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -395,57 +408,8 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
     </View>
   );
 
-  // ── Aadhaar DigiLocker Step UI ───────────────────────────────────────────
+  // ── Step 1: DigiLocker Aadhaar Step UI (only shown when WebView is NOT active) ────
   const renderAadhaarStep = () => {
-    // Show WebView if active
-    if (showWebView && digilockerUrl) {
-      return (
-        <View style={[glass.card, styles.stepCard, { minHeight: 500 }]}>
-          <View style={styles.stepHeader}>
-            <View style={styles.stepIconWrap}>
-              <Icon name="shield-lock" size={28} color={G.accent} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.stepTitle}>DigiLocker Verification</Text>
-              <Text style={styles.stepSubtitle}>
-                Complete your Aadhaar verification below. The app will automatically detect when you're done.
-              </Text>
-            </View>
-          </View>
-
-          <View style={{ flex: 1, minHeight: 450, borderRadius: 12, overflow: 'hidden', marginTop: 12 }}>
-            <WebView
-              source={{ uri: digilockerUrl }}
-              style={{ flex: 1 }}
-              javaScriptEnabled
-              domStorageEnabled
-              thirdPartyCookiesEnabled
-              startInLoadingState
-              renderLoading={() => (
-                <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0A0A0A' }}>
-                  <ActivityIndicator size="large" color={G.accent} />
-                  <Text style={[styles.stepSubtitle, { marginTop: 12 }]}>Loading DigiLocker...</Text>
-                </View>
-              )}
-            />
-          </View>
-
-          <TouchableOpacity
-            style={[glass.buttonGhost, styles.actionBtn, { marginTop: 12 }]}
-            activeOpacity={0.85}
-            onPress={() => {
-              setShowWebView(false);
-              setDigilockerUrl(null);
-              stopPolling();
-            }}
-          >
-            <Icon name="close" size={18} color={G.textPrimary} style={{ marginRight: 8 }} />
-            <Text style={styles.ghostBtnText}>Cancel</Text>
-          </TouchableOpacity>
-        </View>
-      );
-    }
-
     return (
       <View style={[glass.card, styles.stepCard]}>
         <View style={styles.stepHeader}>
@@ -590,8 +554,16 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
                 autoCapitalize="characters"
               />
             </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Date of Birth *</Text>
+        <View style={styles.inputGroup}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <Text style={styles.inputLabel}>Date of Birth *</Text>
+                {kyc?.aadhaarDob && (
+                  <View style={styles.aadhaarDobBadge}>
+                    <Icon name="pencil" size={11} color={G.accent} />
+                    <Text style={styles.aadhaarDobBadgeText}>pre-filled · editable</Text>
+                  </View>
+                )}
+              </View>
               <TextInput
                 style={[glass.input, styles.inputField]}
                 placeholder="DD/MM/YYYY"
@@ -614,6 +586,11 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
                 keyboardType="number-pad"
                 maxLength={10}
               />
+              {kyc?.aadhaarDob && (
+                <Text style={styles.aadhaarDobHint}>
+                  Pre-filled from Aadhaar. Change it if your DL was issued with a different date of birth.
+                </Text>
+              )}
             </View>
           </>
         )}
@@ -739,6 +716,74 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
   );
 
   // ── Render ──────────────────────────────────────────────────────────────
+
+  // Full-screen WebView mode — completely outside the ScrollView to fix scroll conflict
+  if (showWebView && digilockerUrl) {
+    return (
+      <SafeAreaView style={styles.webviewContainer} edges={['top', 'bottom']}>
+        {/* Thin header bar */}
+        <View style={styles.webviewHeader}>
+          <TouchableOpacity
+            style={styles.webviewBackBtn}
+            onPress={() => {
+              setShowWebView(false);
+              setDigilockerUrl(null);
+              stopPolling();
+            }}
+            activeOpacity={0.8}
+          >
+            <Icon name="arrow-left" size={20} color={G.accent} />
+          </TouchableOpacity>
+          <View style={styles.webviewTitleWrap}>
+            <Icon name="shield-lock" size={16} color={G.accent} style={{ marginRight: 6 }} />
+            <Text style={styles.webviewTitle}>DigiLocker Verification</Text>
+          </View>
+          {/* Check status button on the right */}
+          <TouchableOpacity
+            style={styles.webviewCheckBtn}
+            onPress={handleCheckDigiLocker}
+            activeOpacity={0.8}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color={G.accent} />
+            ) : (
+              <Icon name="refresh" size={20} color={G.accent} />
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* Status bar — auto-polling indicator */}
+        <View style={styles.webviewStatusBar}>
+          <PulsingDot color={G.accent} />
+          <Text style={styles.webviewStatusText}>
+            Waiting for DigiLocker… The app will update automatically when done.
+          </Text>
+        </View>
+
+        {/* Full-screen WebView — fills all remaining space */}
+        <WebView
+          source={{ uri: digilockerUrl }}
+          style={styles.fullWebView}
+          javaScriptEnabled
+          domStorageEnabled
+          thirdPartyCookiesEnabled
+          startInLoadingState
+          scalesPageToFit={false}
+          onShouldStartLoadWithRequest={() => true}
+          renderLoading={() => (
+            <View style={styles.webviewLoading}>
+              <ActivityIndicator size="large" color={G.accent} />
+              <Text style={[styles.stepSubtitle, { marginTop: 14, textAlign: 'center' }]}>
+                Loading DigiLocker…
+              </Text>
+            </View>
+          )}
+        />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
@@ -777,6 +822,26 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
             <Text style={styles.loadingText}>Loading verification status...</Text>
           </View>
         )}
+
+        {/* Need Help link — always visible for drivers who are stuck */}
+        <TouchableOpacity
+          style={styles.helpLink}
+          activeOpacity={0.7}
+          onPress={async () => {
+            try {
+              const ticket = await createOnboardingSupportTicket(
+                'I need help completing the identity verification process.'
+              );
+              navigation.navigate('SupportChat', {
+                bookingId: ticket.bookingId,
+                title: 'Verification Support',
+              });
+            } catch { /* silent fail */ }
+          }}
+        >
+          <Icon name="headset" size={15} color={G.textMuted} style={{ marginRight: 6 }} />
+          <Text style={styles.helpLinkText}>Having trouble? Contact Support</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -785,6 +850,79 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
 // ── Styles ──────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: G.bg },
+
+  // ── Full-screen WebView layout ──────────────────────────────────────────
+  webviewContainer: {
+    flex: 1,
+    backgroundColor: G.bg,
+  },
+  webviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: G.bg,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(201,168,76,0.18)',
+  },
+  webviewBackBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: 'rgba(201,168,76,0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  webviewTitleWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  webviewTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: G.textPrimary,
+  },
+  webviewCheckBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: 'rgba(201,168,76,0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  webviewStatusBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(201,168,76,0.06)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(201,168,76,0.10)',
+  },
+  webviewStatusText: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: '600',
+    color: G.accent,
+    lineHeight: 15,
+  },
+  fullWebView: {
+    flex: 1,
+    backgroundColor: '#ffffff', // White bg so Surepass portal renders correctly
+  },
+  webviewLoading: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#0A0A0A',
+  },
+
+  // ── Main layout ─────────────────────────────────────────────────────────
   header: {
     paddingHorizontal: 16,
     paddingTop: 12,
@@ -989,6 +1127,32 @@ const styles = StyleSheet.create({
     fontSize: 16,
     letterSpacing: 1,
   },
+  inputFieldLocked: {
+    opacity: 0.7,
+    backgroundColor: 'rgba(201,168,76,0.06)',
+    borderColor: 'rgba(201,168,76,0.3)',
+  },
+  aadhaarDobBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: G.accentSoft,
+  },
+  aadhaarDobBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: G.accent,
+  },
+  aadhaarDobHint: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: G.textMuted,
+    marginTop: 6,
+    lineHeight: 15,
+  },
 
   // Selfie
   selfieHints: {
@@ -1077,6 +1241,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: G.textSecondary,
+  },
+  helpLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  helpLinkText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: G.textMuted,
+    textDecorationLine: 'underline',
   },
 });
 

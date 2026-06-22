@@ -238,12 +238,35 @@ export const listSupportMessages = async (bookingId: string, threadUserId?: stri
       _t: String(Date.now()), // cache-buster: prevents okhttp from serving 304 cached responses
     };
     if (threadUserId) params.threadUserId = threadUserId;
-    const res = await api.get<ApiResponse<SupportMessage[]>>(`/support/threads/${bookingId}/messages`, { params });
+    const res = await api.get<ApiResponse<SupportMessage[]>>(`/support/threads/${encodeURIComponent(bookingId)}/messages`, { params });
     return unwrap(res);
   } catch (error) {
     return handleAxiosError(error);
   }
 };
+
+export type OnboardingTicketResponse = {
+  bookingId: string;
+  threadUserId: string;
+  clientMessageId: string;
+};
+
+/**
+ * Creates the initial onboarding support ticket.
+ * Backend auto-appends the driver's KYC status to the message.
+ * Returns the synthetic bookingId to use for opening the chat screen.
+ */
+export const createOnboardingSupportTicket = async (message?: string): Promise<OnboardingTicketResponse> => {
+  try {
+    const res = await api.post<ApiResponse<OnboardingTicketResponse>>('/support/onboarding-ticket', {
+      message: message ?? '',
+    });
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
 
 export type PendingRefundItem = {
   refundId: string;
@@ -628,6 +651,9 @@ export type KycStatusResponse = {
   failureReason: string | null;
   digilockerUrl: string | null;
   digilockerUrlExpiresAt: string | null;
+  // Populated after Aadhaar verification — used to pre-fill DL DOB field
+  aadhaarDob?: string | null;    // YYYY-MM-DD
+  aadhaarName?: string | null;
 };
 
 export type KycSelfieResponse = {

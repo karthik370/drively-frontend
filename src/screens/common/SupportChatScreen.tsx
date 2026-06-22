@@ -45,11 +45,15 @@ const toIso = (v: unknown) => {
 const SupportChatScreen = ({ navigation, route }: any) => {
   const bookingIdParam = String(route?.params?.bookingId ?? '');
   const threadUserIdParam = typeof route?.params?.threadUserId === 'string' ? route.params.threadUserId : '';
+  const headerTitle = typeof route?.params?.title === 'string' && route.params.title
+    ? route.params.title
+    : 'Need Help';
   const user = useAppSelector((s) => s.auth.user as any);
   const currentBookingId = useAppSelector((s) => String((s.booking.currentBooking as any)?.id ?? ''));
   const userId = user?.id ?? null;
 
   const bookingId = bookingIdParam || currentBookingId;
+  const isOnboarding = bookingId.startsWith('onboarding:');
 
   const [text, setText] = useState<string>('');
   const [messages, setMessages] = useState<SupportMessage[]>([]);
@@ -218,7 +222,7 @@ const SupportChatScreen = ({ navigation, route }: any) => {
           <Icon name="arrow-left" size={22} color="#C9A84C" />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>
-          Need Help
+          {headerTitle}
         </Text>
         <View style={styles.headerBtn} />
       </View>
@@ -229,6 +233,15 @@ const SupportChatScreen = ({ navigation, route }: any) => {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 76 : 0}
       >
         <View style={styles.listWrap}>
+          {/* Onboarding context banner */}
+          {isOnboarding && (
+            <View style={styles.onboardingBanner}>
+              <Icon name="shield-account" size={16} color="#C9A84C" style={{ marginRight: 8 }} />
+              <Text style={styles.onboardingBannerText}>
+                Verification support — our team will respond shortly
+              </Text>
+            </View>
+          )}
           {isHydrating ? (
             <View style={styles.messagesEmpty}>
               <ActivityIndicator size="small" color="#C9A84C" />
@@ -391,6 +404,24 @@ const styles = StyleSheet.create({
     backgroundColor: G.accent,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  onboardingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(201, 168, 76, 0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(201, 168, 76, 0.25)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginBottom: 10,
+  },
+  onboardingBannerText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#C9A84C',
+    lineHeight: 18,
   },
 });
 

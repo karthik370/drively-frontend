@@ -1,16 +1,18 @@
-import React, { useEffect } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, ScrollView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useAppDispatch, useAppSelector } from '../../redux/store';
 import { logout } from '../../redux/slices/authSlice';
 import { loadKycStatus } from '../../redux/slices/driverSlice';
 import { G } from '../../constants/glassStyles';
+import { createOnboardingSupportTicket } from '../../services/api';
 
 const DriverVerificationRejectedScreen = ({ navigation }: any) => {
   const dispatch = useAppDispatch();
   const verification = useAppSelector((s) => s.driver.verification);
   const kyc = useAppSelector((s) => s.driver.kyc);
+  const [isOpeningSupport, setIsOpeningSupport] = useState(false);
 
   useEffect(() => {
     dispatch(loadKycStatus());
@@ -37,6 +39,29 @@ const DriverVerificationRejectedScreen = ({ navigation }: any) => {
 
   const failureDetails = getFailureDetails();
   const hasKycDetails = kyc && kyc.status !== 'NOT_STARTED';
+
+  const handleContactSupport = async () => {
+    setIsOpeningSupport(true);
+    try {
+      const contextMessage = reason
+        ? `My verification was rejected. Reason: ${reason}. I need help resolving this.`
+        : 'My verification was rejected and I need help understanding why and how to fix it.';
+
+      const ticket = await createOnboardingSupportTicket(contextMessage);
+      navigation.navigate('SupportChat', {
+        bookingId: ticket.bookingId,
+        title: 'Verification Support',
+      });
+    } catch {
+      Alert.alert(
+        'Could not open support',
+        'Please try again. If the issue persists, contact us at support@drivemate.in',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsOpeningSupport(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top','bottom']}>
@@ -121,6 +146,23 @@ const DriverVerificationRejectedScreen = ({ navigation }: any) => {
           >
             <Icon name="file-document-edit" size={20} color="#0A0A0A" style={{ marginRight: 8 }} />
             <Text style={styles.primaryText}>Retry Verification</Text>
+          </TouchableOpacity>
+
+          {/* Contact Support */}
+          <TouchableOpacity
+            style={[styles.supportButton, isOpeningSupport && { opacity: 0.6 }]}
+            activeOpacity={0.85}
+            onPress={() => void handleContactSupport()}
+            disabled={isOpeningSupport}
+          >
+            {isOpeningSupport ? (
+              <ActivityIndicator color={G.accent} size="small" />
+            ) : (
+              <>
+                <Icon name="headset" size={18} color={G.accent} style={{ marginRight: 8 }} />
+                <Text style={styles.supportText}>Contact Support</Text>
+              </>
+            )}
           </TouchableOpacity>
 
           {/* Logout */}
@@ -251,6 +293,24 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   primaryText: { color: '#0A0A0A', fontWeight: '900', fontSize: 16 },
+  supportButton: {
+    width: '100%',
+    maxWidth: 380,
+    borderWidth: 1.5,
+    borderColor: G.accent,
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 12,
+    backgroundColor: 'rgba(201, 168, 76, 0.08)',
+  },
+  supportText: {
+    color: G.accent,
+    fontWeight: '800',
+    fontSize: 15,
+  },
   logoutButton: { marginTop: 18, paddingVertical: 10, paddingHorizontal: 18 },
   logoutText: { color: '#ef4444', fontWeight: '800', fontSize: 15 },
 });

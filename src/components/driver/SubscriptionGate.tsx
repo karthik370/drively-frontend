@@ -1,5 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import {
+    View,
+    Text,
+    StyleSheet,
+    TouchableOpacity,
+    ActivityIndicator,
+    useWindowDimensions,
+} from 'react-native';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { createDriverSubscriptionOrder, verifyDriverSubscriptionPayment } from '../../services/api';
 import { openCashfreeCheckout } from '../../services/cashfreeService';
@@ -15,29 +22,38 @@ interface SubscriptionGateProps {
 const SubscriptionGate: React.FC<SubscriptionGateProps> = ({ onSuccess, price = 500 }) => {
     const [loading, setLoading] = useState(false);
     const user = useAppSelector((s) => s.auth.user);
+    const { width, height } = useWindowDimensions();
+
+    // Responsive scale — cap on tablets / large phones
+    const isSmall = height < 680;         // very small screen (e.g. Galaxy A series)
+    const iconSize   = isSmall ? 40 : 48;
+    const iconBox    = isSmall ? 64 : 76;
+    const titleSize  = isSmall ? 18 : 20;
+    const priceSize  = isSmall ? 36 : 42;
+    const currSize   = isSmall ? 20 : 22;
+    const bodySize   = isSmall ? 13 : 14;
+    const benefitSize = isSmall ? 13 : 14;
+    const cardPad    = isSmall ? 18 : 22;
+    const vGap       = isSmall ? 14 : 20;
 
     const handleSubscribe = async () => {
         try {
             setLoading(true);
 
-            // Step 1: Create Order on Backend (server-to-server with Cashfree)
             const orderData = await createDriverSubscriptionOrder('UPI');
-
             if (!orderData || !orderData.orderId) {
                 throw new Error('Failed to create subscription order');
             }
 
-            // Step 2: Open Cashfree Checkout (native SDK overlay)
             const success = await openCashfreeCheckout({
                 orderId: String(orderData.orderId),
                 paymentSessionId: String(orderData.paymentSessionId),
             });
 
-            // Step 3: Verify payment on backend
             await verifyDriverSubscriptionPayment(success.orderId);
 
             showAlert('Success', 'Subscription activated successfully!', [
-                { text: 'OK', onPress: onSuccess }
+                { text: 'OK', onPress: onSuccess },
             ]);
         } catch (e: any) {
             showAlert('Subscription Error', e.message || 'Could not complete payment');
@@ -48,54 +64,67 @@ const SubscriptionGate: React.FC<SubscriptionGateProps> = ({ onSuccess, price = 
 
     return (
         <View style={styles.container}>
-            <View style={styles.card}>
-                <View style={styles.iconContainer}>
-                    <Icon name="crown" size={48} color="#f59e0b" />
+            <View style={[styles.card, { padding: cardPad, maxWidth: Math.min(width - 32, 420) }]}>
+
+                {/* Crown icon */}
+                <View style={[
+                    styles.iconContainer,
+                    { width: iconBox, height: iconBox, borderRadius: iconBox / 2, marginBottom: vGap },
+                ]}>
+                    <Icon name="crown" size={iconSize} color="#f59e0b" />
                 </View>
 
-                <Text style={styles.title}>Unlock Unlimited Bookings</Text>
-                <Text style={styles.subtitle}>
-                    Subscribe to start receiving ride requests. You keep 100% of every fare!
+                {/* Title */}
+                <Text style={[styles.title, { fontSize: titleSize, marginBottom: 6 }]}>
+                    Unlock Unlimited Bookings
                 </Text>
 
-                <View style={styles.priceContainer}>
-                    <Text style={styles.currency}>₹</Text>
-                    <Text style={styles.price}>{price}</Text>
+                {/* Subtitle */}
+                <Text style={[styles.subtitle, { fontSize: bodySize, marginBottom: vGap }]}>
+                    Subscribe to start receiving ride requests.{'\n'}You keep 100% of every fare!
+                </Text>
+
+                {/* Price pill */}
+                <View style={[styles.priceContainer, { marginBottom: vGap }]}>
+                    <Text style={[styles.currency, { fontSize: currSize }]}>₹</Text>
+                    <Text style={[styles.price, { fontSize: priceSize }]}>{price}</Text>
                     <Text style={styles.period}>/ month</Text>
                 </View>
 
-                <View style={styles.benefitsContainer}>
-                    <View style={styles.benefitRow}>
-                        <Icon name="check-circle" size={20} color="#10b981" />
-                        <Text style={styles.benefitText}>0% Platform Commission</Text>
-                    </View>
-                    <View style={styles.benefitRow}>
-                        <Icon name="check-circle" size={20} color="#10b981" />
-                        <Text style={styles.benefitText}>Keep 100% of cash & online fares</Text>
-                    </View>
-                    <View style={styles.benefitRow}>
-                        <Icon name="check-circle" size={20} color="#10b981" />
-                        <Text style={styles.benefitText}>Unlimited ride requests</Text>
-                    </View>
+                {/* Benefits */}
+                <View style={[styles.benefitsContainer, { marginBottom: vGap }]}>
+                    {[
+                        '0% Platform Commission',
+                        'Keep 100% of cash & online fares',
+                        'Unlimited ride requests',
+                    ].map((benefit) => (
+                        <View key={benefit} style={styles.benefitRow}>
+                            <Icon name="check-circle" size={benefitSize + 4} color="#10b981" />
+                            <Text style={[styles.benefitText, { fontSize: benefitSize }]}>{benefit}</Text>
+                        </View>
+                    ))}
                 </View>
 
+                {/* Pay button */}
                 <TouchableOpacity
                     style={[styles.payButton, loading && styles.payButtonDisabled]}
                     onPress={handleSubscribe}
                     disabled={loading}
+                    activeOpacity={0.85}
                 >
                     {loading ? (
                         <ActivityIndicator color="#ffffff" />
                     ) : (
                         <>
                             <Text style={styles.payButtonText}>Pay ₹{price} Securely</Text>
-                            <Icon name="arrow-right" size={20} color="#ffffff" />
+                            <Icon name="arrow-right" size={18} color="#ffffff" />
                         </>
                     )}
                 </TouchableOpacity>
 
+                {/* Secure note */}
                 <Text style={styles.secureText}>
-                    <Icon name="lock" size={12} color="#8A8A8A" /> Secure payment by Cashfree
+                    🔒  Secure payment by Cashfree
                 </Text>
             </View>
         </View>
@@ -107,80 +136,68 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 20,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
         backgroundColor: G.bgAlt,
     },
     card: {
         width: '100%',
         backgroundColor: G.bg,
-        borderRadius: 24,
-        padding: 24,
+        borderRadius: 20,
         alignItems: 'center',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
-        elevation: 8,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.18,
+        shadowRadius: 16,
+        elevation: 10,
         borderWidth: 1,
         borderColor: G.border3,
     },
     iconContainer: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
         backgroundColor: G.glass2,
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 20,
-        borderWidth: 4,
+        borderWidth: 3,
         borderColor: '#fde68a',
     },
     title: {
-        fontSize: 22,
         fontWeight: '800',
         color: G.textPrimary,
         textAlign: 'center',
-        marginBottom: 8,
+        marginBottom: 6,
     },
     subtitle: {
-        fontSize: 14,
-        color: '#8A8A8A',
+        color: G.textMuted,
         textAlign: 'center',
-        marginBottom: 24,
         lineHeight: 20,
-        paddingHorizontal: 10,
     },
     priceContainer: {
         flexDirection: 'row',
         alignItems: 'baseline',
-        marginBottom: 24,
         backgroundColor: G.glass2,
-        paddingHorizontal: 20,
-        paddingVertical: 12,
-        borderRadius: 16,
+        paddingHorizontal: 18,
+        paddingVertical: 10,
+        borderRadius: 14,
     },
     currency: {
-        fontSize: 24,
         fontWeight: '700',
         color: G.textPrimary,
-        marginRight: 4,
+        marginRight: 3,
     },
     price: {
-        fontSize: 48,
         fontWeight: '900',
         color: G.textPrimary,
         letterSpacing: -1,
     },
     period: {
-        fontSize: 16,
+        fontSize: 14,
         fontWeight: '600',
-        color: '#8A8A8A',
-        marginLeft: 8,
+        color: G.textMuted,
+        marginLeft: 6,
     },
     benefitsContainer: {
         width: '100%',
-        marginBottom: 32,
-        gap: 12,
+        gap: 10,
     },
     benefitRow: {
         flexDirection: 'row',
@@ -188,9 +205,9 @@ const styles = StyleSheet.create({
         gap: 10,
     },
     benefitText: {
-        fontSize: 15,
         fontWeight: '600',
         color: '#CCCCCC',
+        flex: 1,
     },
     payButton: {
         width: '100%',
@@ -198,24 +215,24 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 16,
-        borderRadius: 16,
+        paddingVertical: 14,
+        borderRadius: 14,
         gap: 8,
     },
     payButtonDisabled: {
-        backgroundColor: '#CCCCCC',
+        opacity: 0.5,
     },
     payButtonText: {
         color: G.textPrimary,
-        fontSize: 16,
+        fontSize: 15,
         fontWeight: '800',
     },
     secureText: {
-        marginTop: 16,
+        marginTop: 14,
         fontSize: 12,
-        color: '#8A8A8A',
+        color: G.textMuted,
         textAlign: 'center',
-    }
+    },
 });
 
 export default SubscriptionGate;

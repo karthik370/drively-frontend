@@ -1,16 +1,18 @@
-import React, { useEffect } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useAppDispatch, useAppSelector } from '../../redux/store';
 import { loadDriverVerificationStatus, loadKycStatus } from '../../redux/slices/driverSlice';
 import { logout } from '../../redux/slices/authSlice';
 import { G } from '../../constants/glassStyles';
+import { createOnboardingSupportTicket } from '../../services/api';
 
 const DriverVerificationPendingScreen = ({ navigation }: any) => {
   const dispatch = useAppDispatch();
   const verification = useAppSelector((s) => s.driver.verification);
   const kyc = useAppSelector((s) => s.driver.kyc);
+  const [isOpeningSupport, setIsOpeningSupport] = useState(false);
 
   // Load both verification and KYC status
   useEffect(() => {
@@ -36,6 +38,27 @@ const DriverVerificationPendingScreen = ({ navigation }: any) => {
   const handleRefresh = () => {
     dispatch(loadDriverVerificationStatus());
     dispatch(loadKycStatus());
+  };
+
+  const handleNeedHelp = async () => {
+    setIsOpeningSupport(true);
+    try {
+      const ticket = await createOnboardingSupportTicket(
+        'I need help with my verification. My documents are pending review.'
+      );
+      navigation.navigate('SupportChat', {
+        bookingId: ticket.bookingId,
+        title: 'Verification Support',
+      });
+    } catch {
+      Alert.alert(
+        'Could not open support',
+        'Please try again. If the issue persists, contact us at support@drivemate.in',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsOpeningSupport(false);
+    }
   };
 
   return (
@@ -95,6 +118,23 @@ const DriverVerificationPendingScreen = ({ navigation }: any) => {
             <ActivityIndicator color="#ffffff" />
           ) : (
             <Text style={styles.primaryText}>Refresh status</Text>
+          )}
+        </TouchableOpacity>
+
+        {/* Need Help Button */}
+        <TouchableOpacity
+          style={[styles.helpButton, isOpeningSupport && styles.disabledButton]}
+          activeOpacity={0.85}
+          onPress={() => void handleNeedHelp()}
+          disabled={isOpeningSupport}
+        >
+          {isOpeningSupport ? (
+            <ActivityIndicator color={G.accent} size="small" />
+          ) : (
+            <>
+              <Icon name="headset" size={18} color={G.accent} style={{ marginRight: 8 }} />
+              <Text style={styles.helpText}>Need Help?</Text>
+            </>
           )}
         </TouchableOpacity>
 
@@ -174,6 +214,24 @@ const styles = StyleSheet.create({
   },
   disabledButton: { opacity: 0.6 },
   primaryText: { color: G.textPrimary, fontWeight: '900', fontSize: 16 },
+  helpButton: {
+    width: '100%',
+    maxWidth: 360,
+    borderWidth: 1.5,
+    borderColor: G.accent,
+    borderRadius: 14,
+    paddingVertical: 13,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 12,
+    backgroundColor: 'rgba(201, 168, 76, 0.08)',
+  },
+  helpText: {
+    color: G.accent,
+    fontWeight: '800',
+    fontSize: 15,
+  },
   logoutButton: { marginTop: 18, paddingVertical: 10, paddingHorizontal: 18 },
   logoutText: { color: '#ef4444', fontWeight: '900' },
 });
