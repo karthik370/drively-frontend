@@ -79,8 +79,8 @@ const ProfileScreen = ({ navigation }: any) => {
       try {
         const parent = typeof navigation?.getParent === 'function' ? navigation.getParent() : null;
         if (parent && typeof parent.navigate === 'function') { parent.navigate('Tabs', { screen: tabName }); return; }
-      } catch {}
-      try { navigation.navigate(tabName); } catch {}
+      } catch { }
+      try { navigation.navigate(tabName); } catch { }
     };
     if (nextValue) {
       if (hasActiveTrip) { showAlert('Cannot switch mode', 'An active booking is assigned.'); return; }
@@ -90,11 +90,11 @@ const ProfileScreen = ({ navigation }: any) => {
       navigateToTab('Home');
       // Background verification
       void (async () => {
-        try { await goOffline(); } catch {}
+        try { await goOffline(); } catch { }
         try {
           const ok = await ensureBackendAllowsCustomerMode();
           if (!ok) { dispatch(clearRoleOverride()); showAlert('Cannot switch mode', 'Active booking found. Reverting.'); }
-        } catch {}
+        } catch { }
       })();
     } else {
       dispatch(clearRoleOverride());
@@ -118,7 +118,7 @@ const ProfileScreen = ({ navigation }: any) => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top','bottom']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <ScrollView>
         <ScaleIn delay={100}>
           <View style={styles.header}>
@@ -240,7 +240,7 @@ const ProfileScreen = ({ navigation }: any) => {
           <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>
 
-        <Text style={styles.version}>Version 1.0.0</Text>
+        <Text style={styles.version}>Version 1.0.1</Text>
       </ScrollView>
     </SafeAreaView>
   );
