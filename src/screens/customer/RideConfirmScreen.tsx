@@ -350,7 +350,7 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
     }
 
     if (tripType === TripType.OUTSTATION) {
-      if (requestedHours < 12) setRequestedHours(12);
+      if (requestedHours < 4) setRequestedHours(4);
       return;
     }
 
@@ -359,7 +359,8 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
 
   useEffect(() => {
     if (tripType !== TripType.OUTSTATION) return;
-    setRequestedHours(12);
+    // Default: ROUND_TRIP starts at 12hrs, ONE_WAY starts at 4hrs
+    setRequestedHours(outstationTripType === 'ONE_WAY' ? 4 : 12);
   }, [outstationTripType, tripType]);
 
   useEffect(() => {
@@ -634,8 +635,11 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
       }
 
       const taxesFee = 109;
-      const allowed = [12, 14, 16, 18];
-      const priceByHour: Record<number, number> = { 12: 1800, 14: 1999, 16: 2199, 18: 2399 };
+      const allowed = [4, 6, 8, 10, 12, 14, 16, 18];
+      const priceByHour: Record<number, number> = {
+        4: 1800, 6: 1800, 8: 1800, 10: 1800,
+        12: 1800, 14: 1999, 16: 2199, 18: 2399,
+      };
       const chosen = allowed.reduce((best, h) => (Math.abs(h - hours) < Math.abs(best - hours) ? h : best), allowed[0]);
       const packageHours = chosen;
       const packagePrice = priceByHour[packageHours] ?? 1800;
@@ -899,8 +903,30 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
     if (tripType === TripType.ONE_WAY && pickupLocation && dropLocation) {
       const pickupInside = isPointInPolygon(pickupLocation.latitude, pickupLocation.longitude, HYDERABAD_ORR_POLYGON);
       const dropInside = isPointInPolygon(dropLocation.latitude, dropLocation.longitude, HYDERABAD_ORR_POLYGON);
-      if (!pickupInside || !dropInside) {
-        showAlert('Not serviceable area', 'We will be available soon. Please choose locations within Hyderabad (ORR).');
+
+      if (!pickupInside) {
+        // Pickup outside ORR — plain not serviceable, no Outstation hint
+        showAlert('Not Serviceable', 'We currently serve only within Hyderabad (ORR). Please set your pickup location within Hyderabad.');
+        return;
+      }
+
+      if (!dropInside) {
+        // Pickup inside ORR, drop outside — suggest Outstation
+        showAlert(
+          'Drop Point Outside Service Area',
+          'Your drop location is outside Hyderabad (ORR).\n\nTry Outstation trip type for destinations beyond the city! 🚗',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Switch to Outstation',
+              onPress: () => {
+                setTripType(TripType.OUTSTATION);
+                setOutstationTripType('ONE_WAY');
+                setRequestedHours(4);
+              },
+            },
+          ]
+        );
         return;
       }
     }
@@ -1410,7 +1436,7 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
                     key={opt.key}
                     onPress={() => {
                       setOutstationTripType(opt.key);
-                      setRequestedHours(12);
+                      setRequestedHours(opt.key === 'ONE_WAY' ? 4 : 12);
                       if (opt.key === 'ROUND_TRIP') setMapSelectTarget('pickup');
                     }}
                     style={[styles.tripPill, active ? styles.tripPillActive : styles.tripPillInactive]}
@@ -1437,6 +1463,10 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
                   { h: 120, label: '5\nDays' },
                 ]
                 : [
+                  { h: 4,  label: '4\nHrs'  },
+                  { h: 6,  label: '6\nHrs'  },
+                  { h: 8,  label: '8\nHrs'  },
+                  { h: 10, label: '10\nHrs' },
                   { h: 12, label: '12\nHrs' },
                   { h: 14, label: '14\nHrs' },
                   { h: 16, label: '16\nHrs' },

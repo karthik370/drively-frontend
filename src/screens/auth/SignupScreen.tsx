@@ -96,20 +96,34 @@ const SignupScreen = ({ route, navigation }: any) => {
   };
 
   const handleSignup = async () => {
-    if (!formData.firstName.trim() || !formData.lastName.trim()) {
-      showAlert('Error', 'Please fill in all required fields');
+    const firstName = formData.firstName.trim();
+    const lastName = formData.lastName.trim();
+    const email = formData.email.trim();
+
+    // ── Client-side validation (match backend rules exactly so users never see raw API errors) ──
+    if (!firstName) {
+      showAlert('First Name Required', 'Please enter your first name.');
       return;
     }
-
-    const email = formData.email.trim();
+    if (firstName.length < 2) {
+      showAlert('First Name Too Short', 'First name must be at least 2 characters.\n\nFor example, use "Ab" instead of "A".');
+      return;
+    }
+    if (!lastName) {
+      showAlert('Last Name Required', 'Please enter your last name.');
+      return;
+    }
+    if (lastName.length < 2) {
+      showAlert('Last Name Too Short', 'Last name must be at least 2 characters.\n\nFor example, use "Vc" instead of "V". You can use any 2+ letter abbreviation.');
+      return;
+    }
     if (!email) {
       showAlert('Email Required', 'Please enter your email address for account notifications.');
       return;
     }
-
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      showAlert('Invalid Email', 'Please enter a valid email address.');
+      showAlert('Invalid Email', 'Please enter a valid email address. Example: name@gmail.com');
       return;
     }
 
@@ -118,11 +132,12 @@ const SignupScreen = ({ route, navigation }: any) => {
       const payload: any = {
         phoneNumber,
         userType,
-        firstName: formData.firstName.trim(),
-        lastName: formData.lastName.trim(),
+        firstName,
+        lastName,
         otpSignupToken,
         msg91AccessToken,
-        email: formData.email.trim().toLowerCase(),
+        email: email.toLowerCase(),
+        referralCode: referralCode.trim() || undefined,
       };
 
       await dispatch(signup(payload)).unwrap();

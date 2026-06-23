@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity, TextInput,
     FlatList, Linking, Platform, ActivityIndicator, Animated, Easing,
@@ -90,9 +90,10 @@ const EmergencyContactsScreen = ({ navigation }: any) => {
     const addContact = useCallback(() => {
         const name = newName.trim();
         const phone = newPhone.trim().replace(/[^0-9+]/g, '');
-        if (!name) return showAlert('Name required', 'Please enter a contact name');
-        if (phone.length < 10) return showAlert('Invalid phone', 'Please enter a valid 10-digit phone number');
-        if (contacts.length >= 5) return showAlert('Limit reached', 'Maximum 5 emergency contacts allowed');
+        if (!name) return showAlert('Name Required', 'Please enter the contact\'s name.');
+        if (name.length < 2) return showAlert('Name Too Short', 'Contact name must be at least 2 characters.\n\nExample: "Mom", "Raj", "Priya"');
+        if (phone.length < 10) return showAlert('Invalid Phone Number', 'Please enter a valid 10-digit phone number.\n\nExample: 9876543210 or +919876543210');
+        if (contacts.length >= 5) return showAlert('Limit Reached', 'You can save a maximum of 5 emergency contacts.');
 
         const contact: EmergencyContact = { id: Date.now().toString(), name, phone };
         void persistContacts([...contacts, contact]);

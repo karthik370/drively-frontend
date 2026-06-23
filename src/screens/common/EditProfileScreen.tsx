@@ -100,17 +100,44 @@ const EditProfileScreen = ({ navigation }: any) => {
 
   const onSave = async () => {
     if (!user) return;
-    if (!canSave) {
-      showAlert('Invalid details', 'Please enter a valid first name and last name.');
+
+    // ── Explicit field-level validation with helpful messages ──
+    const fn = firstName.trim();
+    const ln = lastName.trim();
+    const em = email.trim();
+
+    if (!fn) {
+      showAlert('First Name Required', 'Please enter your first name.');
+      return;
+    }
+    if (fn.length < 2) {
+      showAlert('First Name Too Short', 'First name must be at least 2 characters.');
+      return;
+    }
+    if (!ln) {
+      showAlert('Last Name Required', 'Please enter your last name.');
+      return;
+    }
+    if (ln.length < 2) {
+      showAlert('Last Name Too Short', 'Last name must be at least 2 characters.\n\nTip: Use any 2+ letter abbreviation (e.g. "Vc" for "V").');
+      return;
+    }
+    if (!em) {
+      showAlert('Email Required', 'Please enter your email address.');
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(em)) {
+      showAlert('Invalid Email', 'Please enter a valid email address.\nExample: name@gmail.com');
       return;
     }
 
     setIsSaving(true);
     try {
       const payload: any = {
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        email: email.trim().toLowerCase(),
+        firstName: fn,
+        lastName: ln,
+        email: em.toLowerCase(),
       };
 
       if (canEditPhoto && pickedImage) {
