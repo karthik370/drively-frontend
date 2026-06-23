@@ -686,6 +686,8 @@ class SocketService {
       this.socket.disconnect();
       this.socket = null;
     }
+    // Clear room tracking so fresh joins work after reconnect
+    this.joinedBookingRooms.clear();
   }
 
   emit(event: string, data: any) {
@@ -710,11 +712,19 @@ class SocketService {
     }
   }
 
+  // Dedup guard: prevent emitting booking:join multiple times for the same bookingId.
+  // Cleared on leaveBooking/disconnect so re-joining after cancel works.
+  private joinedBookingRooms = new Set<string>();
+
   joinBooking(bookingId: string) {
+    if (!bookingId) return;
+    if (this.joinedBookingRooms.has(bookingId)) return; // already joined — skip
+    this.joinedBookingRooms.add(bookingId);
     this.emit('booking:join', bookingId);
   }
 
   leaveBooking(bookingId: string) {
+    this.joinedBookingRooms.delete(bookingId);
     this.emit('booking:leave', bookingId);
   }
 

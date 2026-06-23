@@ -148,47 +148,6 @@ const DriverOnlineScreen = ({ navigation }: any) => {
   }, [bookingRequests]);
 
   useEffect(() => {
-    if (!isOnline) return;
-    if (!driverLocation) return;
-    if (hasActiveTrip) return;
-
-    let active = true;
-    void (async () => {
-      try {
-        const items = await getAvailableBookings({ radiusKm: 10, limit: 25, maxAgeMinutes: 0 });
-        if (!active) return;
-        if (!Array.isArray(items) || items.length === 0) return;
-
-        for (const it of items) {
-          const bookingId = String((it as any)?.bookingId ?? (it as any)?.id ?? '');
-          if (!bookingId) continue;
-          dispatch(
-            addBookingRequest({
-              bookingId,
-              pickup: (it as any)?.pickup,
-              drop: (it as any)?.drop ?? null,
-              distanceKm: (it as any)?.distanceKm,
-              etaMin: (it as any)?.etaMin,
-              fare: (it as any)?.fare,
-              vehicleType: (it as any)?.vehicleType,
-              transmissionType: (it as any)?.transmissionType,
-              tripType: (it as any)?.tripType,
-              outstationTripType: (it as any)?.outstationTripType,
-              requestedHours: (it as any)?.requestedHours,
-              scheduledTime: typeof (it as any)?.scheduledTime === 'string' ? (it as any).scheduledTime : undefined,
-            })
-          );
-        }
-      } catch {
-      }
-    })();
-
-    return () => {
-      active = false;
-    };
-  }, [dispatch, driverLocation, isOnline]);
-
-  useEffect(() => {
     if (!isOnline) {
       onlineSentRef.current = false;
       setActiveBookingId(null);
