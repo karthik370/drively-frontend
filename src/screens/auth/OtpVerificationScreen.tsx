@@ -252,6 +252,11 @@ const OtpVerificationScreen = ({ route, navigation }: any) => {
   };
 
   const handleVerifyOtp = async (otpCode: string) => {
+    // ── Hard guard against double-tap / auto-submit racing ──
+    // verifyingRef is synchronous (unlike localLoading which is async state)
+    if (verifyingRef.current) return;
+    verifyingRef.current = true;
+
     try {
       if (localLoading || isLoading) return;
       setLocalLoading(true);
@@ -344,6 +349,7 @@ const OtpVerificationScreen = ({ route, navigation }: any) => {
       throw new Error(`Login failed. ${JSON.stringify({ userExists: (result as any)?.userExists, verified: (result as any)?.verified })}`);
     } catch (err: any) {
       const errMsg = getErrorMessage(err) || 'Invalid OTP';
+
       // Detect network errors — keep OTP digits so user can retry without re-typing
       const isNetworkError =
         errMsg.toLowerCase().includes('network') ||
@@ -356,11 +362,24 @@ const OtpVerificationScreen = ({ route, navigation }: any) => {
         err?.code === 'ECONNREFUSED' ||
         err?.status === 0;
 
+      // Detect the MSG91 "already verified" case (code 702, no phone fallback)
+      // This usually means the user tapped twice and first request already logged them in.
+      // Show a friendly message instead of a confusing error.
+      const isAlreadyVerified =
+        errMsg.toLowerCase().includes('already used') ||
+        errMsg.toLowerCase().includes('already verified');
+
       if (isNetworkError) {
         // Keep digits so user can tap retry without re-typing
         showAlert(
           'Network Error',
           'Could not connect to server. Please check your connection and tap "Verify & Continue" to try again.',
+        );
+      } else if (isAlreadyVerified) {
+        // The first tap already succeeded — just show a hint, don't clear OTP
+        showAlert(
+          'Already Verified',
+          'Your OTP was already verified. If you are not logged in yet, please go back and request a new OTP.',
         );
       } else {
         // Real OTP error (wrong code, expired, etc.) — clear digits
@@ -370,6 +389,7 @@ const OtpVerificationScreen = ({ route, navigation }: any) => {
       }
     } finally {
       setLocalLoading(false);
+      verifyingRef.current = false;
     }
   };
 

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * TripPhotoScreen — Capture before/after trip photos
  * ──────────────────────────────────────────────────
  * 4 photos per phase: front, back, left, right
@@ -104,8 +104,7 @@ const TripPhotoScreen = ({ navigation, route }: any) => {
         lng = loc.coords.longitude;
       } catch { }
 
-      await uploadTripPhoto({
-        bookingId,
+      await uploadTripPhoto(bookingId, {
         base64: base64Data,
         mimeType: 'image/jpeg',
         phase,

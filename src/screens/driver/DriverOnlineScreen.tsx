@@ -482,7 +482,6 @@ const DriverOnlineScreen = ({ navigation }: any) => {
           status: ((raw as any)?.status ?? BookingStatus.ACCEPTED) as any,
           customer: (raw as any)?.customer as any,
           driver: (raw as any)?.driver as any,
-          otp: (raw as any)?.otp ?? null,
           pickupLocation: {
             latitude: Number.isFinite(pickupLat) ? pickupLat : 0,
             longitude: Number.isFinite(pickupLng) ? pickupLng : 0,

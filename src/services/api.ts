@@ -898,6 +898,46 @@ export const verifyBookingOtp = async (bookingId: string, otp: string): Promise<
   }
 };
 
+export const uploadTripPhoto = async (
+  bookingId: string,
+  photo: {
+    base64: string;
+    mimeType: string;
+    label: 'front' | 'back' | 'left' | 'right' | 'selfie';
+    phase?: 'PICKUP_VERIFICATION' | 'BEFORE' | 'AFTER';
+    latitude?: number;
+    longitude?: number;
+  }
+): Promise<any> => {
+  try {
+    const res = await api.post<ApiResponse<any>>(`/bookings/${bookingId}/trip-photos`, {
+      base64: photo.base64,
+      mimeType: photo.mimeType || 'image/jpeg',
+      label: photo.label,
+      phase: photo.phase || 'PICKUP_VERIFICATION',
+      latitude: photo.latitude,
+      longitude: photo.longitude,
+    });
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const getTripPhotoStatus = async (bookingId: string): Promise<{
+  complete: boolean;
+  uploaded: string[];
+  remaining: string[];
+  count: number;
+}> => {
+  try {
+    const res = await api.get<ApiResponse<any>>(`/bookings/${bookingId}/trip-photos/status`);
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
 export const cancelBooking = async (
   bookingId: string,
   reason: string,
@@ -1628,6 +1668,26 @@ export const saveDriverUpiId = async (upiId: string): Promise<{ upiId: string }>
   }
 };
 
+/** Create a Cashfree top-up order for driver wallet. Returns orderId + paymentSessionId. */
+export const createDriverWalletTopupOrder = async (amount: number, paymentMethod?: PaymentMethod): Promise<any> => {
+  try {
+    const res = await api.post<ApiResponse<any>>('/driver-wallet/topup/orders', { amount, paymentMethod });
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+/** Verify driver wallet top-up after Cashfree payment completes. */
+export const verifyDriverWalletTopup = async (params: { cf_order_id: string }): Promise<any> => {
+  try {
+    const res = await api.post<ApiResponse<any>>('/driver-wallet/topup/verify', params);
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
 // Backwards-compatible aliases
 export const updateBookingStatusApi = updateBookingStatus;
 
@@ -1664,30 +1724,7 @@ export const verifyDriverSubscriptionPayment = async (
   }
 };
 
-// ─── Trip Photos ───────────────────────────────────────────────────────────────
-export const uploadTripPhoto = async (params: {
-  bookingId: string;
-  base64: string;
-  mimeType: string;
-  phase: 'BEFORE' | 'AFTER';
-  label: string;
-  latitude?: number;
-  longitude?: number;
-}): Promise<any> => {
-  try {
-    const res = await api.post<ApiResponse<any>>(`/trip-photos/${params.bookingId}/upload`, {
-      base64: params.base64,
-      mimeType: params.mimeType,
-      phase: params.phase,
-      label: params.label,
-      latitude: params.latitude,
-      longitude: params.longitude,
-    });
-    return unwrap(res);
-  } catch (error) {
-    return handleAxiosError(error);
-  }
-};
+
 
 export const getTripPhotos = async (bookingId: string): Promise<any> => {
   try {

@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Image } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import {
   View,
   Text,
@@ -33,7 +34,6 @@ import {
   clearCurrentBooking,
   setCurrentBooking,
   updateBookingCustomerRating,
-  updateBookingOtp,
   updateBookingStatus,
   addChatMessage,
 } from '../../redux/slices/bookingSlice';
@@ -45,7 +45,8 @@ import {
   getBookingDetails,
   rateBooking,
   updateBookingStatus as updateBookingStatusApi,
-  verifyBookingOtp,
+  uploadTripPhoto,
+  getTripPhotoStatus,
   createTripShareLink,
   createBookingPaymentOrder,
   verifyBookingPayment,
@@ -108,9 +109,13 @@ const TrackingScreen = ({ navigation, route }: any) => {
   const bookingStatusRef = useRef<string | null>(null);
   const routePolylineRef = useRef<string | null>(null);
   const [isInfoVisible, setIsInfoVisible] = React.useState(true);
-  const [isOtpModalVisible, setIsOtpModalVisible] = React.useState(false);
-  const [otpInput, setOtpInput] = React.useState('');
-  const [isOtpSubmitting, setIsOtpSubmitting] = React.useState(false);
+  const [photoModalVisible, setPhotoModalVisible] = React.useState(false);
+  const [currentPhotoStep, setCurrentPhotoStep] = React.useState(0);
+  const PHOTO_LABELS = ['front', 'back', 'left', 'right', 'selfie'] as const;
+  const PHOTO_TITLES = ['Front of Car', 'Back of Car', 'Left Side', 'Right Side', 'Driver Selfie'] as const;
+  const [capturedPhotos, setCapturedPhotos] = React.useState<Record<string, { uri: string; uploaded: boolean }>>({});
+  const [photoUploading, setPhotoUploading] = React.useState(false);
+  const [photoVerificationComplete, setPhotoVerificationComplete] = React.useState(false);
   const [unreadChatCount, setUnreadChatCount] = React.useState(0);
   const [isRatingModalVisible, setIsRatingModalVisible] = React.useState(false);
   const [ratingValue, setRatingValue] = React.useState<number>(5);
@@ -859,29 +864,120 @@ const TrackingScreen = ({ navigation, route }: any) => {
     }
   };
 
-  const handleStartTripWithOtp = async () => {
+  // ── Photo Verification Flow (replaces OTP) ──
+  const handleOpenPhotoCapture = useCallback(async () => {
     if (!booking?.id) return;
-    if (isOtpSubmitting) return;
 
-    const otp = otpInput.trim();
-    if (!otp) {
-      showAlert('Enter OTP', 'Please enter the OTP from the customer.');
+    // Check camera permissions
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      showAlert('Camera Permission', 'Camera access is required to take verification photos. Please enable it in settings.');
       return;
     }
 
-    setIsOtpSubmitting(true);
+    // Check what's already uploaded
     try {
-      await verifyBookingOtp(booking.id, otp);
-      dispatch(updateBookingOtp({ id: booking.id, otp: null }));
-      dispatch(updateBookingStatus({ id: booking.id, status: BookingStatus.STARTED }));
-      setIsOtpModalVisible(false);
-      setOtpInput('');
-    } catch (e: any) {
-      showAlert('Verify OTP', e?.message || 'Failed to verify OTP');
-    } finally {
-      setIsOtpSubmitting(false);
+      const photoStatus = await getTripPhotoStatus(booking.id);
+      if (photoStatus?.complete) {
+        setPhotoVerificationComplete(true);
+        return;
+      }
+      // Pre-mark already uploaded photos
+      if (photoStatus?.uploaded?.length) {
+        const existing: Record<string, { uri: string; uploaded: boolean }> = {};
+        for (const label of photoStatus.uploaded) {
+          existing[label] = { uri: '', uploaded: true };
+        }
+        setCapturedPhotos(existing);
+        // Start from first missing photo
+        const firstMissing = PHOTO_LABELS.findIndex(l => !photoStatus.uploaded.includes(l));
+        setCurrentPhotoStep(firstMissing >= 0 ? firstMissing : 0);
+      } else {
+        setCapturedPhotos({});
+        setCurrentPhotoStep(0);
+      }
+    } catch {
+      setCapturedPhotos({});
+      setCurrentPhotoStep(0);
     }
-  };
+
+    setPhotoModalVisible(true);
+  }, [booking?.id]);
+
+  const handleCapturePhoto = useCallback(async () => {
+    if (!booking?.id || photoUploading) return;
+
+    const label = PHOTO_LABELS[currentPhotoStep];
+    const isSelfie = label === 'selfie';
+
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        quality: 0.7,
+        base64: true,
+        allowsEditing: false,
+        cameraType: isSelfie ? ImagePicker.CameraType.front : ImagePicker.CameraType.back,
+      });
+
+      if (result.canceled || !result.assets?.[0]?.base64) return;
+
+      const asset = result.assets[0];
+      setPhotoUploading(true);
+
+      // Upload to backend
+      await uploadTripPhoto(booking.id, {
+        base64: asset.base64!,
+        mimeType: 'image/jpeg',
+        label: label as any,
+      });
+
+      // Mark as captured and uploaded
+      setCapturedPhotos(prev => ({
+        ...prev,
+        [label]: { uri: asset.uri, uploaded: true },
+      }));
+
+      // Check if all done
+      const newUploaded = { ...capturedPhotos, [label]: { uri: asset.uri, uploaded: true } };
+      const allDone = PHOTO_LABELS.every(l => newUploaded[l]?.uploaded);
+
+      if (allDone) {
+        setPhotoVerificationComplete(true);
+        showAlert('Photos Complete', 'All verification photos uploaded! You can now start the trip.');
+      } else {
+        // Auto-advance to next missing photo
+        const nextMissing = PHOTO_LABELS.findIndex((l, i) => i > currentPhotoStep && !newUploaded[l]?.uploaded);
+        if (nextMissing >= 0) {
+          setCurrentPhotoStep(nextMissing);
+        } else {
+          // Wrap around to find any remaining
+          const anyMissing = PHOTO_LABELS.findIndex(l => !newUploaded[l]?.uploaded);
+          if (anyMissing >= 0) setCurrentPhotoStep(anyMissing);
+        }
+      }
+    } catch (e: any) {
+      showAlert('Upload Failed', e?.message || 'Failed to upload photo. Please try again.');
+    } finally {
+      setPhotoUploading(false);
+    }
+  }, [booking?.id, currentPhotoStep, photoUploading, capturedPhotos]);
+
+  const handleStartTripAfterPhotos = useCallback(async () => {
+    if (!booking?.id) return;
+    setStatusUpdating(true);
+    try {
+      await updateBookingStatusApi(booking.id, BookingStatus.STARTED);
+      dispatch(updateBookingStatus({ id: booking.id, status: BookingStatus.STARTED }));
+      setPhotoModalVisible(false);
+      setCapturedPhotos({});
+      setCurrentPhotoStep(0);
+      setPhotoVerificationComplete(false);
+    } catch (e: any) {
+      showAlert('Start Trip', e?.message || 'Failed to start trip');
+    } finally {
+      setStatusUpdating(false);
+    }
+  }, [booking?.id, dispatch]);
 
   useEffect(() => {
     const s = booking?.status;
@@ -987,20 +1083,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
     typeof booking?.totalAmount === 'number'
   );
 
-  const showCustomerOtp = Boolean(
-    !isDriverMode &&
-    booking?.status &&
-    [
-      BookingStatus.ACCEPTED,
-      BookingStatus.DRIVER_ARRIVING,
-      BookingStatus.ARRIVED,
-      BookingStatus.STARTED,
-      BookingStatus.IN_PROGRESS,
-    ].includes(booking.status as any) &&
-    Boolean((booking as any)?.driver?.id) &&
-    (typeof (booking as any)?.otp === 'string' || typeof (booking as any)?.otp === 'number') &&
-    String((booking as any).otp).trim().length > 0
-  );
+
 
   const initialRegion = useMemo(() => {
     const base = effectivePickupLocation ?? driverLocation ?? effectiveDropLocation;
@@ -1845,15 +1928,14 @@ const TrackingScreen = ({ navigation, route }: any) => {
           <Text style={[styles.statusText, { color: statusInfo.color }]}>{statusText}</Text>
         </View>
 
-        {/* ── OTP card — prominently shown to customer ── */}
-        {showCustomerOtp ? (
+        {/* ── Driver verifying vehicle — shown to customer when ARRIVED ── */}
+        {!isDriverMode && (booking?.status === BookingStatus.ARRIVED) ? (
           <View style={styles.otpCard}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Icon name="lock-outline" size={18} color="#C9A84C" />
-              <Text style={styles.otpTitle}>Trip OTP</Text>
+              <Icon name="camera" size={18} color="#C9A84C" />
+              <Text style={styles.otpTitle}>Driver Verifying Vehicle</Text>
             </View>
-            <Text style={styles.otpValue}>{String((booking as any).otp)}</Text>
-            <Text style={styles.otpHint}>Share this OTP with driver to start the trip</Text>
+            <Text style={[styles.otpHint, { marginTop: 8 }]}>Your driver is taking verification photos. Trip will start shortly!</Text>
           </View>
         ) : null}
 
@@ -2652,10 +2734,12 @@ const TrackingScreen = ({ navigation, route }: any) => {
             {booking?.status === BookingStatus.ARRIVED ? (
               <TouchableOpacity
                 style={[styles.tripActionButton, styles.tripActionPrimary]}
-                onPress={() => setIsOtpModalVisible(true)}
+                onPress={photoVerificationComplete ? handleStartTripAfterPhotos : handleOpenPhotoCapture}
               >
-                <Icon name="car" size={18} color="#ffffff" />
-                <Text style={styles.tripActionTextPrimary}>Start Trip</Text>
+                <Icon name={photoVerificationComplete ? 'car' : 'camera'} size={18} color="#ffffff" />
+                <Text style={styles.tripActionTextPrimary}>
+                  {photoVerificationComplete ? 'Start Trip' : `Take Photos (${Object.keys(capturedPhotos).filter(k => capturedPhotos[k]?.uploaded).length}/5)`}
+                </Text>
               </TouchableOpacity>
             ) : null}
 
@@ -2685,43 +2769,113 @@ const TrackingScreen = ({ navigation, route }: any) => {
         ) : null}
 
         <Modal
-          visible={isOtpModalVisible}
+          visible={photoModalVisible}
           transparent
-          animationType="fade"
+          animationType="slide"
           onRequestClose={() => {
-            if (isOtpSubmitting) return;
-            setIsOtpModalVisible(false);
+            if (photoUploading) return;
+            setPhotoModalVisible(false);
           }}
         >
           <View style={styles.otpModalOverlay}>
-            <View style={styles.otpModalCard}>
-              <Text style={styles.otpModalTitle}>Enter Trip OTP</Text>
-              <Text style={styles.otpModalSubTitle}>Ask customer for the OTP to start the trip</Text>
-              <TextInput
-                value={otpInput}
-                onChangeText={setOtpInput}
-                placeholder="Enter OTP"
-                keyboardType="number-pad"
-                maxLength={6}
-                style={styles.otpInput}
-              />
+            <View style={[styles.otpModalCard, { maxHeight: '85%' }]}>
+              <Text style={styles.otpModalTitle}>Vehicle Verification Photos</Text>
+              <Text style={styles.otpModalSubTitle}>
+                Take {5 - Object.keys(capturedPhotos).filter(k => capturedPhotos[k]?.uploaded).length} more photo(s) to start the trip
+              </Text>
+
+              {/* Step indicators */}
+              <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 8, marginVertical: 12 }}>
+                {PHOTO_LABELS.map((label, i) => (
+                  <TouchableOpacity
+                    key={label}
+                    onPress={() => !capturedPhotos[label]?.uploaded && setCurrentPhotoStep(i)}
+                    style={{
+                      width: 48, height: 48, borderRadius: 8,
+                      backgroundColor: capturedPhotos[label]?.uploaded ? '#10b981' : i === currentPhotoStep ? G.accent : '#333',
+                      justifyContent: 'center', alignItems: 'center',
+                      borderWidth: i === currentPhotoStep ? 2 : 0,
+                      borderColor: G.accent,
+                    }}
+                  >
+                    {capturedPhotos[label]?.uploaded ? (
+                      <Icon name="check" size={20} color="#fff" />
+                    ) : (
+                      <Icon
+                        name={label === 'selfie' ? 'account' : label === 'front' ? 'car' : label === 'back' ? 'car-back' : 'car-side'}
+                        size={18}
+                        color="#fff"
+                      />
+                    )}
+                    <Text style={{ color: '#fff', fontSize: 8, marginTop: 2 }}>
+                      {label.charAt(0).toUpperCase() + label.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Current capture instruction */}
+              {!photoVerificationComplete ? (
+                <View style={{ alignItems: 'center', marginVertical: 16 }}>
+                  <Icon
+                    name={PHOTO_LABELS[currentPhotoStep] === 'selfie' ? 'camera-front' : 'camera'}
+                    size={48}
+                    color={G.accent}
+                  />
+                  <Text style={{ color: G.textPrimary, fontSize: 18, fontWeight: '700', marginTop: 8 }}>
+                    {PHOTO_TITLES[currentPhotoStep]}
+                  </Text>
+                  <Text style={{ color: G.textSecondary, fontSize: 13, marginTop: 4, textAlign: 'center' }}>
+                    {PHOTO_LABELS[currentPhotoStep] === 'selfie'
+                      ? 'Take a selfie for verification'
+                      : `Take a photo of the ${PHOTO_LABELS[currentPhotoStep]} of the car`}
+                  </Text>
+                </View>
+              ) : (
+                <View style={{ alignItems: 'center', marginVertical: 16 }}>
+                  <Icon name="check-circle" size={48} color="#10b981" />
+                  <Text style={{ color: '#10b981', fontSize: 18, fontWeight: '700', marginTop: 8 }}>
+                    All Photos Uploaded!
+                  </Text>
+                  <Text style={{ color: G.textSecondary, fontSize: 13, marginTop: 4 }}>
+                    You can now start the trip
+                  </Text>
+                </View>
+              )}
 
               <View style={styles.otpModalActionsRow}>
                 <TouchableOpacity
                   style={[styles.otpModalBtn, styles.otpModalBtnSecondary]}
                   onPress={() => {
-                    if (isOtpSubmitting) return;
-                    setIsOtpModalVisible(false);
+                    if (photoUploading) return;
+                    setPhotoModalVisible(false);
                   }}
                 >
-                  <Text style={styles.otpModalBtnSecondaryText}>Cancel</Text>
+                  <Text style={styles.otpModalBtnSecondaryText}>Close</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.otpModalBtn, styles.otpModalBtnPrimary]}
-                  onPress={handleStartTripWithOtp}
-                >
-                  <Text style={styles.otpModalBtnPrimaryText}>{isOtpSubmitting ? 'Verifying...' : 'Verify & Start'}</Text>
-                </TouchableOpacity>
+
+                {!photoVerificationComplete ? (
+                  <TouchableOpacity
+                    style={[styles.otpModalBtn, styles.otpModalBtnPrimary, photoUploading ? { opacity: 0.5 } : {}]}
+                    onPress={handleCapturePhoto}
+                    disabled={photoUploading}
+                  >
+                    {photoUploading ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text style={styles.otpModalBtnPrimaryText}>
+                        📸 Capture {PHOTO_TITLES[currentPhotoStep]}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.otpModalBtn, styles.otpModalBtnPrimary, { backgroundColor: '#10b981' }]}
+                    onPress={handleStartTripAfterPhotos}
+                  >
+                    <Text style={styles.otpModalBtnPrimaryText}>🚀 Start Trip</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           </View>

@@ -23,7 +23,6 @@ import {
   removeBookingRequest,
   setCurrentBooking,
   updateBookingFare,
-  updateBookingOtp,
   updateBookingStatus,
 } from '../redux/slices/bookingSlice';
 import { updateUser } from '../redux/slices/authSlice';
@@ -201,11 +200,7 @@ class SocketService {
       );
     });
 
-    this.socket.on('booking:otp-verified', (data: any) => {
-      const bookingId = String(data?.bookingId ?? '');
-      if (!bookingId) return;
-      store.dispatch(updateBookingOtp({ id: bookingId, otp: null }));
-    });
+
 
     // ── Global chat message handler — always active ──
     this.socket.on('chat:message', (payload: any) => {
@@ -249,10 +244,8 @@ class SocketService {
 
       store.dispatch(updateBookingStatus({ id: bookingId, status: 'ACCEPTED' }));
 
-      // Immediately update OTP from socket event (for customer)
-      if (data?.otp) {
-        store.dispatch(updateBookingOtp({ id: bookingId, otp: String(data.otp) }));
-      }
+
+
 
       // No local notification here — the backend already sends a push notification
       // to avoid double alerts.

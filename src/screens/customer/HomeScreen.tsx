@@ -12,6 +12,7 @@ import { getNearbyDrivers, type NearbyDriver } from '../../services/api';
 import DriverMarker from '../../components/maps/DriverMarker';
 import { FadeIn, SlideUp, StaggerItem, PressableScale } from '../../components/premium/AnimatedComponents';
 import { showAlert } from '../../components/common/CustomAlert';
+import NearestDriverBadge from '../../components/customer/NearestDriverBadge';
 import { G } from '../../constants/glassStyles';
 
 const withTimeout = async <T,>(promise: Promise<T>, ms: number): Promise<T> => {
@@ -357,6 +358,7 @@ const HomeScreen = ({ navigation }: any) => {
                   <Text style={styles.greeting}>Welcome! 👋</Text>
 
                 </View>
+                <NearestDriverBadge nearbyDrivers={nearbyDrivers} />
               </View>
             </View>
           </View>

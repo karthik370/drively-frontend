@@ -1,5 +1,5 @@
-﻿import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
@@ -23,9 +23,11 @@ const WelcomeScreen = ({ navigation }: any) => {
             end={{ x: 1, y: 1 }}
             style={styles.logoRing}
           >
-            <View style={styles.logoInner}>
-              <Text style={styles.logoText}>🚗</Text>
-            </View>
+            <Image
+              source={require('../../../assets/drively_logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
           </LinearGradient>
           <Text style={styles.appName}>Drively</Text>
           <Text style={styles.tagline}>Your Trusted Driver Service</Text>
@@ -79,16 +81,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 24,
   },
-  logoInner: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: colors.elevated,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoText: {
-    fontSize: 60,
+  logoImage: {
+    width: 180,
+    height: 180,
   },
   appName: {
     fontSize: 36,

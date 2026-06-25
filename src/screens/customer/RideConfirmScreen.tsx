@@ -597,19 +597,19 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
         const extraHourRate = 60;
         const allowed = [12, 16, 20, 24, 48, 72, 96, 120];
         const priceByHour: Record<number, number> = {
-          12: 1199,
-          16: 1439,
-          20: 1679,
-          24: 1919,
-          48: 3359,
-          72: 4799,
-          96: 6239,
-          120: 7679,
+          12: 1499,
+          16: 1739,
+          20: 1979,
+          24: 2219,
+          48: 3659,
+          72: 5099,
+          96: 6539,
+          120: 7979,
         };
 
         const chosen = allowed.reduce((best, h) => (Math.abs(h - hours) < Math.abs(best - hours) ? h : best), allowed[0]);
         const packageHours = chosen;
-        const packagePrice = priceByHour[packageHours] ?? 1199;
+        const packagePrice = priceByHour[packageHours] ?? 1499;
 
         const extraHours = Math.max(0, hours - packageHours);
         const extraHourCharge = extraHours * extraHourRate;
@@ -637,8 +637,8 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
       const taxesFee = 109;
       const allowed = [4, 6, 8, 10, 12, 14, 16, 18];
       const priceByHour: Record<number, number> = {
-        4: 1800, 6: 1800, 8: 1800, 10: 1800,
-        12: 1800, 14: 1999, 16: 2199, 18: 2399,
+        4: 1750, 6: 1750, 8: 1750, 10: 1750,
+        12: 1750, 14: 1959, 16: 2159, 18: 2359,
       };
       const chosen = allowed.reduce((best, h) => (Math.abs(h - hours) < Math.abs(best - hours) ? h : best), allowed[0]);
       const packageHours = chosen;
@@ -673,12 +673,12 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
       const getRoundTripPackagePrice = (hrs: number) => {
         const h = Math.max(1, Math.round(hrs));
         const points = [
-          { h: 1, p: 279 },
-          { h: 2, p: 299 },
-          { h: 4, p: 489 },
-          { h: 6, p: 699 },
-          { h: 8, p: 889 },
-          { h: 12, p: 1239 },
+          { h: 1, p: 259 },
+          { h: 2, p: 289 },
+          { h: 4, p: 469 },
+          { h: 6, p: 679 },
+          { h: 8, p: 869 },
+          { h: 12, p: 1219 },
         ];
         const exact = points.find((pt) => pt.h === h);
         if (exact) return { hours: h, price: exact.p };
@@ -728,20 +728,20 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
     const effectiveHours = Math.min(8, Math.max(1, Math.round(hours)));
     const packagePrice =
       effectiveHours === 1
-        ? 309
+        ? 279
         : effectiveHours === 2
-          ? 374
+          ? 344
           : effectiveHours === 3
-            ? 502
+            ? 472
             : effectiveHours === 4
-              ? 631
+              ? 601
               : effectiveHours === 5
-                ? 759
+                ? 729
                 : effectiveHours === 6
-                  ? 899
+                  ? 869
                   : effectiveHours === 7
-                    ? 1019
-                    : 1149;
+                    ? 989
+                    : 1119;
 
     const distanceBufferKm = 0;
     const includedKmLimit = Math.max(0, km);

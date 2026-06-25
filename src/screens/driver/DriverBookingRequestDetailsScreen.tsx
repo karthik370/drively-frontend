@@ -7,7 +7,7 @@ import { useAppDispatch, useAppSelector } from '../../redux/store';
 import { removeBookingRequest, setCurrentBooking } from '../../redux/slices/bookingSlice';
 import { setDropAddress, setDropLocation, setPickupAddress, setPickupLocation } from '../../redux/slices/locationSlice';
 import socketService from '../../services/socketService';
-import { acceptBooking, calculateRoute } from '../../services/api';
+import { acceptBooking, calculateRoute, getDriverWalletSummary } from '../../services/api';
 import { BookingStatus, PaymentMethod, VehicleType } from '../../types';
 import type { BookingRequest } from '../../components/driver/BookingRequestCard';
 import { showAlert } from '../../components/common/CustomAlert';
@@ -54,6 +54,22 @@ const DriverBookingRequestDetailsScreen = ({ navigation, route }: any) => {
   const [pickupEtaMin, setPickupEtaMin] = useState<number | null>(null);
   const [pickupDistanceKm, setPickupDistanceKm] = useState<number | null>(null);
   const pickupRouteKeyRef = useRef<string>('');
+
+  // Wallet gate state
+  const [walletBlocked, setWalletBlocked] = useState(false);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [walletSettleAmount, setWalletSettleAmount] = useState(0);
+
+  useEffect(() => {
+    let mounted = true;
+    getDriverWalletSummary().then((s: any) => {
+      if (!mounted) return;
+      setWalletBlocked(s?.isBlocked ?? false);
+      setWalletBalance(typeof s?.availableBalance === 'number' ? s.availableBalance : null);
+      setWalletSettleAmount(s?.amountToSettle ?? 0);
+    }).catch(() => {});
+    return () => { mounted = false; };
+  }, []);
 
   // Android needs tracksViewChanges=true initially to capture View-based marker bitmaps.
   // After 1s, switch to false to stop per-frame re-rendering (eliminates flickering).
@@ -179,7 +195,6 @@ const DriverBookingRequestDetailsScreen = ({ navigation, route }: any) => {
         status: ((raw as any)?.status ?? BookingStatus.ACCEPTED) as any,
         customer: (raw as any)?.customer as any,
         driver: (raw as any)?.driver as any,
-        otp: (raw as any)?.otp ?? null,
         pickupLocation: { latitude: Number.isFinite(pLat) ? pLat : 0, longitude: Number.isFinite(pLng) ? pLng : 0 },
         pickupAddress: String((raw as any)?.pickupAddress ?? 'Pickup'),
         dropLocation: Number.isFinite(dLat) && Number.isFinite(dLng) ? { latitude: dLat, longitude: dLng } : undefined,
@@ -374,19 +389,50 @@ const DriverBookingRequestDetailsScreen = ({ navigation, route }: any) => {
 
         {/* Actions */}
         <View style={styles.actionsRow}>
-          <TouchableOpacity style={styles.rejectBtn} onPress={onReject} activeOpacity={0.7}>
-            <Icon name="close" size={18} color="#ef4444" />
-            <Text style={styles.rejectText}>Decline</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.acceptBtn, accepting ? styles.btnDisabled : null]}
-            disabled={accepting}
-            onPress={onAccept}
-            activeOpacity={0.7}
-          >
-            <Icon name="check" size={18} color="#ffffff" />
-            <Text style={styles.acceptText}>{accepting ? 'Accepting…' : 'Accept Ride'}</Text>
-          </TouchableOpacity>
+          {walletBlocked ? (
+            // Wallet blocked — replace Accept button with warning + Go to Wallet
+            <View style={styles.walletBlockedWrap}>
+              <View style={styles.walletBlockedAlert}>
+                <Icon name="alert-circle" size={20} color="#dc2626" />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.walletBlockedTitle}>⚠️ Wallet Blocked</Text>
+                  <Text style={styles.walletBlockedMsg}>
+                    Balance −₹{walletBalance !== null ? Math.abs(walletBalance).toFixed(0) : '?'}. Add ₹{walletSettleAmount} to accept rides.
+                  </Text>
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity style={styles.rejectBtn} onPress={onReject} activeOpacity={0.7}>
+                  <Icon name="close" size={18} color="#ef4444" />
+                  <Text style={styles.rejectText}>Decline</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.acceptBtn, { backgroundColor: '#065f46', flex: 1 }]}
+                  onPress={() => navigation.navigate('DriverWallet')}
+                  activeOpacity={0.7}
+                >
+                  <Icon name="wallet-plus" size={18} color="#ffffff" />
+                  <Text style={styles.acceptText}>Add Money</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <>
+              <TouchableOpacity style={styles.rejectBtn} onPress={onReject} activeOpacity={0.7}>
+                <Icon name="close" size={18} color="#ef4444" />
+                <Text style={styles.rejectText}>Decline</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.acceptBtn, accepting ? styles.btnDisabled : null]}
+                disabled={accepting}
+                onPress={onAccept}
+                activeOpacity={0.7}
+              >
+                <Icon name="check" size={18} color="#ffffff" />
+                <Text style={styles.acceptText}>{accepting ? 'Accepting…' : 'Accept Ride'}</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </View>
 
@@ -521,6 +567,17 @@ const styles = StyleSheet.create({
   },
   acceptText: { color: G.textPrimary, fontWeight: '900', fontSize: 15 },
   btnDisabled: { opacity: 0.7 },
+
+  // Wallet blocked gate
+  walletBlockedWrap: { flex: 1, gap: 10 },
+  walletBlockedAlert: {
+    flexDirection: 'row', alignItems: 'flex-start', padding: 12,
+    backgroundColor: 'rgba(220,38,38,0.10)', borderRadius: 12,
+    borderWidth: 1.5, borderColor: 'rgba(220,38,38,0.3)',
+  },
+  walletBlockedTitle: { fontSize: 13, fontWeight: '800', color: '#dc2626' },
+  walletBlockedMsg: { fontSize: 12, color: '#ef4444', marginTop: 2, fontWeight: '500' },
+
 
   // Empty
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
