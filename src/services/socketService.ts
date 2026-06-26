@@ -636,6 +636,29 @@ class SocketService {
     }
 
     this.socket.on('connect', () => {
+      // Auto-restore driver online status after reconnect.
+      // When the app comes back from background or the socket reconnects, we
+      // re-announce the driver as online so the backend re-adds them to the
+      // matching pool (online-drivers room). This runs for every connect event
+      // including the very first connection (harmless — DriverOnlineScreen also
+      // emits driver:online on the same frame, the backend is idempotent).
+      try {
+        const state = store.getState() as any;
+        const isDriverOnline = Boolean(state?.driver?.isOnline);
+        const userType = String(state?.auth?.user?.userType || '');
+        const isDriver = userType === 'DRIVER' || userType === 'BOTH';
+        if (isDriver && isDriverOnline) {
+          const loc = state?.location?.currentLocation;
+          if (loc?.latitude && loc?.longitude) {
+            this.socket?.emit('driver:online', {
+              latitude: loc.latitude,
+              longitude: loc.longitude,
+            });
+          }
+        }
+      } catch {
+        // Silently ignore — the backend auto-rejoin on connection covers this case
+      }
     });
 
     this.socket.on('disconnect', () => {

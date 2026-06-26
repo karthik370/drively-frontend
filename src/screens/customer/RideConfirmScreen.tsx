@@ -1616,8 +1616,9 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
                 <Text style={styles.fareHeaderTotal}>
                   ₹{(() => {
                     let total = estimate.total;
-                    if (promoInfo) total = promoInfo.finalAmount;
-                    if (discountPreview && discountPreview.totalDiscount > 0) {
+                    if (promoInfo) {
+                      total = promoInfo.finalAmount;
+                    } else if (discountPreview && discountPreview.totalDiscount > 0) {
                       total = Math.max(0, total - discountPreview.totalDiscount);
                     }
                     return Math.round(total);
@@ -1724,30 +1725,39 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
                 <Text style={styles.fareLabel}>Taxes & Fee</Text>
                 <Text style={styles.fareValue}>₹{(estimate as any).taxesFee || 0}</Text>
               </View>
+              {/* Discount section: show promo OR auto-discounts — not both simultaneously */}
               {promoInfo ? (
+                // Promo code applied — show only the promo saving
                 <View style={styles.fareRow}>
-                  <Text style={styles.fareLabel}>Promo Discount</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
+                    <Icon name="tag" size={14} color="#10b981" />
+                    <Text style={styles.fareLabel}>Promo Discount ({promoInfo.code})</Text>
+                  </View>
                   <Text style={[styles.fareValue, { color: '#10b981' }]}>-₹{promoInfo.discountAmount.toFixed(0)}</Text>
                 </View>
-              ) : null}
-              {discountPreview && discountPreview.membershipDiscount > 0 ? (
-                <View style={styles.fareRow}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
-                    <Icon name="crown" size={14} color="#C9A84C" />
-                    <Text style={styles.fareLabel}>{discountPreview.membershipLabel}</Text>
-                  </View>
-                  <Text style={[styles.fareValue, { color: '#10b981' }]}>-₹{discountPreview.membershipDiscount}</Text>
-                </View>
-              ) : null}
-              {discountPreview && discountPreview.streakDiscount > 0 ? (
-                <View style={styles.fareRow}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
-                    <Icon name="fire" size={14} color="#f59e0b" />
-                    <Text style={styles.fareLabel}>{discountPreview.streakLabel}</Text>
-                  </View>
-                  <Text style={[styles.fareValue, { color: '#10b981' }]}>-₹{discountPreview.streakDiscount}</Text>
-                </View>
-              ) : null}
+              ) : (
+                // No promo — show auto membership/streak discounts
+                <>
+                  {discountPreview && discountPreview.membershipDiscount > 0 ? (
+                    <View style={styles.fareRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
+                        <Icon name="crown" size={14} color="#C9A84C" />
+                        <Text style={styles.fareLabel}>{discountPreview.membershipLabel}</Text>
+                      </View>
+                      <Text style={[styles.fareValue, { color: '#10b981' }]}>-₹{discountPreview.membershipDiscount}</Text>
+                    </View>
+                  ) : null}
+                  {discountPreview && discountPreview.streakDiscount > 0 ? (
+                    <View style={styles.fareRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
+                        <Icon name="fire" size={14} color="#f59e0b" />
+                        <Text style={styles.fareLabel}>{discountPreview.streakLabel}</Text>
+                      </View>
+                      <Text style={[styles.fareValue, { color: '#10b981' }]}>-₹{discountPreview.streakDiscount}</Text>
+                    </View>
+                  ) : null}
+                </>
+              )}
               {discountPreview?.isPremium && requireExperienced ? (
                 <View style={[styles.fareRow, { backgroundColor: 'rgba(201,168,76,0.08)', borderRadius: 8, padding: 8, marginVertical: 4 }]}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
@@ -1761,8 +1771,11 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
                 <Text style={styles.fareTotalLabel}>Total</Text>
                 <Text style={styles.fareTotalValue}>₹{(() => {
                     let total = estimate.total;
-                    if (promoInfo) total = promoInfo.finalAmount;
-                    if (discountPreview && discountPreview.totalDiscount > 0) {
+                    if (promoInfo) {
+                      // Promo is applied — use promoInfo.finalAmount (promo already deducted)
+                      total = promoInfo.finalAmount;
+                    } else if (discountPreview && discountPreview.totalDiscount > 0) {
+                      // No promo — apply auto-discounts
                       total = Math.max(0, total - discountPreview.totalDiscount);
                     }
                     return Math.round(total);

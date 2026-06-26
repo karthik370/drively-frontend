@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DrawerActions } from '@react-navigation/native';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Switch, Modal, Platform } from 'react-native';
+import { AppState, AppStateStatus, View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Switch, Modal, Platform } from 'react-native';
 import * as Location from 'expo-location';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,6 +9,7 @@ import { setDriverOnline } from '../../redux/slices/driverSlice';
 import { addBookingRequest, clearBookingRequests, removeBookingRequest, setCurrentBooking } from '../../redux/slices/bookingSlice';
 import { setDropAddress, setDropLocation, setPickupAddress, setPickupLocation } from '../../redux/slices/locationSlice';
 import socketService from '../../services/socketService';
+import locationService from '../../services/locationService';
 import { acceptBooking, getActiveBooking, getAvailableBookings, goOffline, goOnline } from '../../services/api';
 import BookingRequestCard, { type BookingRequest } from '../../components/driver/BookingRequestCard';
 import useBookingRequest from '../../hooks/useBookingRequest';
@@ -76,12 +77,28 @@ const DriverOnlineScreen = ({ navigation }: any) => {
       try {
         if (nextOnline) {
           await goOnline();
+          // Issue 3: Start background tracking so driver stays online when app is backgrounded.
+          // Background task (locationService) will keep emitting driver:location-update
+          // and the socket task handler maintains isOnline=true in DB.
+          try {
+            await locationService.startBackgroundTracking();
+          } catch {
+            // Background tracking not available in Expo Go — silently continue
+          }
         } else {
           await goOffline();
+          // Stop background tracking when driver manually goes offline
+          try {
+            await locationService.stopBackgroundTracking();
+          } catch {}
         }
       } catch (e: any) {
         // Revert on failure
         dispatch(setDriverOnline(!nextOnline));
+        // Also stop background tracking if we failed to go online
+        if (nextOnline) {
+          try { await locationService.stopBackgroundTracking(); } catch {}
+        }
         if (e?.message?.includes('Active subscription required') || e?.response?.status === 403) {
           setHasSubscription(false);
           showAlert('Subscription Required', 'You need an active subscription to go online.');
@@ -147,6 +164,33 @@ const DriverOnlineScreen = ({ navigation }: any) => {
     bookingRequestsRef.current = bookingRequests;
   }, [bookingRequests]);
 
+  // Issue 3: When app returns from background → reconnect socket and re-emit driver:online.
+  // This ensures the driver's booking availability is restored after the app is resumed.
+  useEffect(() => {
+    const handleAppState = async (nextState: AppStateStatus) => {
+      if (nextState !== 'active') return;
+      const state = (await import('../../redux/store')).store.getState() as any;
+      const driverOnline = Boolean(state?.driver?.isOnline);
+      if (!driverOnline) return;
+
+      try {
+        if (!socketService.isConnected()) {
+          await socketService.connect();
+        }
+        // Re-announce driver:online so backend marks them available again
+        const loc = state?.location?.currentLocation;
+        if (loc?.latitude && loc?.longitude) {
+          socketService.setDriverOnline(loc.latitude, loc.longitude);
+        }
+      } catch {
+        // Silently ignore reconnect failures
+      }
+    };
+
+    const sub = AppState.addEventListener('change', (s) => { void handleAppState(s); });
+    return () => sub.remove();
+  }, []);
+
   useEffect(() => {
     if (!isOnline) {
       onlineSentRef.current = false;
@@ -178,7 +222,7 @@ const DriverOnlineScreen = ({ navigation }: any) => {
       } catch {
       }
     })();
-  }, [dispatch, driverLocation, isOnline, trackingError]);
+  }, [dispatch, driverLocation, isOnline, setOnlineState, trackingError]);
 
   useEffect(() => {
     if (!isOnline) return;

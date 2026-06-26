@@ -35,6 +35,7 @@ import {
   setCurrentBooking,
   updateBookingCustomerRating,
   updateBookingStatus,
+  updateBookingFare,
   addChatMessage,
 } from '../../redux/slices/bookingSlice';
 import {
@@ -142,6 +143,29 @@ const TrackingScreen = ({ navigation, route }: any) => {
   const [driverProfileData, setDriverProfileData] = React.useState<any>(null);
   const [driverProfileLoading, setDriverProfileLoading] = React.useState(false);
   const [statusUpdating, setStatusUpdating] = React.useState(false); // Loading overlay for status transitions
+  const statusUpdatingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Safety auto-clear
+  // Live fare from backend socket — updated every ~30s during active trips
+  const [liveFare, setLiveFare] = React.useState<number | null>(null);
+  const [liveFareDriver, setLiveFareDriver] = React.useState<number | null>(null);
+  const [liveFareDistanceKm, setLiveFareDistanceKm] = React.useState<number | null>(null);
+
+  // Wrapped setter: every time we set true, arm a 8s safety auto-clear so the overlay
+  // can never get permanently stuck even if a code path forgets to call setStatusUpdating(false).
+  const safeSetStatusUpdating = React.useCallback((val: boolean) => {
+    setStatusUpdating(val);
+    if (val) {
+      if (statusUpdatingTimeoutRef.current) clearTimeout(statusUpdatingTimeoutRef.current);
+      statusUpdatingTimeoutRef.current = setTimeout(() => {
+        setStatusUpdating(false);
+        statusUpdatingTimeoutRef.current = null;
+      }, 8000); // 8s safety timeout (was 15s — shorter to avoid long freezes)
+    } else {
+      if (statusUpdatingTimeoutRef.current) {
+        clearTimeout(statusUpdatingTimeoutRef.current);
+        statusUpdatingTimeoutRef.current = null;
+      }
+    }
+  }, []);
   const [isMapPanned, setIsMapPanned] = React.useState(false); // Suspends auto-camera when user moves map
   const isMapPannedRef = useRef(false);
   const pannedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -208,6 +232,66 @@ const TrackingScreen = ({ navigation, route }: any) => {
     return () => { socket.off('payment_confirmed', onPaymentConfirmed); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [booking?.id]);
+
+  // booking:fare-updated — emitted when a normal driver accepts an experienced-driver booking.
+  // Platform immediately removes the ₹75 experienced driver fee from the total.
+  // Customer sees the updated (lower) fare instantly.
+  useEffect(() => {
+    const socket = (socketService as any)?.socket ?? (socketService as any)?.getSocket?.();
+    if (!socket) return;
+    const onFareUpdated = (data: any) => {
+      if (data?.bookingId !== booking?.id) return;
+      if (typeof data?.totalAmount === 'number') {
+        dispatch(updateBookingFare({
+          id: booking!.id,
+          totalAmount: data.totalAmount,
+          discountAmount: typeof data.discountAmount === 'number' ? data.discountAmount : undefined,
+        }));
+      }
+      if (data?.reason === 'experienced_driver_unavailable' && data?.fareReduced > 0) {
+        showAlert(
+          '💰 Fare Updated',
+          data?.message ||
+            `An experienced driver was not available. ₹${data.fareReduced} experienced driver fee removed. New fare: ₹${data.totalAmount}.`,
+        );
+      }
+    };
+    socket.on('booking:fare-updated', onFareUpdated);
+    return () => { socket.off('booking:fare-updated', onFareUpdated); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [booking?.id]);
+
+  // fare:live-update — live fare pushed by backend every ~30s during STARTED/IN_PROGRESS.
+  // Updates the "Current price" card in real time for both driver and customer.
+  useEffect(() => {
+    const socket = (socketService as any)?.socket ?? (socketService as any)?.getSocket?.();
+    if (!socket) return;
+    const onLiveFare = (data: any) => {
+      if (data?.bookingId !== booking?.id) return;
+      if (typeof data?.liveFare === 'number') {
+        setLiveFare(data.liveFare);
+      }
+      if (typeof data?.driverLiveFare === 'number') {
+        setLiveFareDriver(data.driverLiveFare);
+      }
+      if (typeof data?.actualDistanceKm === 'number') {
+        setLiveFareDistanceKm(data.actualDistanceKm);
+      }
+    };
+    socket.on('fare:live-update', onLiveFare);
+    return () => { socket.off('fare:live-update', onLiveFare); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [booking?.id]);
+
+  // Reset live fare when trip status leaves STARTED/IN_PROGRESS
+  useEffect(() => {
+    const status = booking?.status;
+    if (status && !['STARTED', 'IN_PROGRESS'].includes(status as string)) {
+      setLiveFare(null);
+      setLiveFareDriver(null);
+      setLiveFareDistanceKm(null);
+    }
+  }, [booking?.status]);
 
   // Fix #7: Fallback polling for cash payment — if socket event doesn't arrive,
   // poll the REST API every 5s while trip is COMPLETED and payment is not yet confirmed.
@@ -340,14 +424,46 @@ const TrackingScreen = ({ navigation, route }: any) => {
     ['ACCEPTED', 'DRIVER_ARRIVING', 'ARRIVED', 'STARTED', 'IN_PROGRESS', 'COMPLETED'].includes(String(bookingStatus))
   );
 
+  // effectiveUserType: resolves the user's active role (DRIVER roleOverride can switch BOTH/DRIVER → CUSTOMER)
   const effectiveUserType = useMemo(() => {
-    if (authedUserType === UserType.DRIVER && roleOverride === UserType.CUSTOMER) {
-      return UserType.CUSTOMER;
-    }
+    if (authedUserType === UserType.DRIVER && roleOverride === UserType.CUSTOMER) return UserType.CUSTOMER;
+    if (authedUserType === UserType.BOTH && roleOverride === UserType.CUSTOMER) return UserType.CUSTOMER;
     return authedUserType;
   }, [authedUserType, roleOverride]);
 
-  const isDriverMode = effectiveUserType === UserType.DRIVER;
+  // isDriverMode: true when the current user is acting as a driver for THIS booking.
+  // For BOTH-type users we check booking.driverId (root field) AND booking.driver.id (nested).
+  // The root driverId is set as soon as the driver accepts — before the full driver object
+  // is hydrated in the Redux store. So we MUST check driverId first.
+  const isDriverMode = useMemo(() => {
+    if (effectiveUserType === UserType.DRIVER) return true;
+    if (effectiveUserType === UserType.BOTH) {
+      if (authedUserId) {
+        // Root field driverId (available from ACCEPTED state onwards)
+        const rootDriverId = (booking as any)?.driverId;
+        if (rootDriverId && String(rootDriverId) === String(authedUserId)) return true;
+        // Nested driver object (available after full booking hydration)
+        const nestedDriverId = (booking as any)?.driver?.id;
+        if (nestedDriverId && String(nestedDriverId) === String(authedUserId)) return true;
+        // If they are explicitly the customer of this booking → customer mode
+        const rootCustomerId = (booking as any)?.customerId;
+        const nestedCustomerId = (booking as any)?.customer?.id;
+        const isExplicitlyCustomer =
+          (rootCustomerId && String(rootCustomerId) === String(authedUserId)) ||
+          (nestedCustomerId && String(nestedCustomerId) === String(authedUserId));
+        if (isExplicitlyCustomer) return false;
+      }
+      if (roleOverride === UserType.CUSTOMER) return false;
+      return false;
+    }
+    return false;
+  }, [
+    effectiveUserType, authedUserId, roleOverride,
+    (booking as any)?.driverId,
+    (booking as any)?.driver?.id,
+    (booking as any)?.customerId,
+    (booking as any)?.customer?.id,
+  ]);
   const isDriverModeRef = useRef(isDriverMode);
   isDriverModeRef.current = isDriverMode;
   const isDriverForThisBooking = Boolean(
@@ -507,14 +623,25 @@ const TrackingScreen = ({ navigation, route }: any) => {
       return;
     }
 
-    // Get trip start time from booking
+    // Get trip start time from booking — use real server timestamp so elapsed
+    // is correct even after app close/reopen (avoids "0s" flash on resume)
     const startedAtRaw = (booking as any)?.startedAt;
-    const startMs = startedAtRaw ? new Date(startedAtRaw).getTime() : Date.now();
+
+    // CRITICAL: If startedAt is not yet loaded (app just resumed, data still fetching),
+    // show nothing rather than starting the timer from 0 and confusing the driver/customer.
+    // The effect will re-run automatically when startedAt arrives in Redux.
+    if (!startedAtRaw) {
+      setRoundTripElapsed(null);
+      setRoundTripCountdown(null);
+      return;
+    }
+
+    const startMs = new Date(startedAtRaw).getTime();
     const totalMs = packageHoursForCountdown * 60 * 60 * 1000;
 
     const updateTimer = () => {
       const now = Date.now();
-      const elapsedMs = now - startMs;
+      const elapsedMs = Math.max(0, now - startMs);  // clamp to 0 so negatives don't show
       const remainingMs = Math.max(0, totalMs - elapsedMs);
 
       // Format elapsed
@@ -549,6 +676,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
       }
     };
 
+    // Run immediately so time shows without waiting 1 second
     updateTimer();
     const timer = setInterval(updateTimer, 1000);
     return () => clearInterval(timer);
@@ -587,11 +715,16 @@ const TrackingScreen = ({ navigation, route }: any) => {
   const etaTargetLabel = useMemo(() => {
     const s = booking?.status;
     if (!s) return 'ETA';
+    // Round trips in progress have no drop — don't label ETA to Drop
+    const tripType = String((booking as any)?.tripType ?? '').toUpperCase();
+    if (tripType === 'ROUND_TRIP' && (s === 'STARTED' || s === 'IN_PROGRESS')) {
+      return 'Round Trip';
+    }
     if ([BookingStatus.STARTED, BookingStatus.IN_PROGRESS, BookingStatus.COMPLETED].includes(s as any)) {
       return 'ETA to Drop';
     }
     return 'ETA to Pickup';
-  }, [booking?.status]);
+  }, [booking?.status, (booking as any)?.tripType]);
 
   // Fix: explicitly require REQUESTED/SEARCHING status — null status no longer matches.
   // Also gate with isCancellingRef to prevent 'Searching' flash during cancel navigation.
@@ -690,22 +823,22 @@ const TrackingScreen = ({ navigation, route }: any) => {
   }, [distance]);
 
   const callOtherParty = async () => {
-    const phone = normalizePhone(otherParty?.phoneNumber);
+    let phone = normalizePhone(otherParty?.phoneNumber);
     if (!phone) {
-      showAlert('Call not available', 'Phone number is not available.');
+      showAlert('Call not available', 'Phone number is not available for this booking.');
       return;
     }
-
+    // Strip spaces/dashes that can make tel: fail on some devices
+    phone = phone.replace(/[\s\-().]/g, '');
+    // If number has no country code and is 10 digits, prepend +91
+    if (/^[6-9]\d{9}$/.test(phone)) phone = `+91${phone}`;
     const url = `tel:${phone}`;
     try {
-      const supported = await Linking.canOpenURL(url);
-      if (!supported) {
-        await Linking.openURL(url);
-        return;
-      }
+      // Don't use canOpenURL — it requires QUERY_ALL_PACKAGES on Android 11+
+      // and returns false even when calling is supported. Just open directly.
       await Linking.openURL(url);
     } catch {
-      showAlert('Call', 'Unable to place call from this device.');
+      showAlert('Call', 'Unable to place call. Please dial manually: ' + phone);
     }
   };
 
@@ -754,14 +887,14 @@ const TrackingScreen = ({ navigation, route }: any) => {
           style: 'destructive',
           onPress: () => {
             void (async () => {
-              setStatusUpdating(true);
+              safeSetStatusUpdating(true);
               try {
                 await updateBookingStatusApi(bookingId, nextStatus);
                 dispatch(updateBookingStatus({ id: bookingId, status: nextStatus }));
               } catch (e: any) {
                 showAlert('Update status', e?.message || 'Failed to update booking status');
               } finally {
-                setStatusUpdating(false);
+                safeSetStatusUpdating(false);
               }
             })();
           },
@@ -769,14 +902,14 @@ const TrackingScreen = ({ navigation, route }: any) => {
       ]);
       return;
     }
-    setStatusUpdating(true);
+    safeSetStatusUpdating(true);
     try {
       await updateBookingStatusApi(bookingId, nextStatus);
       dispatch(updateBookingStatus({ id: bookingId, status: nextStatus }));
     } catch (e: any) {
       showAlert('Update status', e?.message || 'Failed to update booking status');
     } finally {
-      setStatusUpdating(false);
+      safeSetStatusUpdating(false);
     }
   };
 
@@ -962,22 +1095,46 @@ const TrackingScreen = ({ navigation, route }: any) => {
     }
   }, [booking?.id, currentPhotoStep, photoUploading, capturedPhotos]);
 
+  // Tracks which bookingId has already been handled for STARTED transition
+  // Prevents the useEffect below from re-running when setCurrentBooking updates booking object
+  const startedHandledForIdRef = useRef<string | null>(null);
+
   const handleStartTripAfterPhotos = useCallback(async () => {
     if (!booking?.id) return;
-    setStatusUpdating(true);
+    // Close the modal immediately so the driver doesn't see a frozen modal while the API call is in-flight.
+    // The statusUpdating overlay (semi-transparent with spinner) will cover the screen instead.
+    setPhotoModalVisible(false);
+    setCapturedPhotos({});
+    setCurrentPhotoStep(0);
+    setPhotoVerificationComplete(false);
+    safeSetStatusUpdating(true);
+    const bookingId = String(booking.id);
     try {
-      await updateBookingStatusApi(booking.id, BookingStatus.STARTED);
-      dispatch(updateBookingStatus({ id: booking.id, status: BookingStatus.STARTED }));
-      setPhotoModalVisible(false);
-      setCapturedPhotos({});
-      setCurrentPhotoStep(0);
-      setPhotoVerificationComplete(false);
+      await updateBookingStatusApi(bookingId, BookingStatus.STARTED);
+      // Optimistic update — socket will also dispatch this, but we do it here first for instant UI.
+      dispatch(updateBookingStatus({ id: bookingId, status: BookingStatus.STARTED }));
+
+      // Re-fetch booking details to get startedAt + current totalAmount for live fare.
+      // IMPORTANT: Defer with setTimeout(0) to yield JS event loop BETWEEN the status dispatch
+      // above and the setCurrentBooking dispatch below. Without this, both dispatches fire in the
+      // same synchronous React batch — MapView + all subscribed components re-render together
+      // causing a visible 1-3s freeze on iOS/Expo Go.
+      setTimeout(async () => {
+        try {
+          const raw = await getBookingDetails(bookingId);
+          if (raw) dispatch(setCurrentBooking(raw as any));
+        } catch {
+          // non-critical — socket fare-updated will fill in the amount
+        }
+      }, 0);
     } catch (e: any) {
-      showAlert('Start Trip', e?.message || 'Failed to start trip');
+      // On failure, restore photo modal state so driver can retry
+      setPhotoVerificationComplete(true); // keep verified state so they don't have to retake photos
+      showAlert('Start Trip Failed', e?.message || 'Failed to start trip. Please check your connection and try again.');
     } finally {
-      setStatusUpdating(false);
+      safeSetStatusUpdating(false);
     }
-  }, [booking?.id, dispatch]);
+  }, [booking?.id, dispatch, safeSetStatusUpdating]);
 
   useEffect(() => {
     const s = booking?.status;
@@ -1031,12 +1188,16 @@ const TrackingScreen = ({ navigation, route }: any) => {
 
   useEffect(() => {
     const s = booking?.status;
-    if (!s) return;
+    const id = booking?.id;
+    if (!s || !id) return;
     if (s === BookingStatus.STARTED || s === BookingStatus.IN_PROGRESS) {
+      // Idempotency guard: only run STARTED setup once per booking.
+      // Without this, dispatch(setCurrentBooking) from handleStartTripAfterPhotos
+      // updates booking object → re-triggers this effect → infinite loop → iOS freeze.
+      if (startedHandledForIdRef.current === id) return;
+      startedHandledForIdRef.current = id;
+
       // ── FULL RESET of all route/camera tracking refs ──
-      // This is critical: when the trip starts, the target changes from PICKUP → DROP.
-      // Every single ref that cached the old pickup route must be wiped clean
-      // so the system immediately fetches a fresh route to the DROP.
       lastRouteKeyRef.current = null;
       lastRouteTsRef.current = 0;
       lastRouteStartRef.current = null;
@@ -1047,15 +1208,24 @@ const TrackingScreen = ({ navigation, route }: any) => {
       lastDispatchedEtaRef.current = null;
       lastDispatchedDistRef.current = null;
 
-      // BUG 2 FIX: Mark "just started" — first 10s show full route, not 3km truncated
+      // Mark "just started" — first 10s show full route, not 3km truncated
       justStartedRef.current = true;
       setShowFullRouteBtn(true);
       setTimeout(() => { justStartedRef.current = false; }, 10000);
 
       // Clear the old pickup route from Redux immediately
       dispatch(clearRoute());
+
+      // Round-trip after STARTED has no route target → clear ETA so stale
+      // "6 min to pickup" doesn't stay on screen.
+      const tripType = String((booking as any)?.tripType ?? '').toUpperCase();
+      if (tripType === 'ROUND_TRIP') {
+        dispatch(updateETA({ eta: null as any, distance: null as any }));
+      }
+      // NOTE: getBookingDetails re-fetch is done in handleStartTripAfterPhotos directly
+      // to avoid the booking dependency here triggering an infinite re-render loop.
     }
-  }, [booking?.status, dispatch]);
+  }, [booking?.status, booking?.id, dispatch]);
 
   const statusInfo = useMemo(() => {
     if (!bookingStatus) return { text: 'Waiting for driver...', color: G.accent, bg: '#eff6ff', icon: 'clock-outline' as const };
@@ -1072,15 +1242,16 @@ const TrackingScreen = ({ navigation, route }: any) => {
   const statusText = statusInfo.text;
 
   const isCashPayment = (booking as any)?.paymentMethod === 'CASH';
-  // Show the final fare card only after the trip is marked COMPLETED by the backend
+  // Show final fare only after COMPLETED
   const showFinalFare = Boolean(
     booking?.status === BookingStatus.COMPLETED &&
-    typeof booking?.totalAmount === 'number'
+    booking?.totalAmount != null   // null check (not type check) handles Prisma Decimal 0
   );
+  // Show live fare card as soon as trip is in progress — even if amount=0 initially
+  // (avoids the card being hidden during the brief window before fare-updated socket arrives)
   const showLiveFare = Boolean(
     booking?.status &&
-    [BookingStatus.STARTED, BookingStatus.IN_PROGRESS].includes(booking.status as any) &&
-    typeof booking?.totalAmount === 'number'
+    [BookingStatus.STARTED, BookingStatus.IN_PROGRESS].includes(booking.status as any)
   );
 
 
@@ -1203,20 +1374,29 @@ const TrackingScreen = ({ navigation, route }: any) => {
       }
     }
 
-    // BUG 1 FIX: Guard — if status just changed and either endpoint is missing,
-    // retry up to 5 times every 300ms until both are available
+    // Guard — if either endpoint is missing, retry up to 5 times
+    // BUT: for round trips in STARTED/IN_PROGRESS, targetPos being null is EXPECTED
+    // (round trips have no drop location). Skip retries entirely in that case.
     if (!driverPos || !targetPos) {
-      const retryCountKey = `__fitRetry_${status}`;
-      const retryCount = (fitMapToRouteRef as any)[retryCountKey] ?? 0;
-      if (retryCount < 5) {
-        (fitMapToRouteRef as any)[retryCountKey] = retryCount + 1;
-        console.log('[MAP-FIT] Missing endpoint, retry', retryCount + 1, '/5 —',
-          'driver:', !!driverPos, 'target:', !!targetPos, 'status:', status);
-        setTimeout(() => fitMapToRouteRef.current(overrideDriver, overrideTarget), 300);
-        return;
+      const tripType = String((booking as any)?.tripType ?? '').toUpperCase();
+      const isRoundTripInProgress = tripType === 'ROUND_TRIP' &&
+        Boolean(status && ['STARTED', 'IN_PROGRESS'].includes(status));
+
+      if (!targetPos && isRoundTripInProgress) {
+        // Expected: round trip has no drop target. Fall through to the no-target branch.
+      } else {
+        const retryCountKey = `__fitRetry_${status}`;
+        const retryCount = (fitMapToRouteRef as any)[retryCountKey] ?? 0;
+        if (retryCount < 5) {
+          (fitMapToRouteRef as any)[retryCountKey] = retryCount + 1;
+          console.log('[MAP-FIT] Missing endpoint, retry', retryCount + 1, '/5 —',
+            'driver:', !!driverPos, 'target:', !!targetPos, 'status:', status);
+          setTimeout(() => fitMapToRouteRef.current(overrideDriver, overrideTarget), 300);
+          return;
+        }
+        // Exhausted retries — reset counter and fall through
+        (fitMapToRouteRef as any)[retryCountKey] = 0;
       }
-      // Exhausted retries — reset counter and fall through with what we have
-      (fitMapToRouteRef as any)[retryCountKey] = 0;
     }
 
     // Reset retry counters on successful call
@@ -1737,7 +1917,13 @@ const TrackingScreen = ({ navigation, route }: any) => {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={() => {
+          if (navigation.canGoBack()) {
+            navigation.goBack();
+          } else {
+            navigation.navigate('Tabs');
+          }
+        }}>
           <Icon name="arrow-left" size={24} color="#C9A84C" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Track Ride</Text>
@@ -1959,7 +2145,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
                   : null
               }
               licensePlate={(booking as any)?.driver?.driverProfile?.currentVehicle?.registrationNumber ?? null}
-              etaMinutes={eta}
+              etaMinutes={isRoundTripStarted ? null : eta}
               status={String(booking.status)}
               phoneNumber={normalizePhone(
                 (booking as any)?.driver?.phoneNumber ??
@@ -2446,7 +2632,30 @@ const TrackingScreen = ({ navigation, route }: any) => {
         {showFinalFare ? (
           <View style={styles.finalFareCard}>
             <Text style={styles.finalFareTitle}>Trip Summary</Text>
-            <Text style={styles.finalFareValue}>₹{Number(booking?.totalAmount || 0).toFixed(0)}</Text>
+
+            {/* Driver sees their full earnings; customer sees what they owe */}
+            <Text style={styles.finalFareValue}>
+              ₹{isDriverMode
+                ? Number((booking as any)?.driverEarnings || booking?.totalAmount || 0).toFixed(0)
+                : Number(booking?.totalAmount || 0).toFixed(0)}
+            </Text>
+
+            {/* Subsidy badge — only visible to driver when platform subsidy > 0 */}
+            {(() => {
+              if (!isDriverMode) return null;
+              const pb = (booking as any)?.pricingBreakdown;
+              const subsidy = Number(pb?.platformSubsidy ?? pb?.discounts?.platformSubsidy ?? 0);
+              const earnings = Number((booking as any)?.driverEarnings || 0);
+              const customerPays = Number(booking?.totalAmount || 0);
+              const computedSubsidy = subsidy > 0 ? subsidy : Math.max(0, Math.round((earnings - customerPays) * 100) / 100);
+              if (computedSubsidy <= 0) return null;
+              return (
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#d1fae5', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, marginTop: 6, gap: 4 }}>
+                  <Text style={{ fontSize: 13, color: '#065f46', fontWeight: '700' }}>💚 +₹{computedSubsidy.toFixed(0)} platform subsidy added to wallet</Text>
+                </View>
+              );
+            })()}
+
             <Text style={styles.finalFareHint}>
               {isDriverMode
                 ? (paymentDone || (booking as any)?.paymentStatus === 'PAID') ? 'Ride completed — payment received ✓' : 'Ride completed — collect payment'
@@ -2508,10 +2717,20 @@ const TrackingScreen = ({ navigation, route }: any) => {
                 style={[styles.finalFareDone, { backgroundColor: G.accent, marginBottom: 12 }]}
                 onPress={() => {
                   if (!booking?.id) return;
-                  const amount = Number(booking?.totalAmount || 0).toFixed(0);
+                  const pb = (booking as any)?.pricingBreakdown;
+                  const subsidy = Number(pb?.platformSubsidy ?? pb?.discounts?.platformSubsidy ?? 0);
+                  const earnings = Number((booking as any)?.driverEarnings || 0);
+                  const customerPays = Number(booking?.totalAmount || 0);
+                  const computedSubsidy = subsidy > 0 ? subsidy : Math.max(0, Math.round((earnings - customerPays) * 100) / 100);
+                  const cashAmount = customerPays.toFixed(0);
+
+                  const subsidyMsg = computedSubsidy > 0
+                    ? `\n\n💚 Platform will add ₹${computedSubsidy.toFixed(0)} to your wallet (discount subsidy).`
+                    : '';
+
                   showAlert(
                     'Collect Cash',
-                    `Did you collect ₹${amount} in cash from the customer?`,
+                    `Collect ₹${cashAmount} cash from the customer.${subsidyMsg}`,
                     [
                       { text: 'No', style: 'cancel' },
                       {
@@ -2525,7 +2744,10 @@ const TrackingScreen = ({ navigation, route }: any) => {
                               return;
                             }
                             setPaymentDone(true);
-                            showAlert('Cash Collected ✅', `₹${amount} cash payment recorded successfully!`);
+                            const successMsg = computedSubsidy > 0
+                              ? `₹${cashAmount} cash collected! ₹${computedSubsidy.toFixed(0)} platform subsidy added to your wallet.`
+                              : `₹${cashAmount} cash payment recorded successfully!`;
+                            showAlert('Cash Collected ✅', successMsg);
                           } catch (e: any) {
                             showAlert('Error', e?.message || 'Could not record cash payment');
                           }
@@ -2542,7 +2764,21 @@ const TrackingScreen = ({ navigation, route }: any) => {
             {/* DRIVER: Payment received indicator */}
             {isDriverMode && (paymentDone || (booking as any)?.paymentStatus === 'PAID') ? (
               <View style={[styles.finalFareDone, { backgroundColor: '#059669', marginBottom: 12, opacity: 1 }]}>
-                <Text style={styles.finalFareDoneText}>💰 Payment Received</Text>
+                {(() => {
+                  const pb = (booking as any)?.pricingBreakdown;
+                  const subsidy = Number(pb?.platformSubsidy ?? pb?.discounts?.platformSubsidy ?? 0);
+                  const earnings = Number((booking as any)?.driverEarnings || 0);
+                  const customerPays = Number(booking?.totalAmount || 0);
+                  const computedSubsidy = subsidy > 0 ? subsidy : Math.max(0, Math.round((earnings - customerPays) * 100) / 100);
+                  if (computedSubsidy > 0 && (booking as any)?.paymentMethod === 'CASH') {
+                    return (
+                      <Text style={styles.finalFareDoneText}>
+                        💰 ₹{customerPays.toFixed(0)} cash + ₹{computedSubsidy.toFixed(0)} wallet = ₹{earnings.toFixed(0)} earned
+                      </Text>
+                    );
+                  }
+                  return <Text style={styles.finalFareDoneText}>💰 Payment Received</Text>;
+                })()}
               </View>
             ) : null}
 
@@ -2714,8 +2950,26 @@ const TrackingScreen = ({ navigation, route }: any) => {
 
         {showLiveFare ? (
           <View style={styles.liveFareCard}>
-            <Text style={styles.liveFareTitle}>Current price</Text>
-            <Text style={styles.liveFareValue}>₹{Number(booking?.totalAmount || 0).toFixed(0)}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={styles.liveFareTitle}>Current price</Text>
+              {liveFareDistanceKm != null ? (
+                <Text style={{ fontSize: 11, color: '#6b7280', fontWeight: '600' }}>
+                  {liveFareDistanceKm.toFixed(1)} km travelled
+                </Text>
+              ) : null}
+            </View>
+            <Text style={styles.liveFareValue}>
+              ₹{(() => {
+                // Driver sees driverLiveFare (full earnings), customer sees liveFare (discounted)
+                const fareToShow = isDriverMode
+                  ? (liveFareDriver ?? liveFare ?? Number(booking?.totalAmount || 0))
+                  : (liveFare ?? Number(booking?.totalAmount || 0));
+                return fareToShow.toFixed(0);
+              })()}
+            </Text>
+            {liveFare != null ? (
+              <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>Updates every ~30s</Text>
+            ) : null}
           </View>
         ) : null}
 
@@ -2756,16 +3010,19 @@ const TrackingScreen = ({ navigation, route }: any) => {
         ) : null}
 
         {showDriverSection && booking?.id && !isDriverMode ? (
-          <View style={styles.etaCard}>
-            <View style={styles.etaInfo}>
-              <Icon name={isRoundTripStarted ? 'timer-sand' : 'clock-outline'} size={20} color={isRoundTripStarted ? '#C9A84C' : '#8A8A8A'} />
-              <Text style={styles.etaText}>
-                {isRoundTripStarted
-                  ? `Elapsed: ${roundTripElapsed ?? '—'}${roundTripCountdown ? `  •  Remaining: ${roundTripCountdown}` : ''}`
-                  : `${etaTargetLabel}: ${etaText}  •  Distance: ${distanceText}`}
-              </Text>
+          // For round trip customer AFTER trip starts: hide ETA card — it’s meaningless.
+          // The status badge above already says “Trip in progress”.
+          // For all other states: show ETA / countdown timer.
+          isRoundTripStarted ? null : (
+            <View style={styles.etaCard}>
+              <View style={styles.etaInfo}>
+                <Icon name="clock-outline" size={20} color="#8A8A8A" />
+                <Text style={styles.etaText}>
+                  {`${etaTargetLabel}: ${etaText}  •  Distance: ${distanceText}`}
+                </Text>
+              </View>
             </View>
-          </View>
+          )
         ) : null}
 
         <Modal

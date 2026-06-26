@@ -196,6 +196,9 @@ const AppNavigator = () => {
 
       dispatch(
         setCurrentBooking({
+          // Spread ALL raw fields first so nothing is dropped (especially timestamps)
+          ...(raw as any),
+          // Then override/normalize the fields we need to map correctly:
           id: String((raw as any)?.id),
           bookingNumber: String((raw as any)?.bookingNumber ?? ''),
           status: status as any,
@@ -217,6 +220,10 @@ const AppNavigator = () => {
           tripType: (raw as any)?.tripType as any,
           totalAmount: typeof (raw as any)?.totalAmount === 'number' ? (raw as any).totalAmount : Number((raw as any)?.totalAmount || 0),
           paymentMethod: (raw as any)?.paymentMethod as any,
+          // Preserve all timestamps from the API (startedAt is critical for round-trip elapsed timer)
+          startedAt: (raw as any)?.startedAt ?? null,
+          acceptedAt: (raw as any)?.acceptedAt ?? null,
+          completedAt: (raw as any)?.completedAt ?? null,
           createdAt: (raw as any)?.createdAt ? String((raw as any).createdAt) : now,
           updatedAt: (raw as any)?.updatedAt ? String((raw as any).updatedAt) : now,
         } as any)

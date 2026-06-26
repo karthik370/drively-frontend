@@ -1,5 +1,9 @@
-﻿import React, { useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import {
+  Alert, Keyboard, KeyboardAvoidingView, Platform,
+  ScrollView, StyleSheet, Text, TextInput,
+  TouchableOpacity, TouchableWithoutFeedback, View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { G } from '../../constants/glassStyles';
@@ -48,7 +52,7 @@ const WalletTopupScreen = ({ navigation }: any) => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top','bottom']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Icon name="arrow-left" size={22} color="#C9A84C" />
@@ -57,33 +61,53 @@ const WalletTopupScreen = ({ navigation }: any) => {
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.card}>
-          <Text style={styles.label}>Amount (INR)</Text>
-          <TextInput
-            style={styles.input}
-            keyboardType="numeric"
-            value={amountText}
-            onChangeText={setAmountText}
-            placeholder="Enter amount"
-            placeholderTextColor="#444444"
-          />
+      {/* KeyboardAvoidingView lifts content above the keyboard on iOS */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+      >
+        {/* TouchableWithoutFeedback: tap anywhere outside input dismisses keyboard */}
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+            <View style={styles.card}>
+              <Text style={styles.label}>Amount (INR)</Text>
+              <TextInput
+                style={styles.input}
+                keyboardType="numeric"
+                returnKeyType="done"
+                onSubmitEditing={Keyboard.dismiss}
+                value={amountText}
+                onChangeText={setAmountText}
+                placeholder="Enter amount"
+                placeholderTextColor="#444444"
+              />
 
-          <View style={styles.quickRow}>
-            {[100, 200, 500, 1000].map((v) => (
-              <TouchableOpacity key={v} style={styles.quickBtn} onPress={() => setAmountText(String(v))}>
-                <Text style={styles.quickText}>₹{v}</Text>
+              <View style={styles.quickRow}>
+                {[100, 200, 500, 1000].map((v) => (
+                  <TouchableOpacity
+                    key={v}
+                    style={styles.quickBtn}
+                    onPress={() => { Keyboard.dismiss(); setAmountText(String(v)); }}
+                  >
+                    <Text style={styles.quickText}>₹{v}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <TouchableOpacity
+                style={[styles.cta, isPaying ? styles.ctaDisabled : null]}
+                disabled={isPaying}
+                onPress={() => { Keyboard.dismiss(); submit(); }}
+              >
+                <Text style={styles.ctaText}>{isPaying ? 'Processing…' : 'Pay Now'}</Text>
               </TouchableOpacity>
-            ))}
-          </View>
 
-          <TouchableOpacity style={[styles.cta, isPaying ? styles.ctaDisabled : null]} disabled={isPaying} onPress={submit}>
-            <Text style={styles.ctaText}>{isPaying ? 'Processing…' : 'Pay Now'}</Text>
-          </TouchableOpacity>
-
-          <Text style={styles.hint}>Cashfree checkout will open to complete the payment.</Text>
-        </View>
-      </ScrollView>
+              <Text style={styles.hint}>Cashfree checkout will open to complete the payment.</Text>
+            </View>
+          </ScrollView>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };

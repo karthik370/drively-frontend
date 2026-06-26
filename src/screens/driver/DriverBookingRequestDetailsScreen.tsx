@@ -328,7 +328,7 @@ const DriverBookingRequestDetailsScreen = ({ navigation, route }: any) => {
       <View style={styles.detailsWrap}>
         {/* Fare + trip info — large and clearly readable */}
         <View style={styles.fareRow}>
-          {/* Fare amount */}
+          {/* Fare amount — shows full driver earnings (platform absorbs discounts) */}
           <View style={styles.fareChip}>
             <Icon name="currency-inr" size={20} color="#16a34a" />
             <Text style={styles.fareValue}>₹{request?.fare ? Math.round(request.fare) : '—'}</Text>
@@ -348,6 +348,30 @@ const DriverBookingRequestDetailsScreen = ({ navigation, route }: any) => {
             </View>
           ) : null}
         </View>
+
+        {/* Platform subsidy badge — visible only when platform is absorbing a discount */}
+        {(request as any)?.platformSubsidy > 0 ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#d1fae5', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, marginBottom: 6, gap: 4 }}>
+            <Icon name="gift-outline" size={14} color="#065f46" />
+            <Text style={{ fontSize: 12, color: '#065f46', fontWeight: '700' }}>
+              Incl. ₹{Math.round((request as any).platformSubsidy)} platform subsidy
+              {(request as any)?.customerFare ? ` • Customer pays ₹${Math.round((request as any).customerFare)}` : ''}
+            </Text>
+          </View>
+        ) : null}
+
+        {/* Experienced driver badge — shown when customer requested one */}
+        {(request as any)?.requireExperienced ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fef3c7', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, marginBottom: 10, gap: 4 }}>
+            <Icon name="star-circle-outline" size={14} color="#92400e" />
+            <Text style={{ fontSize: 12, color: '#92400e', fontWeight: '700' }}>
+              ⭐ Customer requested experienced driver
+              {(request as any)?.experiencedDriverFee > 0
+                ? ` (+₹${Math.round((request as any).experiencedDriverFee)} included in fare)`
+                : ''}
+            </Text>
+          </View>
+        ) : null}
 
         {/* Route summary */}
         <View style={styles.routeCard}>

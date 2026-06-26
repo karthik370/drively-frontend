@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
@@ -11,6 +11,7 @@ import { showAlert } from '../../components/common/CustomAlert';
 
 const BookingHistoryScreen = ({ navigation }: any) => {
   const authedUserType = useAppSelector((s) => s.auth.user?.userType);
+  const authedUserId = useAppSelector((s) => s.auth.user?.id ?? null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [items, setItems] = useState<any[]>([]);
@@ -33,57 +34,78 @@ const BookingHistoryScreen = ({ navigation }: any) => {
     void load('initial');
   }, []);
 
-  const renderBookingItem = useCallback(({ item }: any) => (
-    <TouchableOpacity
-      style={styles.bookingCard}
-      onPress={() => {
-        const bookingId = String(item?.id || '');
-        if (!bookingId) return;
-        const parentNav = typeof navigation?.getParent === 'function' ? navigation.getParent() : null;
-        (parentNav || navigation).navigate('BookingDetails', { bookingId });
-      }}
-    >
-      <View style={styles.bookingHeader}>
-        <View>
-          <Text style={styles.bookingNumber}>#{String(item.bookingNumber || '').slice(0, 10)}</Text>
-          <Text style={styles.bookingDate}>
-            {item?.createdAt ? new Date(item.createdAt).toLocaleString() : ''}
-          </Text>
-        </View>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-          <Text style={styles.statusText}>{item.status}</Text>
-        </View>
-      </View>
+  const renderBookingItem = useCallback(({ item }: any) => {
+    // Determine if this user is the DRIVER of this specific booking.
+    // For BOTH-type users, check if their userId matches booking.driverId.
+    const isDriverOfBooking =
+      authedUserType === UserType.DRIVER ||
+      (authedUserType === UserType.BOTH && item?.driverId && String(item.driverId) === authedUserId);
 
-      <View style={styles.locationContainer}>
-        <View style={styles.locationRow}>
-          <Icon name="circle" size={12} color="#10b981" />
-          <Text style={styles.locationText} numberOfLines={1}>{String(item.pickupAddress || '')}</Text>
-        </View>
-        <View style={styles.connector} />
-        <View style={styles.locationRow}>
-          <Icon name="map-marker" size={12} color="#ef4444" />
-          <Text style={styles.locationText} numberOfLines={1}>{String(item.dropAddress || '')}</Text>
-        </View>
-      </View>
+    // Show driver's actual earnings (includes platform subsidy) not customer's discounted fare.
+    const displayAmount = isDriverOfBooking
+      ? Number(item?.driverEarnings || item?.totalAmount || 0)
+      : Number(item?.totalAmount || 0);
 
-      <View style={styles.bookingFooter}>
-        <View style={styles.driverInfo}>
-          <Icon name="account-circle" size={20} color="#8A8A8A" />
-          <Text style={styles.driverName}>
-            {authedUserType === UserType.DRIVER || authedUserType === UserType.BOTH
-              ? item?.customer
-                ? `${String(item.customer.firstName || '')} ${String(item.customer.lastName || '')}`.trim()
-                : '—'
-              : item?.driver
-                ? `${String(item.driver.firstName || '')} ${String(item.driver.lastName || '')}`.trim()
-                : '—'}
-          </Text>
+    return (
+      <TouchableOpacity
+        style={styles.bookingCard}
+        onPress={() => {
+          const bookingId = String(item?.id || '');
+          if (!bookingId) return;
+          const parentNav = typeof navigation?.getParent === 'function' ? navigation.getParent() : null;
+          (parentNav || navigation).navigate('BookingDetails', { bookingId });
+        }}
+      >
+        <View style={styles.bookingHeader}>
+          <View>
+            <Text style={styles.bookingNumber}>#{String(item.bookingNumber || '').slice(0, 10)}</Text>
+            <Text style={styles.bookingDate}>
+              {item?.createdAt ? new Date(item.createdAt).toLocaleString() : ''}
+            </Text>
+          </View>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
+            <Text style={styles.statusText}>{item.status}</Text>
+          </View>
         </View>
-        <Text style={styles.amount}>₹{Number(item?.totalAmount || 0).toFixed(0)}</Text>
-      </View>
-    </TouchableOpacity>
-  ), [authedUserType, navigation]);
+
+        <View style={styles.locationContainer}>
+          <View style={styles.locationRow}>
+            <Icon name="circle" size={12} color="#10b981" />
+            <Text style={styles.locationText} numberOfLines={1}>{String(item.pickupAddress || '')}</Text>
+          </View>
+          <View style={styles.connector} />
+          <View style={styles.locationRow}>
+            <Icon name="map-marker" size={12} color="#ef4444" />
+            <Text style={styles.locationText} numberOfLines={1}>{String(item.dropAddress || '')}</Text>
+          </View>
+        </View>
+
+        <View style={styles.bookingFooter}>
+          <View style={styles.driverInfo}>
+            <Icon name="account-circle" size={20} color="#8A8A8A" />
+            <Text style={styles.driverName}>
+              {isDriverOfBooking
+                ? item?.customer
+                  ? `${String(item.customer.firstName || '')} ${String(item.customer.lastName || '')}`.trim()
+                  : '—'
+                : item?.driver
+                  ? `${String(item.driver.firstName || '')} ${String(item.driver.lastName || '')}`.trim()
+                  : '—'}
+            </Text>
+          </View>
+          {/* Drivers see their actual earnings (with subsidy), customers see their fare */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            {isDriverOfBooking && (
+              <Icon name="wallet-outline" size={13} color="#10b981" />
+            )}
+            <Text style={[styles.amount, isDriverOfBooking && { color: '#10b981' }]}>
+              ₹{displayAmount.toFixed(0)}
+            </Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  }, [authedUserType, authedUserId, navigation]);
 
   const keyExtractor = useCallback((item: any) => String(item.id), []);
 

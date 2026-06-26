@@ -279,8 +279,10 @@ const RideReceiptScreen = ({ navigation, route }: Props) => {
                         </>
                     )}
 
-                    {/* 7. DISCOUNTS */}
-                    {hasDiscounts && (
+                    {/* 7. DISCOUNTS — only shown to customer, not driver.
+                         Drivers don't need to see customer savings (platform absorbed).
+                         Driver's earnings are in the "Your Earnings" card below. */}
+                    {hasDiscounts && !isDriver && (
                         <>
                             <View style={[styles.sectionHeader, { marginTop: 4 }]}>
                                 <Icon name="tag-multiple-outline" size={13} color="#10b981" />
@@ -308,16 +310,21 @@ const RideReceiptScreen = ({ navigation, route }: Props) => {
                         </>
                     )}
 
-                    {/* 8. TOTAL PAYABLE */}
-                    <View style={styles.totalPayableRow}>
-                        <View style={{ flex: 1 }}>
-                            <Text style={styles.totalPayableLabel}>Total Payable</Text>
-                            {hasDiscounts && (
-                                <Text style={styles.savedText}>You saved ₹{Math.round(totalDiscount)} 🎉</Text>
-                            )}
+
+                    {/* 8. TOTAL PAYABLE — only for customers.
+                         Drivers see their own earnings breakdown below; showing
+                         the customer's discounted fare confuses them. */}
+                    {!isDriver && (
+                        <View style={styles.totalPayableRow}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.totalPayableLabel}>Total Payable</Text>
+                                {hasDiscounts && (
+                                    <Text style={styles.savedText}>You saved ₹{Math.round(totalDiscount)} 🎉</Text>
+                                )}
+                            </View>
+                            <Text style={styles.totalPayableValue}>₹{Math.round(displayTotal)}</Text>
                         </View>
-                        <Text style={styles.totalPayableValue}>₹{Math.round(displayTotal)}</Text>
-                    </View>
+                    )}
 
                     {/* TIP (outside total) */}
                     {Number(booking?.tipAmount || 0) > 0 && (
@@ -331,32 +338,75 @@ const RideReceiptScreen = ({ navigation, route }: Props) => {
                     )}
                 </View>
 
-                {/* ── DRIVER EARNINGS BREAKDOWN ───────────────────── */}
-                {isDriver && (
-                    <View style={styles.card}>
-                        <Text style={styles.cardTitle}>Your Earnings</Text>
-                        <FareRow icon="cash-multiple" label="Total ride fare" value={displayTotal} />
-                        {commission > 0 && (
-                            <FareRow icon="percent" label="Platform commission" value={commission} isDeduction />
-                        )}
-                        <View style={styles.fareDivider} />
-                        <View style={styles.fareRow}>
-                            <Text style={styles.fareTotalLabel}>Your earnings</Text>
-                            <Text style={[styles.fareTotalValue, { color: '#10b981' }]}>₹{Math.round(driverEarnings)}</Text>
+                {/* ── DRIVER EARNINGS BREAKDOWN ───────────────────────────────── */}
+                {isDriver && (() => {
+                    // Compute how much the platform subsidised (absorbed all discounts for driver)
+                    const subsidyFromPb = Number(
+                        breakdown?.platformSubsidy ??
+                        discounts?.platformSubsidy ??
+                        0
+                    );
+                    const customerPays = Number(booking?.totalAmount || 0);
+                    const earnings = Number(booking?.driverEarnings || 0);
+                    // If not stored explicitly, compute: earnings - what customer paid = subsidy
+                    const computedSubsidy = subsidyFromPb > 0
+                        ? subsidyFromPb
+                        : Math.max(0, Math.round((earnings - customerPays) * 100) / 100);
+
+                    return (
+                        <View style={styles.card}>
+                            <Text style={styles.cardTitle}>Your Earnings</Text>
+
+                            {/* What the customer paid you in cash/UPI */}
+                            <FareRow
+                                icon={paymentMethod === 'CASH' ? 'cash' : paymentMethod === 'UPI' ? 'cellphone' : 'wallet'}
+                                label={`${payMethodLabel} collected from customer`}
+                                value={customerPays}
+                            />
+
+                            {/* Platform subsidy top-up added to driver wallet */}
+                            {computedSubsidy > 0 && (
+                                <FareRow
+                                    icon="wallet-plus"
+                                    label="Platform subsidy (added to wallet)"
+                                    value={computedSubsidy}
+                                    highlight="amber"
+                                />
+                            )}
+
+                            <View style={styles.fareDivider} />
+
+                            {/* Total = customer paid + subsidy */}
+                            <View style={styles.fareRow}>
+                                <Text style={styles.fareTotalLabel}>Total earnings</Text>
+                                <Text style={[styles.fareTotalValue, { color: '#10b981' }]}>₹{Math.round(earnings)}</Text>
+                            </View>
+
+                            {commission === 0 && (
+                                <View style={[styles.fareRow, { backgroundColor: G.glass2, borderRadius: 8, paddingHorizontal: 8, marginTop: 4 }]}>
+                                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#16a34a' }}>0% platform fee — you keep everything!</Text>
+                                </View>
+                            )}
+
+                            {/* Transparent summary note for cash trips with subsidy */}
+                            {paymentMethod === 'CASH' && computedSubsidy > 0 && (
+                                <View style={[styles.fareRow, { backgroundColor: '#0f2a1a', borderRadius: 8, paddingHorizontal: 8, marginTop: 4, gap: 6 }]}>
+                                    <Icon name="information-outline" size={13} color="#34d399" />
+                                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#34d399', flex: 1 }}>
+                                        ₹{Math.round(customerPays)} cash + ₹{Math.round(computedSubsidy)} wallet = ₹{Math.round(earnings)} earned
+                                    </Text>
+                                </View>
+                            )}
+                            {paymentMethod === 'CASH' && computedSubsidy === 0 && (
+                                <View style={[styles.fareRow, { backgroundColor: '#1A170A', borderRadius: 8, paddingHorizontal: 8, marginTop: 4 }]}>
+                                    <Icon name="cash" size={14} color="#f59e0b" />
+                                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#f59e0b', marginLeft: 6 }}>Cash collected — not added to wallet</Text>
+                                </View>
+                            )}
                         </View>
-                        {commission === 0 && (
-                            <View style={[styles.fareRow, { backgroundColor: G.glass2, borderRadius: 8, paddingHorizontal: 8, marginTop: 4 }]}>
-                                <Text style={{ fontSize: 11, fontWeight: '700', color: '#16a34a' }}>0% platform fee — you keep everything!</Text>
-                            </View>
-                        )}
-                        {paymentMethod === 'CASH' && (
-                            <View style={[styles.fareRow, { backgroundColor: '#1A170A', borderRadius: 8, paddingHorizontal: 8, marginTop: 4 }]}>
-                                <Icon name="cash" size={14} color="#f59e0b" />
-                                <Text style={{ fontSize: 11, fontWeight: '700', color: '#f59e0b', marginLeft: 6 }}>Cash collected — not added to wallet</Text>
-                            </View>
-                        )}
-                    </View>
-                )}
+                    );
+                })()}
+
 
                 {/* ── DOWNLOAD PDF ─────────────────────────────────── */}
                 {booking?.status === 'COMPLETED' && booking?.id && (

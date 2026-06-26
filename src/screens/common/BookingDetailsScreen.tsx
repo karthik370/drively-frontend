@@ -136,21 +136,56 @@ const BookingDetailsScreen = ({ navigation, route }: any) => {
       if (fallback > 0) rows.push({ label: 'Trip Fare', value: fmt(fallback) });
     }
 
-    // Discounts
-    const promoDiscount = Number(pb?.discounts?.promoDiscount || booking?.discountAmount || 0);
-    if (promoDiscount > 0) rows.push({ label: 'Promo discount', value: `-${fmt(promoDiscount)}`, negative: true });
+    // ── DISCOUNTS ──────────────────────────────────────────────────────────
+    // Drivers don't need to see the customer's promo/membership/streak savings.
+    // Those are platform-absorbed discounts — irrelevant to driver earnings.
+    // Drivers only see the platform subsidy (what was topped up to their wallet).
+    // Customers see all discount breakdown lines.
+    if (!isViewingAsDriver) {
+      const promoDiscount = Number(pb?.discounts?.promoDiscount || 0);
+      if (promoDiscount > 0) rows.push({ label: 'Promo / coupon discount', value: `-${fmt(promoDiscount)}`, negative: true });
 
-    const membershipDiscount = Number(pb?.discounts?.membershipDiscount || pb?.membershipDiscount || 0);
-    if (membershipDiscount > 0) rows.push({ label: 'Membership discount', value: `-${fmt(membershipDiscount)}`, negative: true });
+      const membershipDiscount = Number(pb?.discounts?.membershipDiscount || pb?.membershipDiscount || 0);
+      const membershipType = String(pb?.discounts?.membershipType || '').trim();
+      if (membershipDiscount > 0) rows.push({
+        label: membershipType ? `${membershipType} plan discount` : 'Membership discount',
+        value: `-${fmt(membershipDiscount)}`,
+        negative: true,
+      });
 
-    const streakDiscount = Number(pb?.discounts?.streakDiscount || 0);
-    if (streakDiscount > 0) rows.push({ label: 'Streak discount', value: `-${fmt(streakDiscount)}`, negative: true });
+      const streakDiscount = Number(pb?.discounts?.streakDiscount || 0);
+      const streakRides = Number(pb?.discounts?.streakRides || 0);
+      const streakPct = Number(pb?.discounts?.streakPct || 0);
+      if (streakDiscount > 0) rows.push({
+        label: streakRides > 0
+          ? `Streak discount (${streakRides} rides${streakPct > 0 ? `, ${streakPct}% off` : ''})`
+          : 'Streak discount',
+        value: `-${fmt(streakDiscount)}`,
+        negative: true,
+      });
 
-    const walletUsed = Number(pb?.walletDeduction || booking?.walletAmountUsed || 0);
-    if (walletUsed > 0) rows.push({ label: 'Wallet applied', value: `-${fmt(walletUsed)}`, negative: true });
+      const walletUsed = Number(pb?.walletDeduction || booking?.walletAmountUsed || 0);
+      if (walletUsed > 0) rows.push({ label: 'Wallet applied', value: `-${fmt(walletUsed)}`, negative: true });
+    }
+
+    // For drivers: show platform subsidy as a positive line item (green)
+    if (isViewingAsDriver) {
+      const subsidy = Number(pb?.platformSubsidy ?? pb?.discounts?.platformSubsidy ?? 0);
+      const earnings = Number(booking?.driverEarnings || 0);
+      const customerPays = Number(booking?.totalAmount || 0);
+      const computedSubsidy = subsidy > 0 ? subsidy : Math.max(0, Math.round((earnings - customerPays) * 100) / 100);
+      if (computedSubsidy > 0) {
+        rows.push({
+          label: '💚 Platform subsidy',
+          value: `+${fmt(computedSubsidy)}`,
+          negative: true, // renders green (reusing "negative" = green color convention)
+        });
+      }
+    }
+
 
     return rows;
-  }, [booking]);
+  }, [booking, isViewingAsDriver]);
 
   const totalAmount = Number(booking?.totalAmount || 0);
   const isCompleted = String(booking?.status || '').toUpperCase() === 'COMPLETED';
@@ -311,10 +346,14 @@ const BookingDetailsScreen = ({ navigation, route }: any) => {
             <Text style={[gText.bodySm, { textAlign: 'center', paddingVertical: 8 }]}>No breakdown available</Text>
           ) : null}
 
-          {/* Total */}
+          {/* Total — driver sees their full earnings, customer sees discounted amount */}
           <View style={s.totalRow}>
-            <Text style={s.totalLabel}>Total Amount</Text>
-            <Text style={s.totalValue}>{fmt(totalAmount)}</Text>
+            <Text style={s.totalLabel}>{isViewingAsDriver ? 'Your Earnings' : 'Total Amount'}</Text>
+            <Text style={s.totalValue}>
+              {isViewingAsDriver
+                ? fmt(Number(booking?.driverEarnings || booking?.totalAmount || 0))
+                : fmt(totalAmount)}
+            </Text>
           </View>
 
           {/* Payment method */}

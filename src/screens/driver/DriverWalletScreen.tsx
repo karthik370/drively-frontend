@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     RefreshControl, ActivityIndicator, Modal, TextInput,
+    Keyboard, KeyboardAvoidingView, Platform, TouchableWithoutFeedback,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
@@ -60,27 +61,47 @@ const DriverWalletScreen = ({ navigation }: any) => {
     useEffect(() => { fetchData(); }, [fetchData]);
     const onRefresh = () => { setRefreshing(true); fetchData(); };
 
-    // ── Top-up via Cashfree ──────────────────────────────────────────────────
+    // ── Top-up via Cashfree ──────────────────────────────────────────────────────────────────────────
     const handleTopup = async () => {
         if (isTopping) return;
         const amt = parseFloat(topupAmount);
         if (!amt || amt < 50) { showAlert('Minimum ₹50', 'Enter at least ₹50 to top up'); return; }
+
+        // Dismiss keyboard FIRST — Cashfree SDK may fail to steal focus if keyboard is open
+        Keyboard.dismiss();
+
+        // Brief pause so keyboard fully dismisses before SDK launches
+        await new Promise<void>(res => setTimeout(res, 150));
+
         setIsTopping(true);
+        let didSucceed = false;
         try {
             const order = await createDriverWalletTopupOrder(amt, 'UPI');
-            const success = await openCashfreeCheckout({
+            const result = await openCashfreeCheckout({
                 orderId: String(order.orderId),
                 paymentSessionId: String(order.paymentSessionId),
             });
-            await verifyDriverWalletTopup({ cf_order_id: success.orderId });
-            showAlert('✅ Top-up Successful', `₹${amt.toFixed(0)} added to your wallet!`);
-            setShowTopupModal(false);
-            setTopupAmount('100');
-            fetchData();
+            await verifyDriverWalletTopup({ cf_order_id: result.orderId });
+            didSucceed = true;
         } catch (e: any) {
-            showAlert('Top-up Failed', e?.message || 'Payment failed. Please try again.');
+            const msg = String(e?.message || '');
+            // Cashfree throws on cancel — don’t treat it as error
+            if (!msg.toLowerCase().includes('cancel') && !msg.toLowerCase().includes('user cancel')) {
+                showAlert('Top-up Failed', msg || 'Payment failed. Please try again.');
+            }
         } finally {
-            setIsTopping(false);
+            // Delay state reset so Cashfree’s overlay fully dismisses before we unlock the UI.
+            // Without this, React updates fire while the SDK modal is still tearing down,
+            // leaving a ghost touch-blocking layer on screen (the "stuck" bug).
+            setTimeout(() => {
+                setIsTopping(false);
+                if (didSucceed) {
+                    showAlert('✅ Top-up Successful', `₹${amt.toFixed(0)} added to your wallet!`);
+                    setShowTopupModal(false);
+                    setTopupAmount('100');
+                    fetchData();
+                }
+            }, 300);
         }
     };
 
@@ -158,6 +179,7 @@ const DriverWalletScreen = ({ navigation }: any) => {
             case 'PAYOUT': return { name: 'bank-transfer', bg: '#dbeafe', color: G.accent };
             case 'PLATFORM_FEE': return { name: 'tag-minus', bg: '#fef3c7', color: '#d97706' };
             case 'WALLET_TOPUP': return { name: 'wallet-plus', bg: '#d1fae5', color: '#059669' };
+            case 'PLATFORM_SUBSIDY': return { name: 'gift-outline', bg: '#d1fae5', color: '#065f46' };
             default: return { name: 'cash', bg: '#f3f4f6', color: G.textSecondary };
         }
     };
@@ -380,115 +402,139 @@ const DriverWalletScreen = ({ navigation }: any) => {
 
             {/* ── Top-up Modal ── */}
             <Modal visible={showTopupModal} transparent animationType="slide">
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalCard}>
-                        <Text style={styles.modalTitle}>Add Money to Wallet</Text>
-                        <Text style={styles.modalHint}>Pay via Cashfree. Amount credits instantly on success.</Text>
+                <KeyboardAvoidingView
+                    style={{ flex: 1 }}
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                >
+                    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+                        <View style={styles.modalOverlay}>
+                            <View style={styles.modalCard}>
+                                <Text style={styles.modalTitle}>Add Money to Wallet</Text>
+                                <Text style={styles.modalHint}>Pay via Cashfree. Amount credits instantly on success.</Text>
 
-                        <TextInput
-                            style={styles.modalInput}
-                            keyboardType="numeric"
-                            placeholder="Enter amount (min ₹50)"
-                            placeholderTextColor="#666"
-                            value={topupAmount}
-                            onChangeText={setTopupAmount}
-                            editable={!isTopping}
-                        />
+                                <TextInput
+                                    style={styles.modalInput}
+                                    keyboardType="numeric"
+                                    returnKeyType="done"
+                                    onSubmitEditing={Keyboard.dismiss}
+                                    placeholder="Enter amount (min ₹50)"
+                                    placeholderTextColor="#666"
+                                    value={topupAmount}
+                                    onChangeText={setTopupAmount}
+                                    editable={!isTopping}
+                                />
 
-                        <View style={styles.quickRow}>
-                            {[50, 100, 200, 500].map((v) => (
-                                <TouchableOpacity key={v} style={styles.quickBtn} onPress={() => setTopupAmount(String(v))}>
-                                    <Text style={styles.quickText}>₹{v}</Text>
-                                </TouchableOpacity>
-                            ))}
+                                <View style={styles.quickRow}>
+                                    {[50, 100, 200, 500].map((v) => (
+                                        <TouchableOpacity
+                                            key={v}
+                                            style={styles.quickBtn}
+                                            onPress={() => { Keyboard.dismiss(); setTopupAmount(String(v)); }}
+                                        >
+                                            <Text style={styles.quickText}>₹{v}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+
+                                <View style={styles.modalActions}>
+                                    <TouchableOpacity
+                                        style={styles.modalCancelBtn}
+                                        onPress={() => { if (!isTopping) { Keyboard.dismiss(); setShowTopupModal(false); } }}
+                                    >
+                                        <Text style={styles.modalCancelText}>Cancel</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.modalConfirmBtn, { backgroundColor: '#059669' }, isTopping && { opacity: 0.6 }]}
+                                        onPress={() => { Keyboard.dismiss(); handleTopup(); }}
+                                        disabled={isTopping}
+                                    >
+                                        <Text style={styles.modalConfirmText}>{isTopping ? 'Processing…' : 'Pay Now'}</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
                         </View>
-
-                        <View style={styles.modalActions}>
-                            <TouchableOpacity
-                                style={styles.modalCancelBtn}
-                                onPress={() => { if (!isTopping) setShowTopupModal(false); }}
-                            >
-                                <Text style={styles.modalCancelText}>Cancel</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[styles.modalConfirmBtn, { backgroundColor: '#059669' }, isTopping && { opacity: 0.6 }]}
-                                onPress={handleTopup}
-                                disabled={isTopping}
-                            >
-                                <Text style={styles.modalConfirmText}>{isTopping ? 'Processing…' : 'Pay Now'}</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
+                    </TouchableWithoutFeedback>
+                </KeyboardAvoidingView>
             </Modal>
 
             {/* ── Payout Modal ── */}
             <Modal visible={showPayoutModal} transparent animationType="slide">
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalCard}>
-                        <Text style={styles.modalTitle}>
-                            {isEditingPayoutMethod ? 'Edit Payout Method' : 'Withdraw Earnings'}
-                        </Text>
-                        <Text style={styles.modalHint}>
-                            Available: ₹{withdrawable.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                        </Text>
+                <KeyboardAvoidingView
+                    style={{ flex: 1 }}
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                >
+                    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+                        <View style={styles.modalOverlay}>
+                            <View style={styles.modalCard}>
+                                <Text style={styles.modalTitle}>
+                                    {isEditingPayoutMethod ? 'Edit Payout Method' : 'Withdraw Earnings'}
+                                </Text>
+                                <Text style={styles.modalHint}>
+                                    Available: ₹{withdrawable.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                                </Text>
 
-                        <TextInput
-                            style={styles.modalInput}
-                            keyboardType="numeric"
-                            placeholder="Enter amount (min ₹100)"
-                            value={payoutAmount}
-                            onChangeText={setPayoutAmount}
-                            editable={!isSubmitting}
-                        />
-                        <Text style={styles.methodLabel}>Transfer Method</Text>
-                        <View style={styles.methodToggleRow}>
-                            <TouchableOpacity
-                                style={[styles.methodToggle, payoutMethod === 'UPI' && styles.methodToggleActive]}
-                                onPress={() => setPayoutMethod('UPI')}
-                            >
-                                <Icon name="cellphone" size={16} color={payoutMethod === 'UPI' ? '#fff' : '#CCC'} />
-                                <Text style={[styles.methodToggleText, payoutMethod === 'UPI' && styles.methodToggleTextActive]}>UPI</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[styles.methodToggle, payoutMethod === 'BANK' && styles.methodToggleActive]}
-                                onPress={() => setPayoutMethod('BANK')}
-                            >
-                                <Icon name="bank" size={16} color={payoutMethod === 'BANK' ? '#fff' : '#CCC'} />
-                                <Text style={[styles.methodToggleText, payoutMethod === 'BANK' && styles.methodToggleTextActive]}>Bank</Text>
-                            </TouchableOpacity>
+                                <TextInput
+                                    style={styles.modalInput}
+                                    keyboardType="numeric"
+                                    returnKeyType="done"
+                                    onSubmitEditing={Keyboard.dismiss}
+                                    placeholder="Enter amount (min ₹100)"
+                                    value={payoutAmount}
+                                    onChangeText={setPayoutAmount}
+                                    editable={!isSubmitting}
+                                />
+                                <Text style={styles.methodLabel}>Transfer Method</Text>
+                                <View style={styles.methodToggleRow}>
+                                    <TouchableOpacity
+                                        style={[styles.methodToggle, payoutMethod === 'UPI' && styles.methodToggleActive]}
+                                        onPress={() => { Keyboard.dismiss(); setPayoutMethod('UPI'); }}
+                                    >
+                                        <Icon name="cellphone" size={16} color={payoutMethod === 'UPI' ? '#fff' : '#CCC'} />
+                                        <Text style={[styles.methodToggleText, payoutMethod === 'UPI' && styles.methodToggleTextActive]}>UPI</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.methodToggle, payoutMethod === 'BANK' && styles.methodToggleActive]}
+                                        onPress={() => { Keyboard.dismiss(); setPayoutMethod('BANK'); }}
+                                    >
+                                        <Icon name="bank" size={16} color={payoutMethod === 'BANK' ? '#fff' : '#CCC'} />
+                                        <Text style={[styles.methodToggleText, payoutMethod === 'BANK' && styles.methodToggleTextActive]}>Bank</Text>
+                                    </TouchableOpacity>
+                                </View>
+
+                                {payoutMethod === 'UPI' && (!summary?.payoutMethods?.upiId || isEditingPayoutMethod) && (
+                                    <TextInput
+                                        style={styles.modalInput}
+                                        placeholder="Enter your UPI ID (e.g. name@upi)"
+                                        placeholderTextColor="#666"
+                                        value={upiId}
+                                        onChangeText={setUpiId}
+                                        autoCapitalize="none"
+                                        returnKeyType="done"
+                                        onSubmitEditing={Keyboard.dismiss}
+                                        editable={!isSubmitting}
+                                    />
+                                )}
+
+                                {payoutMethod === 'BANK' && (!summary?.payoutMethods?.bank || isEditingPayoutMethod) && (
+                                    <>
+                                        <TextInput style={styles.modalInput} placeholder="Account Holder Name" placeholderTextColor="#666" value={bankName} onChangeText={setBankName} returnKeyType="next" editable={!isSubmitting} />
+                                        <TextInput style={styles.modalInput} placeholder="Account Number" placeholderTextColor="#666" value={bankAcc} onChangeText={setBankAcc} keyboardType="numeric" returnKeyType="next" editable={!isSubmitting} />
+                                        <TextInput style={styles.modalInput} placeholder="IFSC Code" placeholderTextColor="#666" value={bankIfsc} onChangeText={setBankIfsc} autoCapitalize="characters" returnKeyType="done" onSubmitEditing={Keyboard.dismiss} editable={!isSubmitting} />
+                                    </>
+                                )}
+
+                                <View style={styles.modalActions}>
+                                    <TouchableOpacity style={styles.modalCancelBtn} onPress={() => { if (!isSubmitting) { Keyboard.dismiss(); setShowPayoutModal(false); setIsEditingPayoutMethod(false); } }}>
+                                        <Text style={styles.modalCancelText}>Cancel</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={[styles.modalConfirmBtn, isSubmitting && { opacity: 0.6 }]} onPress={() => { Keyboard.dismiss(); handlePayout(); }} disabled={isSubmitting}>
+                                        <Text style={styles.modalConfirmText}>{isSubmitting ? 'Processing...' : 'Withdraw'}</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
                         </View>
-
-                        {payoutMethod === 'UPI' && (!summary?.payoutMethods?.upiId || isEditingPayoutMethod) && (
-                            <TextInput
-                                style={styles.modalInput}
-                                placeholder="Enter your UPI ID (e.g. name@upi)"
-                                placeholderTextColor="#666"
-                                value={upiId}
-                                onChangeText={setUpiId}
-                                autoCapitalize="none"
-                                editable={!isSubmitting}
-                            />
-                        )}
-
-                        {payoutMethod === 'BANK' && (!summary?.payoutMethods?.bank || isEditingPayoutMethod) && (
-                            <>
-                                <TextInput style={styles.modalInput} placeholder="Account Holder Name" placeholderTextColor="#666" value={bankName} onChangeText={setBankName} editable={!isSubmitting} />
-                                <TextInput style={styles.modalInput} placeholder="Account Number" placeholderTextColor="#666" value={bankAcc} onChangeText={setBankAcc} keyboardType="numeric" editable={!isSubmitting} />
-                                <TextInput style={styles.modalInput} placeholder="IFSC Code" placeholderTextColor="#666" value={bankIfsc} onChangeText={setBankIfsc} autoCapitalize="characters" editable={!isSubmitting} />
-                            </>
-                        )}
-
-                        <View style={styles.modalActions}>
-                            <TouchableOpacity style={styles.modalCancelBtn} onPress={() => { if (!isSubmitting) { setShowPayoutModal(false); setIsEditingPayoutMethod(false); } }}>
-                                <Text style={styles.modalCancelText}>Cancel</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={[styles.modalConfirmBtn, isSubmitting && { opacity: 0.6 }]} onPress={handlePayout} disabled={isSubmitting}>
-                                <Text style={styles.modalConfirmText}>{isSubmitting ? 'Processing...' : 'Withdraw'}</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
+                    </TouchableWithoutFeedback>
+                </KeyboardAvoidingView>
             </Modal>
 
             {/* ── UPI Save Modal ── */}
