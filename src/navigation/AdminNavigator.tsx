@@ -4,6 +4,7 @@ import AdminDriverVerificationsScreen from '../screens/admin/AdminDriverVerifica
 import AdminDriverVerificationDetailScreen from '../screens/admin/AdminDriverVerificationDetailScreen';
 import AdminNeedHelpInboxScreen from '../screens/admin/AdminNeedHelpInboxScreen';
 import AdminRefundsScreen from '../screens/admin/AdminRefundsScreen';
+import AdminWithdrawalRequestsScreen from '../screens/admin/AdminWithdrawalRequestsScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -15,6 +16,7 @@ const AdminNavigator = ({ route }: any) => {
       <Stack.Screen name="AdminRefunds" component={AdminRefundsScreen} />
       <Stack.Screen name="AdminDriverVerifications" component={AdminDriverVerificationsScreen} />
       <Stack.Screen name="AdminDriverVerificationDetail" component={AdminDriverVerificationDetailScreen} />
+      <Stack.Screen name="AdminWithdrawalRequests" component={AdminWithdrawalRequestsScreen} />
     </Stack.Navigator>
   );
 };

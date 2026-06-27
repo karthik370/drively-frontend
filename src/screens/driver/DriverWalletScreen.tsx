@@ -140,7 +140,10 @@ const DriverWalletScreen = ({ navigation }: any) => {
         setIsSubmitting(true);
         try {
             await requestDriverPayout(amt, payoutMethod, Object.keys(details).length > 0 ? details : undefined);
-            showAlert('Withdrawal Initiated', `₹${amt.toFixed(0)} withdrawal via ${payoutMethod} has been submitted.`);
+            showAlert(
+                '📤 Request Sent to Admin',
+                `₹${amt.toFixed(0)} withdrawal via ${payoutMethod} has been sent to admin. You will receive a notification once it is processed.`
+            );
             setShowPayoutModal(false);
             setIsEditingPayoutMethod(false);
             setPayoutAmount('');
@@ -383,15 +386,18 @@ const DriverWalletScreen = ({ navigation }: any) => {
                                 <Text style={[
                                     styles.txAmount,
                                     isNegative ? styles.txMinus
-                                        : tx.type === 'PAYOUT' && tx.status === 'PROCESSING' ? { color: '#fbbf24' }
-                                            : tx.type === 'PAYOUT' && tx.status === 'FAILED' ? { color: '#ef4444' }
-                                                : styles.txPlus,
+                                        : tx.type === 'PAYOUT' && tx.status === 'PENDING' ? { color: '#f59e0b' }
+                                            : tx.type === 'PAYOUT' && tx.status === 'PROCESSING' ? { color: '#fbbf24' }
+                                                : tx.type === 'PAYOUT' && tx.status === 'FAILED' ? { color: '#ef4444' }
+                                                    : styles.txPlus,
                                 ]}>
-                                    {tx.type === 'PAYOUT' && tx.status === 'PROCESSING'
+                                    {tx.type === 'PAYOUT' && tx.status === 'PENDING'
                                         ? `⏳ ₹${Math.abs(tx.amount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
-                                        : tx.type === 'PAYOUT' && tx.status === 'FAILED'
-                                            ? `✗ ₹${Math.abs(tx.amount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
-                                            : `${isNegative ? '−' : '+'}₹${Math.abs(tx.amount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
+                                        : tx.type === 'PAYOUT' && tx.status === 'PROCESSING'
+                                            ? `⏳ ₹${Math.abs(tx.amount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
+                                            : tx.type === 'PAYOUT' && tx.status === 'FAILED'
+                                                ? `✗ ₹${Math.abs(tx.amount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
+                                                : `${isNegative ? '−' : '+'}₹${Math.abs(tx.amount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
                                     }
                                 </Text>
                             </View>

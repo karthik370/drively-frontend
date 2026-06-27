@@ -1688,6 +1688,38 @@ export const verifyDriverWalletTopup = async (params: { cf_order_id: string }): 
   }
 };
 
+// ── Admin Payout / Withdrawal Management ────────────────────────────────────
+
+/** [Admin] Get all PENDING/PROCESSING withdrawal requests with full driver details */
+export const getAdminPendingPayouts = async (): Promise<any[]> => {
+  try {
+    const res = await api.get<ApiResponse<any[]>>('/admin/payouts/pending');
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+/** [Admin] Approve a withdrawal request — marks COMPLETED and notifies driver */
+export const adminApprovePayout = async (payoutId: string): Promise<any> => {
+  try {
+    const res = await api.post<ApiResponse<any>>(`/admin/payouts/${payoutId}/approve`, {});
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+/** [Admin] Reject a withdrawal request — marks FAILED, unlocks amount, notifies driver */
+export const adminRejectPayout = async (payoutId: string, reason?: string): Promise<any> => {
+  try {
+    const res = await api.post<ApiResponse<any>>(`/admin/payouts/${payoutId}/reject`, { reason: reason || 'Rejected by admin' });
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
 // Backwards-compatible aliases
 export const updateBookingStatusApi = updateBookingStatus;
 

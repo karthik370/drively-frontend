@@ -148,6 +148,15 @@ const DrawerNavigator = () => {
               drawerIcon: ({ color, size }) => <Icon name="cash-refund" color={color} size={size} />,
             }}
           />
+          <Drawer.Screen
+            name="AdminWithdrawals"
+            component={AdminNavigator}
+            initialParams={{ initialRouteName: 'AdminWithdrawalRequests' }}
+            options={{
+              drawerLabel: 'Withdrawals',
+              drawerIcon: ({ color, size }) => <Icon name="bank-transfer-out" color={color} size={size} />,
+            }}
+          />
         </>
       ) : null}
       <Drawer.Screen
