@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, RefreshControl } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { G } from '../../constants/glassStyles';
+import { BookingCardSkeleton } from '../../components/common/LoadingSkeleton';
 
 import { getBookingHistory } from '../../services/api';
 import { useAppSelector } from '../../redux/store';
@@ -16,17 +17,28 @@ const BookingHistoryScreen = ({ navigation }: any) => {
   const [refreshing, setRefreshing] = useState(false);
   const [items, setItems] = useState<any[]>([]);
 
+  // isMounted ref — prevents setState after unmount
+  const isMounted = useRef(true);
+  useEffect(() => {
+    isMounted.current = true;
+    return () => { isMounted.current = false; };
+  }, []);
+
   const load = async (mode: 'initial' | 'refresh') => {
     if (mode === 'initial') setLoading(true);
     if (mode === 'refresh') setRefreshing(true);
     try {
       const res = await getBookingHistory(1, 30);
+      if (!isMounted.current) return;
       setItems(Array.isArray(res?.bookings) ? res.bookings : []);
     } catch (e: any) {
+      if (!isMounted.current) return;
       showAlert('My Rides', e?.message || 'Failed to load booking history');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isMounted.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   };
 
@@ -109,6 +121,23 @@ const BookingHistoryScreen = ({ navigation }: any) => {
 
   const keyExtractor = useCallback((item: any) => String(item.id), []);
 
+  // ── Skeleton for initial load: show 4 shimmer cards matching booking card shape ──
+  if (loading && items.length === 0) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <View style={styles.header}>
+          <Text style={styles.title}>My Rides</Text>
+        </View>
+        <View style={{ padding: 16 }}>
+          <BookingCardSkeleton />
+          <BookingCardSkeleton />
+          <BookingCardSkeleton />
+          <BookingCardSkeleton />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top','bottom']}>
       <View style={styles.header}>
@@ -128,10 +157,8 @@ const BookingHistoryScreen = ({ navigation }: any) => {
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Icon name="car-off" size={64} color="#d1d5db" />
-            <Text style={styles.emptyTitle}>{loading ? 'Loading…' : 'No rides yet'}</Text>
-            <Text style={styles.emptySubtitle}>
-              {loading ? 'Fetching your rides…' : 'Your ride history will appear here'}
-            </Text>
+            <Text style={styles.emptyTitle}>No rides yet</Text>
+            <Text style={styles.emptySubtitle}>Your ride history will appear here</Text>
           </View>
         }
       />

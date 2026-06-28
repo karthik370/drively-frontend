@@ -87,7 +87,70 @@ export const MapSkeleton = () => (
     </View>
 );
 
+/**
+ * BookingCardSkeleton — matches the exact shape of a booking history card.
+ * Show 3-4 of these while getBookingHistory() is in-flight.
+ */
+export const BookingCardSkeleton = () => (
+    <View style={styles.card}>
+        {/* Header row: booking number + status badge */}
+        <View style={[styles.row, { justifyContent: 'space-between', marginBottom: 12 }]}>
+            <View>
+                <ShimmerBar width={120} height={14} />
+                <ShimmerBar width={80} height={10} style={{ marginTop: 6 }} />
+            </View>
+            <ShimmerBar width={70} height={24} borderRadius={12} />
+        </View>
+        {/* Route: pickup → drop */}
+        <ShimmerBar width="90%" height={11} style={{ marginBottom: 8 }} />
+        <ShimmerBar width={12} height={16} borderRadius={2} style={{ marginLeft: 5, marginBottom: 8 }} />
+        <ShimmerBar width="80%" height={11} style={{ marginBottom: 14 }} />
+        {/* Footer: driver name + amount */}
+        <View style={[styles.row, { justifyContent: 'space-between', paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)' }]}>
+            <ShimmerBar width={100} height={12} />
+            <ShimmerBar width={50} height={18} />
+        </View>
+    </View>
+);
+
+/**
+ * EarningsSkeleton — matches the DriverEarningsScreen layout.
+ * Shows while earnings data is loading.
+ */
+export const EarningsSkeleton = () => (
+    <View style={styles.container}>
+        {/* Total earnings card */}
+        <View style={[styles.card, { alignItems: 'center', paddingVertical: 32, marginBottom: 12 }]}>
+            <ShimmerBar width={100} height={12} style={{ marginBottom: 12 }} />
+            <ShimmerBar width={160} height={44} borderRadius={8} style={{ marginBottom: 10 }} />
+            <ShimmerBar width={60} height={10} />
+        </View>
+        {/* Today card */}
+        <View style={[styles.card, { marginBottom: 12 }]}>
+            <ShimmerBar width={140} height={14} style={{ marginBottom: 14 }} />
+            <ShimmerBar width={120} height={30} borderRadius={8} style={{ alignSelf: 'center' }} />
+        </View>
+        {/* Goal card */}
+        <View style={[styles.card, { marginBottom: 12 }]}>
+            <ShimmerBar width="60%" height={12} style={{ marginBottom: 10 }} />
+            <ShimmerBar width="100%" height={8} borderRadius={4} style={{ marginBottom: 6 }} />
+            <ShimmerBar width="40%" height={10} />
+        </View>
+        {/* Previous earnings rows */}
+        <View style={styles.card}>
+            <ShimmerBar width={130} height={14} style={{ marginBottom: 16 }} />
+            {[1, 2, 3, 4].map((i) => (
+                <View key={i} style={[styles.row, { justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' }]}>
+                    <ShimmerBar width={90} height={12} />
+                    <ShimmerBar width={50} height={14} />
+                </View>
+            ))}
+        </View>
+    </View>
+);
+
 export { ShimmerBar };
+
 
 const styles = StyleSheet.create({
     container: {

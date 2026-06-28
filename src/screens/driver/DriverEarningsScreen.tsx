@@ -1,87 +1,117 @@
-﻿import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { getDriverEarnings, getEarningsBreakdown } from '../../services/api';
 import EarningsGoalCard from '../../components/driver/EarningsGoalCard';
+import { EarningsSkeleton } from '../../components/common/LoadingSkeleton';
 import { G } from '../../constants/glassStyles';
+
+type DailyEarning = { label: string; amount: number };
 
 const DriverEarningsScreen = () => {
   const [todayEarnings, setTodayEarnings] = useState<number | null>(null);
   const [totalEarnings, setTotalEarnings] = useState<number | null>(null);
-  const [previousEarnings, setPreviousEarnings] = useState<any[]>([]);
+  const [previousEarnings, setPreviousEarnings] = useState<DailyEarning[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
+  // isMounted ref — prevents setState after unmount (no memory leaks)
+  const isMounted = useRef(true);
   useEffect(() => {
-    const load = async () => {
-      try {
-        const today = await getDriverEarnings('today');
-        setTodayEarnings(typeof today?.earnings === 'number' ? today.earnings : 0);
-        setTotalEarnings(typeof today?.totalEarnings === 'number' ? today.totalEarnings : 0);
-
-        // Fetch real previous earnings breakdown for last 7 days
-        const now = new Date();
-        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        const breakdown = await getEarningsBreakdown(sevenDaysAgo.toISOString().split('T')[0], now.toISOString().split('T')[0]);
-
-        // Aggregate earnings by day
-        const dailyMap: { [key: string]: number } = {};
-        if (Array.isArray(breakdown?.bookings)) {
-          breakdown.bookings.forEach((b: any) => {
-            const date = b.completedAt ? new Date(b.completedAt).toISOString().split('T')[0] : null;
-            if (date && date !== now.toISOString().split('T')[0]) {
-              dailyMap[date] = (dailyMap[date] || 0) + Number(b.driverEarnings || 0);
-            }
-          });
-        }
-
-        // Build list from oldest to newest, excluding today
-        const list: any[] = [];
-        for (let i = 6; i >= 1; i--) {
-          const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-          const dateStr = d.toISOString().split('T')[0];
-          const amount = dailyMap[dateStr] || 0;
-          const dayName = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-          list.push({ label: dayName, amount });
-        }
-
-        // Add weekly total if we have data
-        const weekTotal = list.reduce((sum, item) => sum + item.amount, 0);
-        if (weekTotal > 0) {
-          list.push({ label: 'Last 7 Days', amount: weekTotal });
-        }
-
-        setPreviousEarnings(list);
-      } catch (e) {
-        setTodayEarnings(0);
-        setTotalEarnings(0);
-      } finally {
-        setLoading(false);
-      }
-    };
-    void load();
+    isMounted.current = true;
+    return () => { isMounted.current = false; };
   }, []);
 
+  const load = useCallback(async () => {
+    try {
+      const now = new Date();
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+      // ── Parallel fetch: both calls fire at the SAME TIME ─────────────────
+      // Old code: getDriverEarnings → wait → getEarningsBreakdown (2x slower)
+      // New code: both fire together, done when the slower one finishes
+      const [today, breakdown] = await Promise.all([
+        getDriverEarnings('today'),
+        getEarningsBreakdown(
+          sevenDaysAgo.toISOString().split('T')[0],
+          now.toISOString().split('T')[0],
+        ),
+      ]);
+
+      if (!isMounted.current) return;
+
+      setTodayEarnings(typeof today?.earnings === 'number' ? today.earnings : 0);
+      setTotalEarnings(typeof today?.totalEarnings === 'number' ? today.totalEarnings : 0);
+
+      // Aggregate earnings by day
+      const todayStr = now.toISOString().split('T')[0];
+      const dailyMap: Record<string, number> = {};
+      if (Array.isArray(breakdown?.bookings)) {
+        breakdown.bookings.forEach((b: any) => {
+          const date = b.completedAt ? new Date(b.completedAt).toISOString().split('T')[0] : null;
+          if (date && date !== todayStr) {
+            dailyMap[date] = (dailyMap[date] || 0) + Number(b.driverEarnings || 0);
+          }
+        });
+      }
+
+      // Build list oldest → newest (excluding today)
+      const list: DailyEarning[] = [];
+      for (let i = 6; i >= 1; i--) {
+        const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+        const dateStr = d.toISOString().split('T')[0];
+        list.push({
+          label: d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+          amount: dailyMap[dateStr] || 0,
+        });
+      }
+
+      const weekTotal = list.reduce((sum, item) => sum + item.amount, 0);
+      if (weekTotal > 0) list.push({ label: 'Last 7 Days', amount: weekTotal });
+
+      setPreviousEarnings(list);
+    } catch {
+      if (!isMounted.current) return;
+      setTodayEarnings(0);
+      setTotalEarnings(0);
+    } finally {
+      if (isMounted.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    void load();
+  }, [load]);
+
+  // ── Skeleton while loading (first visit) ─────────────────────────────────
   if (loading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top','bottom']}>
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <View style={styles.header}>
           <Text style={styles.title}>Earnings</Text>
         </View>
-        <View style={styles.loadingCenter}>
-          <ActivityIndicator size="large" color="#C9A84C" />
-        </View>
+        <EarningsSkeleton />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top','bottom']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <Text style={styles.title}>Earnings</Text>
       </View>
 
-      <ScrollView style={styles.content}>
+      <ScrollView
+        style={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
         <View style={styles.totalCard}>
           <Text style={styles.totalLabel}>Total Earnings</Text>
           <Text style={styles.totalAmount}>₹{totalEarnings?.toFixed(0) || '0'}</Text>
@@ -109,6 +139,9 @@ const DriverEarningsScreen = () => {
             ))}
           </View>
         )}
+
+        {/* Bottom padding for safe scroll */}
+        <View style={{ height: 32 }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -132,11 +165,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-  },
-  loadingCenter: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   totalCard: {
     margin: 16,

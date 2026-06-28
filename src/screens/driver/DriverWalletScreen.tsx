@@ -14,6 +14,7 @@ import {
     createDriverWalletTopupOrder,
     verifyDriverWalletTopup,
 } from '../../services/api';
+import apiCache from '../../services/apiCache';
 import { openCashfreeCheckout } from '../../services/cashfreeService';
 import { showAlert } from '../../components/common/CustomAlert';
 import { G } from '../../constants/glassStyles';
@@ -99,6 +100,7 @@ const DriverWalletScreen = ({ navigation }: any) => {
                     showAlert('✅ Top-up Successful', `₹${amt.toFixed(0)} added to your wallet!`);
                     setShowTopupModal(false);
                     setTopupAmount('100');
+                    apiCache.invalidate('driver-wallet:');
                     fetchData();
                 }
             }, 300);
@@ -141,8 +143,8 @@ const DriverWalletScreen = ({ navigation }: any) => {
         try {
             await requestDriverPayout(amt, payoutMethod, Object.keys(details).length > 0 ? details : undefined);
             showAlert(
-                '📤 Request Sent to Admin',
-                `₹${amt.toFixed(0)} withdrawal via ${payoutMethod} has been sent to admin. You will receive a notification once it is processed.`
+                '\ud83d\udce4 Request Sent to Admin',
+                `\u20b9${amt.toFixed(0)} withdrawal via ${payoutMethod} has been sent to admin. You will receive a notification once it is processed.`
             );
             setShowPayoutModal(false);
             setIsEditingPayoutMethod(false);
@@ -151,6 +153,8 @@ const DriverWalletScreen = ({ navigation }: any) => {
             setBankAcc('');
             setBankIfsc('');
             setBankName('');
+            // Invalidate wallet cache so fetchData() returns fresh balance & payout list
+            apiCache.invalidate('driver-wallet:');
             fetchData();
         } catch (e: any) {
             showAlert('Payout Failed', e?.message || 'Could not process payout');

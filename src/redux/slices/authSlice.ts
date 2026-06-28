@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import * as SecureStore from 'expo-secure-store';
 import { authService } from '../../services/authService';
+import apiCache from '../../services/apiCache';
 import { User, AuthState, PendingSignup } from '../../types';
 
 const ROLE_OVERRIDE_KEY = 'roleOverride';
@@ -216,8 +217,12 @@ export const logout = createAsyncThunk(
       await SecureStore.deleteItemAsync('accessToken');
       await SecureStore.deleteItemAsync('refreshToken');
       await SecureStore.deleteItemAsync(ROLE_OVERRIDE_KEY);
+      // Clear all cached API responses so next user starts fresh
+      apiCache.clear();
       return null;
     } catch (error: any) {
+      // Still clear cache even if server logout fails
+      apiCache.clear();
       return rejectWithValue(error.response?.data?.message || 'Logout failed');
     }
   }

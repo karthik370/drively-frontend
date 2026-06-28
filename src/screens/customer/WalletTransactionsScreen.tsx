@@ -1,8 +1,9 @@
-﻿import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { G } from '../../constants/glassStyles';
+import { ScreenSkeleton } from '../../components/common/LoadingSkeleton';
 
 import { getWalletTransactions, WalletTx } from '../../services/api';
 import { showAlert } from '../../components/common/CustomAlert';
@@ -12,24 +13,48 @@ const WalletTransactionsScreen = ({ navigation }: any) => {
   const [refreshing, setRefreshing] = useState(false);
   const [items, setItems] = useState<WalletTx[]>([]);
 
+  const isMounted = useRef(true);
+  useEffect(() => {
+    isMounted.current = true;
+    return () => { isMounted.current = false; };
+  }, []);
+
   const load = async (mode: 'initial' | 'refresh') => {
     if (mode === 'initial') setLoading(true);
     if (mode === 'refresh') setRefreshing(true);
 
     try {
       const txs = await getWalletTransactions(50);
-      setItems(txs);
+      if (isMounted.current) setItems(txs);
     } catch (e: any) {
-      showAlert('Wallet', e?.message || 'Failed to load transactions');
+      if (isMounted.current) showAlert('Wallet', e?.message || 'Failed to load transactions');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isMounted.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   };
 
   useEffect(() => {
     void load('initial');
   }, []);
+
+  // ── Skeleton for initial load ──
+  if (loading && items.length === 0) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top','bottom']}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+            <Icon name="arrow-left" size={22} color="#C9A84C" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Transactions</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <ScreenSkeleton lines={7} />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top','bottom']}>
@@ -45,12 +70,6 @@ const WalletTransactionsScreen = ({ navigation }: any) => {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load('refresh')} />}
       >
-        {loading ? (
-          <View style={styles.center}>
-            <ActivityIndicator size="small" color="#C9A84C" />
-            <Text style={styles.centerText}>Loading…</Text>
-          </View>
-        ) : null}
 
         {!loading && items.length === 0 ? (
           <View style={styles.center}>

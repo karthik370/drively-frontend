@@ -1,6 +1,7 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { API_URL } from '../constants/config';
+import { withCache } from './apiCache';
 
 export type ApiResponse<T> = {
   success: boolean;
@@ -1019,14 +1020,13 @@ export type BookingHistoryResponse = {
 };
 
 export const getBookingHistory = async (page: number = 1, limit: number = 20): Promise<BookingHistoryResponse> => {
-  try {
+  // Cache for 60 seconds — history doesn't change mid-session
+  return withCache(`booking:history:${page}:${limit}`, 60, async () => {
     const res = await api.get<ApiResponse<BookingHistoryResponse>>('/bookings/user/history', {
       params: { page, limit },
     });
     return unwrap(res);
-  } catch (error) {
-    return handleAxiosError(error);
-  }
+  });
 };
 
 // PROMOTIONS
@@ -1217,16 +1217,15 @@ export type MembershipPlan = {
 };
 
 export const listMembershipPlans = async (): Promise<MembershipPlan[]> => {
-  try {
+  // Cache 300s — plans rarely change
+  return withCache('membership:plans', 300, async () => {
     const res = await api.get<ApiResponse<MembershipPlan[]>>('/membership/plans');
     const plans = unwrap(res);
     return (plans || []).map((p: any) => ({
       ...p,
       price: Number(p?.price || 0),
     }));
-  } catch (error) {
-    return handleAxiosError(error);
-  }
+  });
 };
 
 export const getCurrentMembership = async (): Promise<any> => {
@@ -1298,12 +1297,11 @@ export type FavoriteDriver = {
 };
 
 export const listFavoriteDrivers = async (): Promise<FavoriteDriver[]> => {
-  try {
+  // Cache 120s — favorite list changes infrequently
+  return withCache('favorites:list', 120, async () => {
     const res = await api.get<ApiResponse<FavoriteDriver[]>>('/features/favorite-drivers');
     return unwrap(res);
-  } catch (error) {
-    return handleAxiosError(error);
-  }
+  });
 };
 
 export const addFavoriteDriver = async (driverId: string): Promise<any> => {
@@ -1412,23 +1410,21 @@ export const goOffline = async (): Promise<any> => {
 };
 
 export const getDriverEarnings = async (period: 'today' | 'week' | 'month' = 'today'): Promise<any> => {
-  try {
+  // Cache 30s — today's earnings update after each trip completes
+  return withCache(`earnings:${period}`, 30, async () => {
     const res = await api.get<ApiResponse<any>>('/drivers/earnings', { params: { period } });
     return unwrap(res);
-  } catch (error) {
-    return handleAxiosError(error);
-  }
+  });
 };
 
 export const getEarningsBreakdown = async (startDate: string, endDate: string): Promise<any> => {
-  try {
+  // Cache 60s — historical breakdown data doesn't change
+  return withCache(`earnings:breakdown:${startDate}:${endDate}`, 60, async () => {
     const res = await api.get<ApiResponse<any>>('/drivers/earnings/breakdown', {
       params: { startDate, endDate },
     });
     return unwrap(res);
-  } catch (error) {
-    return handleAxiosError(error);
-  }
+  });
 };
 
 export const requestPayout = async (amount: number, method: PayoutMethod): Promise<any> => {
@@ -1623,21 +1619,19 @@ export const redeemRewardsCoins = async (coins: number, bookingId: string): Prom
 // ── Driver Wallet ───────────────────────────────────────────────────
 
 export const getDriverWalletSummary = async (): Promise<any> => {
-  try {
+  // Cache 15s — balance updates after payouts/bookings
+  return withCache('driver-wallet:summary', 15, async () => {
     const res = await api.get<ApiResponse<any>>('/driver-wallet/summary');
     return unwrap(res);
-  } catch (error) {
-    return handleAxiosError(error);
-  }
+  });
 };
 
 export const getDriverWalletTransactions = async (limit = 50): Promise<any[]> => {
-  try {
+  // Cache 30s — transactions list doesn't change mid-session
+  return withCache(`driver-wallet:transactions:${limit}`, 30, async () => {
     const res = await api.get<ApiResponse<any[]>>('/driver-wallet/transactions', { params: { limit } });
     return unwrap(res);
-  } catch (error) {
-    return handleAxiosError(error);
-  }
+  });
 };
 
 export const requestDriverPayout = async (amount: number, method: 'BANK' | 'UPI', details?: any): Promise<any> => {
@@ -1650,12 +1644,11 @@ export const requestDriverPayout = async (amount: number, method: 'BANK' | 'UPI'
 };
 
 export const getDriverPayoutHistory = async (): Promise<any[]> => {
-  try {
+  // Cache 60s — payout history is read-only after submission
+  return withCache('driver-wallet:payouts', 60, async () => {
     const res = await api.get<ApiResponse<any[]>>('/driver-wallet/payouts');
     return unwrap(res);
-  } catch (error) {
-    return handleAxiosError(error);
-  }
+  });
 };
 
 /** Save / update driver's UPI ID (for QR code payments). Stores to driver_profiles.upiId. */

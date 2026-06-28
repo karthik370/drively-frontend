@@ -1,8 +1,10 @@
-﻿import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { listFavoriteDrivers, removeFavoriteDriver, type FavoriteDriver } from '../../services/api';
+import apiCache from '../../services/apiCache';
+import { ScreenSkeleton } from '../../components/common/LoadingSkeleton';
 import { showAlert } from '../../components/common/CustomAlert';
 import { G } from '../../constants/glassStyles';
 
@@ -10,15 +12,21 @@ const FavoriteDriversScreen = ({ navigation }: any) => {
     const [drivers, setDrivers] = useState<FavoriteDriver[]>([]);
     const [loading, setLoading] = useState(true);
 
+    const isMounted = useRef(true);
+    useEffect(() => {
+        isMounted.current = true;
+        return () => { isMounted.current = false; };
+    }, []);
+
     const load = useCallback(async () => {
         setLoading(true);
         try {
             const data = await listFavoriteDrivers();
-            setDrivers(Array.isArray(data) ? data : []);
+            if (isMounted.current) setDrivers(Array.isArray(data) ? data : []);
         } catch {
-            setDrivers([]);
+            if (isMounted.current) setDrivers([]);
         } finally {
-            setLoading(false);
+            if (isMounted.current) setLoading(false);
         }
     }, []);
 
@@ -35,7 +43,10 @@ const FavoriteDriversScreen = ({ navigation }: any) => {
                 onPress: async () => {
                     try {
                         await removeFavoriteDriver(id);
+                        // Update UI immediately (optimistic)
                         setDrivers((prev) => prev.filter((d) => d.id !== id));
+                        // Invalidate cache so next visit loads fresh list
+                        apiCache.invalidate('favorites:');
                     } catch (e: any) {
                         showAlert('Error', e?.message || 'Failed to remove driver');
                     }
@@ -75,6 +86,22 @@ const FavoriteDriversScreen = ({ navigation }: any) => {
         </View>
     ), []);
 
+    // ── Shimmer skeleton during initial load ──
+    if (loading) {
+        return (
+            <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+                <View style={styles.header}>
+                    <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+                        <Icon name="arrow-left" size={22} color="#C9A84C" />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>Favorite Drivers</Text>
+                    <View style={{ width: 40 }} />
+                </View>
+                <ScreenSkeleton lines={5} />
+            </SafeAreaView>
+        );
+    }
+
     return (
         <SafeAreaView style={styles.container} edges={['top','bottom']}>
             <View style={styles.header}>
@@ -85,12 +112,7 @@ const FavoriteDriversScreen = ({ navigation }: any) => {
                 <View style={{ width: 40 }} />
             </View>
 
-            {loading ? (
-                <View style={styles.emptyWrap}>
-                    <ActivityIndicator size="small" color="#C9A84C" />
-                    <Text style={styles.emptySubtext}>Loading favorites…</Text>
-                </View>
-            ) : drivers.length === 0 ? (
+            {drivers.length === 0 ? (
                 <View style={styles.emptyWrap}>
                     <Icon name="heart-outline" size={48} color="#d1d5db" />
                     <Text style={styles.emptyTitle}>No favorite drivers yet</Text>
