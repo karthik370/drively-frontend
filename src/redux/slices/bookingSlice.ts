@@ -99,7 +99,9 @@ const bookingSlice = createSlice({
         outstationTripType: typeof action.payload?.outstationTripType === 'string' ? action.payload.outstationTripType : undefined,
         requestedHours: typeof action.payload?.requestedHours === 'number' ? action.payload.requestedHours : undefined,
         scheduledTime: typeof action.payload?.scheduledTime === 'string' ? action.payload.scheduledTime : undefined,
-        createdAt: new Date().toISOString(),
+        // Use server createdAt if the backend sends it (needed for the driver-online-timestamp
+        // notification guard in BookingRequestCard). Fall back to local time if missing.
+        createdAt: typeof action.payload?.createdAt === 'string' ? action.payload.createdAt : new Date().toISOString(),
       });
       state.bookingRequests = state.bookingRequests.slice(0, 30);
     },

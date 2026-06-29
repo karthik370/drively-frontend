@@ -41,6 +41,10 @@ class SocketService {
   // Dedup guard: prevent duplicate in-app notifications for the same booking offer.
   // Cleared when offer is removed/accepted/cancelled so fresh offers always get through.
   private seenOfferIds = new Set<string>();
+  // Records when the driver explicitly went online in this session.
+  // Used to suppress notifications for bookings that already existed
+  // before the driver came online (they still appear in the list).
+  private driverOnlineAt = 0;
 
   private distanceApproxMeters(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) {
     const dLat = a.latitude - b.latitude;
@@ -98,8 +102,14 @@ class SocketService {
       const isNew = offerId && !this.seenOfferIds.has(offerId);
       if (isNew) this.seenOfferIds.add(offerId);
 
+      // Timestamp guard: only notify for bookings NEWER than when driver went online.
+      // Pre-existing bookings (createdAt <= driverOnlineAt) still show in the list
+      // via addBookingRequest, but do NOT ring the bell or send a push notification.
+      const bookingCreatedMs = data?.createdAt ? new Date(data.createdAt).getTime() : Date.now();
+      const isNewBooking = this.driverOnlineAt === 0 || bookingCreatedMs > this.driverOnlineAt;
+
       store.dispatch(addBookingRequest(data));
-      if (isNew) {
+      if (isNew && isNewBooking) {
         store.dispatch(
           addNotification({
             type: 'booking_request',
@@ -787,7 +797,15 @@ class SocketService {
   }
 
   setDriverOnline(latitude: number, longitude: number) {
+    // Record the moment the driver came online so we can suppress notifications
+    // for bookings that already existed before this timestamp.
+    this.driverOnlineAt = Date.now();
     this.emit('driver:online', { latitude, longitude });
+  }
+
+  /** Returns the epoch ms when driver last went online. 0 if never set this session. */
+  getDriverOnlineAt(): number {
+    return this.driverOnlineAt;
   }
 
   setDriverOffline() {

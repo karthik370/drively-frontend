@@ -46,8 +46,9 @@ if (TaskManager?.defineTask) {
         })
       );
 
+      const wasDisconnected = !socketService.isConnected();
       try {
-        if (!socketService.isConnected()) {
+        if (wasDisconnected) {
           await socketService.connect();
         }
       } catch {
@@ -66,6 +67,11 @@ if (TaskManager?.defineTask) {
       const isDriver = userType === 'DRIVER' || userType === 'BOTH';
 
       if (isDriver && isDriverOnline) {
+        if (wasDisconnected) {
+          try {
+            socketService.setDriverOnline(location.coords.latitude, location.coords.longitude);
+          } catch {}
+        }
         socketService.emit('driver:location-update', {
           latitude: location.coords.latitude,
           longitude: location.coords.longitude,

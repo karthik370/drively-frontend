@@ -879,6 +879,22 @@ const TrackingScreen = ({ navigation, route }: any) => {
     if (!bookingId) return;
     if (statusUpdating) return; // Prevent double-tap
 
+    const driverLoc = currentLocation ?? driverLocation;
+
+    if (nextStatus === BookingStatus.ARRIVED) {
+      if (!driverLoc) {
+        showAlert('Arrived', 'Unable to verify your location. Please ensure location services are enabled.');
+        return;
+      }
+      if (pickupLocation) {
+        const dist = distanceApproxMeters(driverLoc, pickupLocation);
+        if (dist > 500) {
+          showAlert('Arrived', 'please reach the pickup location first !!');
+          return;
+        }
+      }
+    }
+
     if (nextStatus === BookingStatus.COMPLETED) {
       showAlert('End Trip', 'Are you sure you want to end this trip? The final fare will be calculated.', [
         { text: 'Cancel', style: 'cancel' },
@@ -889,7 +905,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
             void (async () => {
               safeSetStatusUpdating(true);
               try {
-                await updateBookingStatusApi(bookingId, nextStatus);
+                await updateBookingStatusApi(bookingId, nextStatus, driverLoc?.latitude, driverLoc?.longitude);
                 dispatch(updateBookingStatus({ id: bookingId, status: nextStatus }));
               } catch (e: any) {
                 showAlert('Update status', e?.message || 'Failed to update booking status');
@@ -904,7 +920,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
     }
     safeSetStatusUpdating(true);
     try {
-      await updateBookingStatusApi(bookingId, nextStatus);
+      await updateBookingStatusApi(bookingId, nextStatus, driverLoc?.latitude, driverLoc?.longitude);
       dispatch(updateBookingStatus({ id: bookingId, status: nextStatus }));
     } catch (e: any) {
       showAlert('Update status', e?.message || 'Failed to update booking status');

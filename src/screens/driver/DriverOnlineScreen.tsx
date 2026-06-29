@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DrawerActions } from '@react-navigation/native';
 import { AppState, AppStateStatus, View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Switch, Modal, Platform } from 'react-native';
 import * as Location from 'expo-location';
+import * as SecureStore from 'expo-secure-store';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppDispatch, useAppSelector } from '../../redux/store';
@@ -68,6 +69,8 @@ const DriverOnlineScreen = ({ navigation }: any) => {
     void fetchSubscription();
   }, [fetchSubscription]);
 
+  const hasRestoredRef = useRef<boolean>(false);
+
   const setOnlineState = useCallback(
     async (nextOnline: boolean) => {
       if (onlineToggleInFlightRef.current) return;
@@ -77,6 +80,9 @@ const DriverOnlineScreen = ({ navigation }: any) => {
       try {
         if (nextOnline) {
           await goOnline();
+          try {
+            await SecureStore.setItemAsync('driver_was_online', '1');
+          } catch {}
           // Issue 3: Start background tracking so driver stays online when app is backgrounded.
           // Background task (locationService) will keep emitting driver:location-update
           // and the socket task handler maintains isOnline=true in DB.
@@ -87,17 +93,23 @@ const DriverOnlineScreen = ({ navigation }: any) => {
           }
         } else {
           await goOffline();
+          try {
+            await SecureStore.deleteItemAsync('driver_was_online');
+          } catch {}
           // Stop background tracking when driver manually goes offline
           try {
             await locationService.stopBackgroundTracking();
-          } catch {}
+          } catch { }
         }
       } catch (e: any) {
         // Revert on failure
         dispatch(setDriverOnline(!nextOnline));
+        try {
+          await SecureStore.deleteItemAsync('driver_was_online');
+        } catch {}
         // Also stop background tracking if we failed to go online
         if (nextOnline) {
-          try { await locationService.stopBackgroundTracking(); } catch {}
+          try { await locationService.stopBackgroundTracking(); } catch { }
         }
         if (e?.message?.includes('Active subscription required') || e?.response?.status === 403) {
           setHasSubscription(false);
@@ -112,6 +124,25 @@ const DriverOnlineScreen = ({ navigation }: any) => {
     [dispatch]
   );
 
+  // Auto-restore effect: runs once subscription check completes
+  useEffect(() => {
+    if (subLoading) return;
+    if (!hasSubscription || isOnline || hasRestoredRef.current) return;
+
+    hasRestoredRef.current = true;
+
+    void (async () => {
+      try {
+        const val = await SecureStore.getItemAsync('driver_was_online');
+        if (val === '1') {
+          // If restoring from background/killed state, assume permission is granted
+          permissionGrantedRef.current = true;
+          await setOnlineState(true);
+        }
+      } catch {}
+    })();
+  }, [subLoading, hasSubscription, isOnline, setOnlineState]);
+
   const handleGoOnlineWithDisclosure = async () => {
     try {
       const fg = await Location.requestForegroundPermissionsAsync();
@@ -120,7 +151,7 @@ const DriverOnlineScreen = ({ navigation }: any) => {
         setShowDisclosure(false);
         return;
       }
-      
+
       // Background location is nice-to-have but NOT required (Expo Go doesn't support it)
       try {
         await Location.requestBackgroundPermissionsAsync();
@@ -499,7 +530,7 @@ const DriverOnlineScreen = ({ navigation }: any) => {
       // Immediately remove from request list and join socket room
       setActiveBookingId(id);
       dispatch(removeBookingRequest(id));
-      try { socketService.joinBooking(id); } catch {}
+      try { socketService.joinBooking(id); } catch { }
 
       // Use the accept response directly — no need for a second getBookingDetails() call
       const now = new Date().toISOString();

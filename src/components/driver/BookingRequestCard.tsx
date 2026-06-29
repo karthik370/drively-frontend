@@ -3,6 +3,7 @@ import { StyleSheet, Vibration, View } from 'react-native';
 import { Button, Card, Text, useTheme } from 'react-native-paper';
 import * as Haptics from 'expo-haptics';
 import * as Notifications from 'expo-notifications';
+import socketService from '../../services/socketService';
 import { showAlert } from '../common/CustomAlert';
 import { G } from '../../constants/glassStyles';
 
@@ -109,32 +110,42 @@ const BookingRequestCard = ({
   }, [driverLocation, request.pickup?.latitude, request.pickup?.longitude]);
 
   useEffect(() => {
-    (async () => {
-      try {
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } catch {
-      }
+    // ── Timestamp guard ────────────────────────────────────────────────
+    // Only fire haptic + vibration + local push if this booking was CREATED
+    // after the driver went online. Pre-existing bookings still appear in
+    // the list (this card still renders) but produce no sound/notification.
+    const driverOnlineAt = socketService.getDriverOnlineAt();
+    const bookingCreatedMs = request.createdAt ? new Date(request.createdAt).getTime() : Date.now();
+    const isNewBooking = driverOnlineAt === 0 || bookingCreatedMs > driverOnlineAt;
 
-      try {
-        Vibration.vibrate(120);
-      } catch {
-      }
-
-      try {
-        const perm = await Notifications.getPermissionsAsync();
-        if (perm.granted || perm.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL) {
-          await Notifications.scheduleNotificationAsync({
-            content: {
-              title: 'New booking request',
-              body: request.pickup?.address ? `Pickup: ${request.pickup.address}` : 'Open the app to accept/reject',
-              sound: 'default',
-            },
-            trigger: null,
-          });
+    if (isNewBooking) {
+      (async () => {
+        try {
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } catch {
         }
-      } catch {
-      }
-    })();
+
+        try {
+          Vibration.vibrate(120);
+        } catch {
+        }
+
+        try {
+          const perm = await Notifications.getPermissionsAsync();
+          if (perm.granted || perm.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL) {
+            await Notifications.scheduleNotificationAsync({
+              content: {
+                title: 'New booking request',
+                body: request.pickup?.address ? `Pickup: ${request.pickup.address}` : 'Open the app to accept/reject',
+                sound: 'default',
+              },
+              trigger: null,
+            });
+          }
+        } catch {
+        }
+      })();
+    }
 
     return () => {
       if (tickingRef.current) {
@@ -177,8 +188,8 @@ const BookingRequestCard = ({
       onPress={
         onPress
           ? () => {
-              onPress(request.id);
-            }
+            onPress(request.id);
+          }
           : undefined
       }
     >

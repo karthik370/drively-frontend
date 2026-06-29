@@ -18,6 +18,7 @@ import ErrorBoundary from './src/components/common/ErrorBoundary';
 import { MSG91_TOKEN_AUTH, MSG91_WIDGET_ID } from './src/constants/config';
 import { OTPWidget } from '@msg91comm/sendotp-react-native';
 import * as Notifications from 'expo-notifications';
+import './src/services/locationService';
 
 SplashScreen.preventAutoHideAsync();
 
