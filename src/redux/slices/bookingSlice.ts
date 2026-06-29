@@ -85,7 +85,18 @@ const bookingSlice = createSlice({
     addBookingRequest: (state, action: PayloadAction<any>) => {
       const bookingId = String(action.payload?.bookingId ?? action.payload?.id ?? '');
       if (!bookingId) return;
-      if (state.bookingRequests.some((r) => r.id === bookingId)) return;
+
+      const existing = state.bookingRequests.find((r) => r.id === bookingId);
+      if (existing) {
+        // Booking already in list (added by socket). Merge/update fields that
+        // may be missing or stale — primarily fare, which the poll has as a DB value.
+        const newFare = typeof action.payload?.fare === 'number' ? action.payload.fare : undefined;
+        if (typeof newFare === 'number' && newFare > 0 && !existing.fare) {
+          existing.fare = newFare;
+        }
+        return; // don't re-add, don't re-trigger haptic in BookingRequestCard
+      }
+
       state.bookingRequests.unshift({
         id: bookingId,
         pickup: action.payload?.pickup,

@@ -45,11 +45,32 @@ class SocketService {
   // Used to suppress notifications for bookings that already existed
   // before the driver came online (they still appear in the list).
   private driverOnlineAt = 0;
+  // Booking IDs that this driver has declined OR cancelled this session.
+  // The poll (getAvailableBookings) uses this to prevent re-showing
+  // a booking after reject/cancel, even before the backend Redis cache expires.
+  // Also works cross-screen (TrackingScreen cancel → DriverOnlineScreen poll).
+  private skippedBookingIds = new Set<string>();
 
   private distanceApproxMeters(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) {
     const dLat = a.latitude - b.latitude;
     const dLng = a.longitude - b.longitude;
     return Math.sqrt(dLat * dLat + dLng * dLng) * 111_000;
+  }
+
+  // ── Skipped Booking API (decline + cancel) ─────────────────────────────────
+  // Call addSkippedBooking when driver declines or cancels a booking.
+  // Call hasSkippedBooking in the poll filter.
+  // Call clearSkippedBookings when driver goes offline.
+  addSkippedBooking(bookingId: string): void {
+    if (bookingId) this.skippedBookingIds.add(bookingId);
+  }
+
+  hasSkippedBooking(bookingId: string): boolean {
+    return this.skippedBookingIds.has(bookingId);
+  }
+
+  clearSkippedBookings(): void {
+    this.skippedBookingIds.clear();
   }
 
   private async refreshAccessToken(): Promise<string> {

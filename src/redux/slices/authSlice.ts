@@ -213,20 +213,22 @@ export const logout = createAsyncThunk(
   async (_, { getState, rejectWithValue }) => {
     try {
       const state = getState() as { auth: AuthState };
-      if (state.auth.refreshToken) {
-        await authService.logout(state.auth.refreshToken);
-      }
-    } catch (error: any) {
-      // Ignore server-side logout failure to guarantee local logout always succeeds
-    } finally {
+      await authService.logout(state.auth.refreshToken!);
       await SecureStore.deleteItemAsync('accessToken');
       await SecureStore.deleteItemAsync('refreshToken');
       await SecureStore.deleteItemAsync(ROLE_OVERRIDE_KEY);
+      // Clear driver online persistence so the next user starts offline
       await SecureStore.deleteItemAsync('driver_was_online');
       // Clear all cached API responses so next user starts fresh
       apiCache.clear();
+      return null;
+    } catch (error: any) {
+      // Still clear cache even if server logout fails
+      apiCache.clear();
+      // Best-effort: clear online flag even on error
+      try { await SecureStore.deleteItemAsync('driver_was_online'); } catch {}
+      return rejectWithValue(error.response?.data?.message || 'Logout failed');
     }
-    return null;
   }
 );
 

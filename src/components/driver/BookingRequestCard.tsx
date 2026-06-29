@@ -205,7 +205,7 @@ const BookingRequestCard = ({
           <View style={styles.activeWrap}>
             <Text style={styles.activeLabel}>Active</Text>
             <Text style={styles.fareText}>
-              ₹{request.fare ? Math.round(request.fare) : '—'}
+              {typeof request.fare === 'number' ? `₹${Math.round(request.fare)}` : '—'}
             </Text>
           </View>
         </View>

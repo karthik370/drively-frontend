@@ -37,6 +37,10 @@ const DriverOnlineScreen = ({ navigation }: any) => {
   const acceptingRef = useRef<string | null>(null);
   const pollInFlightRef = useRef<boolean>(false);
   const bookingRequestsRef = useRef<BookingRequest[]>([]);
+  // Prevents the auto-restore from firing more than once per session
+  const hasRestoredRef = useRef<boolean>(false);
+  // Note: booking skip tracking (decline + cancel) lives in socketService.skippedBookingIds
+  // so it persists across screen navigations (TrackingScreen cancel → DriverOnlineScreen poll).
 
   const [hasSubscription, setHasSubscription] = useState<boolean>(true); // assume true until checked
   const [subLoading, setSubLoading] = useState<boolean>(true);
@@ -69,7 +73,43 @@ const DriverOnlineScreen = ({ navigation }: any) => {
     void fetchSubscription();
   }, [fetchSubscription]);
 
-  const hasRestoredRef = useRef<boolean>(false);
+  // ── Auto-restore online status after app was killed ───────────────────────────
+  // When the OS kills the app (force-close / memory pressure), Redux resets and
+  // isOnline becomes false. On the next launch, this effect reads the persisted
+  // SecureStore flag and silently calls setOnlineState(true) so the driver is
+  // back online without needing to toggle the switch again.
+  // Guards:
+  //   • subscription must be loaded + active (subLoading=false && hasSubscription)
+  //   • not already online (no-op if Redux already has isOnline=true)
+  //   • hasRestoredRef prevents this from running more than once per session
+  useEffect(() => {
+    if (subLoading || isOnline || hasRestoredRef.current) return;
+    if (!hasSubscription) return;
+
+    hasRestoredRef.current = true; // mark attempted so this never fires twice
+
+    void (async () => {
+      try {
+        const wasOnline = await SecureStore.getItemAsync('driver_was_online');
+        if (wasOnline !== '1') return;
+
+        // Confirm location permission before restoring — might have been revoked
+        const perm = await Location.getForegroundPermissionsAsync();
+        if (perm.status !== 'granted') {
+          // Can't go online without location — clear stale flag
+          await SecureStore.deleteItemAsync('driver_was_online');
+          return;
+        }
+
+        // Mark permission as confirmed so the disclosure modal is skipped
+        permissionGrantedRef.current = true;
+        await setOnlineState(true);
+      } catch {
+        // Silently ignore — driver stays offline if restore fails
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subLoading, hasSubscription, isOnline]);
 
   const setOnlineState = useCallback(
     async (nextOnline: boolean) => {
@@ -80,12 +120,11 @@ const DriverOnlineScreen = ({ navigation }: any) => {
       try {
         if (nextOnline) {
           await goOnline();
-          try {
-            await SecureStore.setItemAsync('driver_was_online', '1');
-          } catch {}
+          // Persist online status to SecureStore so we can auto-restore if the app is killed.
+          // The background task and AppState handler handle socket reconnection for
+          // normal backgrounding — this covers the force-close / OS-kill scenario.
+          await SecureStore.setItemAsync('driver_was_online', '1');
           // Issue 3: Start background tracking so driver stays online when app is backgrounded.
-          // Background task (locationService) will keep emitting driver:location-update
-          // and the socket task handler maintains isOnline=true in DB.
           try {
             await locationService.startBackgroundTracking();
           } catch {
@@ -93,9 +132,8 @@ const DriverOnlineScreen = ({ navigation }: any) => {
           }
         } else {
           await goOffline();
-          try {
-            await SecureStore.deleteItemAsync('driver_was_online');
-          } catch {}
+          // Clear persistence: driver manually went offline — do NOT restore on next launch
+          await SecureStore.deleteItemAsync('driver_was_online');
           // Stop background tracking when driver manually goes offline
           try {
             await locationService.stopBackgroundTracking();
@@ -104,11 +142,9 @@ const DriverOnlineScreen = ({ navigation }: any) => {
       } catch (e: any) {
         // Revert on failure
         dispatch(setDriverOnline(!nextOnline));
-        try {
-          await SecureStore.deleteItemAsync('driver_was_online');
-        } catch {}
-        // Also stop background tracking if we failed to go online
+        // If going online failed, clear the persisted flag so we don't auto-restore into a broken state
         if (nextOnline) {
+          try { await SecureStore.deleteItemAsync('driver_was_online'); } catch {}
           try { await locationService.stopBackgroundTracking(); } catch { }
         }
         if (e?.message?.includes('Active subscription required') || e?.response?.status === 403) {
@@ -123,25 +159,6 @@ const DriverOnlineScreen = ({ navigation }: any) => {
     },
     [dispatch]
   );
-
-  // Auto-restore effect: runs once subscription check completes
-  useEffect(() => {
-    if (subLoading) return;
-    if (!hasSubscription || isOnline || hasRestoredRef.current) return;
-
-    hasRestoredRef.current = true;
-
-    void (async () => {
-      try {
-        const val = await SecureStore.getItemAsync('driver_was_online');
-        if (val === '1') {
-          // If restoring from background/killed state, assume permission is granted
-          permissionGrantedRef.current = true;
-          await setOnlineState(true);
-        }
-      } catch {}
-    })();
-  }, [subLoading, hasSubscription, isOnline, setOnlineState]);
 
   const handleGoOnlineWithDisclosure = async () => {
     try {
@@ -188,6 +205,8 @@ const DriverOnlineScreen = ({ navigation }: any) => {
   useEffect(() => {
     if (!isOnline) {
       dispatch(clearBookingRequests());
+      // Clear the cross-screen skip list so next online session starts fresh
+      socketService.clearSkippedBookings();
     }
   }, [dispatch, isOnline]);
 
@@ -401,6 +420,8 @@ const DriverOnlineScreen = ({ navigation }: any) => {
         for (const it of Array.isArray(items) ? items : []) {
           const bookingId = String((it as any)?.bookingId ?? (it as any)?.id ?? '');
           if (!bookingId) continue;
+          // Skip bookings the driver declined or cancelled this session
+          if (socketService.hasSkippedBooking(bookingId)) continue;
           dispatch(
             addBookingRequest({
               bookingId,
@@ -415,6 +436,7 @@ const DriverOnlineScreen = ({ navigation }: any) => {
               outstationTripType: (it as any)?.outstationTripType,
               requestedHours: (it as any)?.requestedHours,
               scheduledTime: typeof (it as any)?.scheduledTime === 'string' ? (it as any).scheduledTime : undefined,
+              createdAt: typeof (it as any)?.createdAt === 'string' ? (it as any).createdAt : undefined,
             })
           );
         }
@@ -589,6 +611,8 @@ const DriverOnlineScreen = ({ navigation }: any) => {
 
   const handleReject = (id: string) => {
     try {
+      // Track in socketService so it persists if driver navigates between screens
+      socketService.addSkippedBooking(id);
       socketService.emit('booking:reject', { bookingId: id });
       dispatch(removeBookingRequest(id));
     } catch {

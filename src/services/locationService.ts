@@ -46,10 +46,11 @@ if (TaskManager?.defineTask) {
         })
       );
 
-      const wasDisconnected = !socketService.isConnected();
+      let socketWasReconnected = false;
       try {
-        if (wasDisconnected) {
+        if (!socketService.isConnected()) {
           await socketService.connect();
+          socketWasReconnected = true;
         }
       } catch {
       }
@@ -59,6 +60,13 @@ if (TaskManager?.defineTask) {
       const booking = state?.booking?.currentBooking;
       const isDriverOnline = Boolean(state?.driver?.isOnline);
 
+      // Re-announce driver:online after reconnecting the socket so the backend marks
+      // the driver available again. A location-update alone doesn't restore online
+      // status if the backend already timed out the previous socket connection.
+      if (socketWasReconnected && isDriverOnline) {
+        socketService.setDriverOnline(location.coords.latitude, location.coords.longitude);
+      }
+
       if (!user) {
         return;
       }
@@ -67,11 +75,6 @@ if (TaskManager?.defineTask) {
       const isDriver = userType === 'DRIVER' || userType === 'BOTH';
 
       if (isDriver && isDriverOnline) {
-        if (wasDisconnected) {
-          try {
-            socketService.setDriverOnline(location.coords.latitude, location.coords.longitude);
-          } catch {}
-        }
         socketService.emit('driver:location-update', {
           latitude: location.coords.latitude,
           longitude: location.coords.longitude,
@@ -89,7 +92,9 @@ class LocationService {
   private isTracking: boolean = false;
 
   private hasTaskManager(): boolean {
-    return Boolean(TaskManager?.defineTask && TaskManager?.isTaskDefinedAsync);
+    // isTaskDefined is sync in expo-task-manager v14+.
+    // isTaskDefinedAsync does NOT exist — using it caused the console error.
+    return Boolean(TaskManager?.defineTask && TaskManager?.isTaskDefined);
   }
 
   async requestPermissions(): Promise<boolean> {
@@ -214,7 +219,8 @@ class LocationService {
         return false;
       }
 
-      const isTaskDefined = await TaskManager.isTaskDefinedAsync(LOCATION_TASK_NAME);
+      // isTaskDefined is synchronous — no await needed (and isTaskDefinedAsync doesn't exist)
+      const isTaskDefined = TaskManager.isTaskDefined(LOCATION_TASK_NAME);
       if (!isTaskDefined) {
         if (__DEV__) {
           console.error('Background location task is not defined; background tracking disabled');
@@ -259,7 +265,8 @@ class LocationService {
         return;
       }
 
-      const isTaskDefined = await TaskManager.isTaskDefinedAsync(LOCATION_TASK_NAME);
+      // isTaskDefined is synchronous in expo-task-manager v14
+      const isTaskDefined = TaskManager.isTaskDefined(LOCATION_TASK_NAME);
       if (!isTaskDefined) {
         this.isTracking = false;
         return;
@@ -270,8 +277,11 @@ class LocationService {
         await Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME);
       }
     } catch (err) {
+      // "Task not found" is expected when stop is called without a prior start
+      // (e.g., driver went offline without going online, or OS already stopped the task).
+      // Use warn instead of error to avoid red noise in the dev console.
       if (__DEV__) {
-        console.error('Error stopping background tracking:', err);
+        console.warn('stopBackgroundTracking (non-fatal):', err);
       }
     } finally {
       this.isTracking = false;

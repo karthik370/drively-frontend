@@ -881,18 +881,9 @@ export const rejectBooking = async (bookingId: string, _driverId: string, reason
   }
 };
 
-export const updateBookingStatus = async (
-  bookingId: string,
-  newStatus: string,
-  latitude?: number,
-  longitude?: number
-): Promise<any> => {
+export const updateBookingStatus = async (bookingId: string, newStatus: string): Promise<any> => {
   try {
-    const res = await api.patch<ApiResponse<any>>(`/bookings/${bookingId}/status`, {
-      status: newStatus,
-      latitude,
-      longitude,
-    });
+    const res = await api.patch<ApiResponse<any>>(`/bookings/${bookingId}/status`, { status: newStatus });
     return unwrap(res);
   } catch (error) {
     return handleAxiosError(error);

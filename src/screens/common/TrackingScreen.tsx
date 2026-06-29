@@ -879,20 +879,30 @@ const TrackingScreen = ({ navigation, route }: any) => {
     if (!bookingId) return;
     if (statusUpdating) return; // Prevent double-tap
 
-    const driverLoc = currentLocation ?? driverLocation;
-
+    // ── Proximity gate: driver must be within 200m of pickup to mark ARRIVED ──
     if (nextStatus === BookingStatus.ARRIVED) {
-      if (!driverLoc) {
-        showAlert('Arrived', 'Unable to verify your location. Please ensure location services are enabled.');
-        return;
-      }
-      if (pickupLocation) {
-        const dist = distanceApproxMeters(driverLoc, pickupLocation);
-        if (dist > 500) {
-          showAlert('Arrived', 'please reach the pickup location first !!');
-          return;
+      const driverPos = currentLocation;
+      const pickupPos = pickupLocation;
+
+      if (driverPos && pickupPos &&
+          Number.isFinite(driverPos.latitude) && Number.isFinite(driverPos.longitude) &&
+          Number.isFinite(pickupPos.latitude) && Number.isFinite(pickupPos.longitude)) {
+
+        const distMeters = distanceApproxMeters(
+          { latitude: driverPos.latitude, longitude: driverPos.longitude },
+          { latitude: pickupPos.latitude, longitude: pickupPos.longitude }
+        );
+
+        if (distMeters > 200) {
+          showAlert(
+            '📍 Not at pickup yet',
+            `You are ${Math.round(distMeters)}m away from the pickup location.\n\nPlease reach within 200 meters of the customer's pickup point first.`,
+            [{ text: 'OK' }]
+          );
+          return; // Block the status update
         }
       }
+      // If location data is unavailable (GPS off / loading), allow through without blocking.
     }
 
     if (nextStatus === BookingStatus.COMPLETED) {
@@ -905,7 +915,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
             void (async () => {
               safeSetStatusUpdating(true);
               try {
-                await updateBookingStatusApi(bookingId, nextStatus, driverLoc?.latitude, driverLoc?.longitude);
+                await updateBookingStatusApi(bookingId, nextStatus);
                 dispatch(updateBookingStatus({ id: bookingId, status: nextStatus }));
               } catch (e: any) {
                 showAlert('Update status', e?.message || 'Failed to update booking status');
@@ -920,7 +930,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
     }
     safeSetStatusUpdating(true);
     try {
-      await updateBookingStatusApi(bookingId, nextStatus, driverLoc?.latitude, driverLoc?.longitude);
+      await updateBookingStatusApi(bookingId, nextStatus);
       dispatch(updateBookingStatus({ id: bookingId, status: nextStatus }));
     } catch (e: any) {
       showAlert('Update status', e?.message || 'Failed to update booking status');
@@ -2594,6 +2604,9 @@ const TrackingScreen = ({ navigation, route }: any) => {
                       isCancellingRef.current = true; // Prevent 'searching' flash
                       const bId = booking.id;
                       await cancelBooking(bId, 'Cancelled by driver', 'DRIVER');
+                      // Mark this booking as skipped so DriverOnlineScreen's poll won't
+                      // re-add it when the driver returns. Booking goes to other drivers.
+                      socketService.addSkippedBooking(bId);
                       // Leave the booking socket room so we don't get stale events
                       try { socketService.emit('booking:leave', bId); } catch {}
                       dispatch(clearCurrentBooking());
