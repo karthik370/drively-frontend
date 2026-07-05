@@ -713,6 +713,23 @@ export const submitKycSelfie = async (base64: string, mimeType: string = 'image/
   }
 };
 
+export type KycDLPhotoResponse = {
+  faceExtracted: boolean;
+  message: string;
+  nextStep: string;
+};
+
+// Step 3: Upload physical DL card front photo → Didit OCR extracts face for face match
+export const submitKycDLPhoto = async (base64: string, mimeType: string = 'image/jpeg'): Promise<KycDLPhotoResponse> => {
+  try {
+    const res = await api.post<ApiResponse<KycDLPhotoResponse>>('/kyc/dl-photo', { base64, mimeType });
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+
 // ── DigiLocker Verification ──────────────────────────────────────────────
 
 // ── Aadhaar Direct Verification (Didit — replaces DigiLocker) ───────────────

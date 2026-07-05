@@ -24,6 +24,7 @@ import {
   verifyAadhaarDirect,
   submitKycFallback,
   submitKycSelfie,
+  submitKycDLPhoto,
   KycStatusResponse,
   createOnboardingSupportTicket,
 } from '../../services/api';
@@ -32,15 +33,20 @@ import {
 const STEPS = [
   { key: 'aadhaar', label: 'Aadhaar', icon: 'shield-lock' },
   { key: 'documents', label: 'PAN & DL', icon: 'file-document-edit' },
-  { key: 'selfie', label: 'Selfie Match', icon: 'face-recognition' },
+  { key: 'dl-photo', label: 'DL Photo', icon: 'card-account-details' },
+  { key: 'selfie', label: 'Selfie', icon: 'face-recognition' },
 ] as const;
 
-type StepKey = 'aadhaar' | 'documents' | 'selfie';
+type StepKey = 'aadhaar' | 'documents' | 'dl-photo' | 'selfie';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 const getActiveStep = (kyc: KycStatusResponse | null): StepKey => {
-  if (!kyc || kyc.status === 'NOT_STARTED' || kyc.status === 'AADHAAR_OTP_PENDING' || kyc.status === 'DIGILOCKER_PENDING') return 'aadhaar';
-  if (kyc.status === 'FALLBACK_PENDING' || kyc.status === 'DIGILOCKER_COMPLETED') return 'documents';
+  if (!kyc || kyc.status === 'NOT_STARTED') return 'aadhaar';
+  if (!kyc.aadhaarVerified) return 'aadhaar';
+  if (!kyc.panVerified || !kyc.dlVerified) return 'documents';
+  // PAN+DL numbers verified but face match not yet pending → DL photo step
+  if (kyc.status === 'FALLBACK_PENDING') return 'dl-photo';
+  // Face match pending/failed → selfie step
   if (kyc.status === 'FACE_MATCH_PENDING') return 'selfie';
   if (kyc.status === 'FAILED') {
     if (!kyc.aadhaarVerified) return 'aadhaar';
@@ -85,6 +91,7 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
   const [panNumber, setPanNumber] = useState('');
   const [dlNumber, setDlNumber] = useState('');
   const [dobInput, setDobInput] = useState('');
+  const [dlPhotoUri, setDlPhotoUri] = useState<string | null>(null);
   const [selfieUri, setSelfieUri] = useState<string | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -184,7 +191,78 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
     }
   }, [panNumber, dlNumber, dobInput, dispatch]);
 
-  // ── Step 3: Selfie ──────────────────────────────────────────────────────
+  // ── Step 3: DL Photo — capture front of physical DL card ────────────────
+  const handleCaptureDLPhoto = useCallback(async () => {
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        showAlert('Permission Required', 'Camera permission is needed to photograph your DL.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'] as any,
+        allowsEditing: true,
+        aspect: [16, 10],  // DL card landscape ratio
+        quality: 0.7,
+        base64: false,
+        cameraType: ImagePicker.CameraType.back, // back camera for document
+        exif: false,
+      });
+      if (result.canceled) return;
+      const asset = result.assets?.[0];
+      if (asset?.uri) setDlPhotoUri(asset.uri);
+    } catch (e: any) {
+      showAlert('Error', e?.message || 'Failed to open camera.');
+    }
+  }, []);
+
+  const handlePickDLPhoto = useCallback(async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'] as any,
+        allowsEditing: true,
+        aspect: [16, 10],
+        quality: 0.7,
+      });
+      if (result.canceled) return;
+      const asset = result.assets?.[0];
+      if (asset?.uri) setDlPhotoUri(asset.uri);
+    } catch (e: any) {
+      showAlert('Error', e?.message || 'Failed to open gallery.');
+    }
+  }, []);
+
+  const handleSubmitDLPhoto = useCallback(async () => {
+    if (!dlPhotoUri) {
+      showAlert('Missing Photo', 'Please take a photo of your DL card front first.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const ImageManipulator = require('expo-image-manipulator');
+      const compressed = await ImageManipulator.manipulateAsync(
+        dlPhotoUri,
+        [{ resize: { width: 1200 } }],  // Higher res for OCR accuracy
+        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+      );
+      const FileSystem = require('expo-file-system/legacy');
+      const base64 = await FileSystem.readAsStringAsync(compressed.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      const result = await submitKycDLPhoto(base64, 'image/jpeg');
+      dispatch(setKycStatus({ ...kyc!, status: 'FACE_MATCH_PENDING' }));
+      showAlert(
+        result.faceExtracted ? 'DL Verified ✅' : 'DL Processed',
+        result.message
+      );
+    } catch (e: any) {
+      showAlert('Error', e?.message || 'Failed to process DL photo. Please retake.');
+    } finally {
+      setLoading(false);
+    }
+  }, [dlPhotoUri, kyc, dispatch]);
+
+  // ── Step 4: Selfie ──────────────────────────────────────────────────────
   const handleTakeSelfie = useCallback(async () => {
     try {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
@@ -576,6 +654,88 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
     );
   };
 
+  // ── Step 3: DL Card Photo UI ────────────────────────────────────────────
+  const renderDLPhotoStep = () => (
+    <View style={[glass.card, styles.stepCard]}>
+      <View style={styles.stepHeader}>
+        <View style={styles.stepIconWrap}>
+          <Icon name="card-account-details" size={28} color={G.accent} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.stepTitle}>DL Card Photo</Text>
+          <Text style={styles.stepSubtitle}>
+            Take a clear photo of the front of your Driving License card. We extract your photo for face match.
+          </Text>
+        </View>
+      </View>
+
+      <View style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 14, marginBottom: 16 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+          <Icon name="information" size={18} color={G.accent} style={{ marginRight: 8 }} />
+          <Text style={[styles.stepSubtitle, { fontWeight: '600', color: G.textPrimary }]}>Tips for best results</Text>
+        </View>
+        {[
+          { icon: 'lightning-bolt', text: 'Good lighting — no glare or shadows' },
+          { icon: 'card-text', text: 'All 4 corners of the card visible' },
+          { icon: 'camera', text: 'Use back camera, hold steady' },
+          { icon: 'blur-off', text: 'Card must be in focus and not blurry' },
+        ].map((tip) => (
+          <View key={tip.icon} style={styles.hintRow}>
+            <Icon name={tip.icon as any} size={14} color={G.accent} />
+            <Text style={styles.hintText}>{tip.text}</Text>
+          </View>
+        ))}
+      </View>
+
+      {dlPhotoUri ? (
+        <View style={styles.selfiePreviewWrap}>
+          <Image source={{ uri: dlPhotoUri }} style={[styles.selfiePreview, { aspectRatio: 16 / 10, borderRadius: 10 }]} />
+          <TouchableOpacity style={styles.retakeBtn} onPress={() => setDlPhotoUri(null)}>
+            <Icon name="camera-retake" size={16} color={G.textPrimary} />
+            <Text style={styles.retakeBtnText}>Retake</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+          <TouchableOpacity
+            style={[glass.buttonPrimary, styles.actionBtn, { flex: 1 }]}
+            activeOpacity={0.85}
+            onPress={handleCaptureDLPhoto}
+          >
+            <Icon name="camera" size={18} color="#0A0A0A" style={{ marginRight: 6 }} />
+            <Text style={styles.actionBtnText}>Camera</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[glass.buttonGhost, styles.actionBtn, { flex: 1 }]}
+            activeOpacity={0.85}
+            onPress={handlePickDLPhoto}
+          >
+            <Icon name="image" size={18} color={G.textPrimary} style={{ marginRight: 6 }} />
+            <Text style={styles.ghostBtnText}>Gallery</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {dlPhotoUri && (
+        <TouchableOpacity
+          style={[glass.buttonPrimary, styles.actionBtn, loading && styles.disabledBtn]}
+          activeOpacity={0.85}
+          disabled={loading}
+          onPress={handleSubmitDLPhoto}
+        >
+          {loading ? (
+            <ActivityIndicator color="#0A0A0A" />
+          ) : (
+            <>
+              <Icon name="check-decagram" size={18} color="#0A0A0A" style={{ marginRight: 8 }} />
+              <Text style={styles.actionBtnText}>Scan DL Photo</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
   // ── Selfie Step UI ──────────────────────────────────────────────────────
   const renderSelfieStep = () => (
     <View style={[glass.card, styles.stepCard]}>
@@ -697,14 +857,11 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
 
         {kyc?.status === 'COMPLETED' && renderCompletedState()}
 
-        {/* Step 1: Aadhaar OTP */}
-        {(activeStep === 'aadhaar' || (!kyc?.aadhaarVerified && kyc?.status !== 'COMPLETED')) && renderAadhaarStep()}
-
-        {/* Step 2: PAN & DL */}
-        {(activeStep === 'documents' || (kyc?.aadhaarVerified && (!kyc?.panVerified || !kyc?.dlVerified) && kyc?.status !== 'COMPLETED')) && renderFallbackStep()}
-
-        {/* Step 3: Selfie */}
-        {(activeStep === 'selfie' || (kyc?.aadhaarVerified && kyc?.panVerified && kyc?.dlVerified && !kyc?.faceMatchPassed && kyc?.status !== 'COMPLETED')) && renderSelfieStep()}
+        {/* Show ONLY the current active step — one at a time */}
+        {kyc?.status !== 'COMPLETED' && activeStep === 'aadhaar'   && renderAadhaarStep()}
+        {kyc?.status !== 'COMPLETED' && activeStep === 'documents' && renderFallbackStep()}
+        {kyc?.status !== 'COMPLETED' && activeStep === 'dl-photo'  && renderDLPhotoStep()}
+        {kyc?.status !== 'COMPLETED' && activeStep === 'selfie'    && renderSelfieStep()}
 
         {/* Loading state */}
         {kycLoading && !kyc && (
