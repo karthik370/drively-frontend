@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+﻿import React, { useEffect, useMemo, useRef } from 'react';
 import {
   Alert,
   Animated,
@@ -118,9 +118,9 @@ const DriverInfoCard = ({
     } catch {
     }
 
-    const link = `drively://booking/${bookingId}`;
+    const link = `drivegaadi://booking/${bookingId}`;
     await Share.share({
-      message: `Track my trip on Drively: ${link}`,
+      message: `Track my trip on DriveGaadi: ${link}`,
       url: link,
     });
   };

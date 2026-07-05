@@ -15,7 +15,8 @@
  * Lerp bearing (wraparound safe) → RAF lerp coordinate → trim polyline
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { Image } from 'react-native';
 import { Marker } from 'react-native-maps';
 
 // ─────────────────────────────────────────────────────────────────────
@@ -42,6 +43,13 @@ export { CAR_IMAGE };
 
 const ANIM_MS = 1000;
 const SNAP_RADIUS_M = 200;
+
+/**
+ * Fixed marker size in dp — guarantees the same visual size on ALL devices
+ * regardless of screen density (1x, 2x, 3x, tablet, emulator, Expo Go, dev client).
+ * Using the `image` prop renders at native PNG pixel size which varies by DPI.
+ */
+const MARKER_SIZE_DP = 40;
 
 // ─────────────────────────────────────────────────────────────────────
 // Geometry helpers
@@ -144,6 +152,10 @@ const DriverMarker = React.memo(
   }: DriverMarkerProps) => {
     const [displayCoord, setDisplayCoord] = useState<Coord>({ latitude, longitude });
     const [rotation, setRotation] = useState(0);
+    // tracksViewChanges=true initially so React Native captures the child image bitmap.
+    // Disabled after 600ms — image is static so it never needs re-capture.
+    // This gives consistent size on ALL devices without Android clipping issues.
+    const [tracksViewChanges, setTracksViewChanges] = useState(true);
 
     // ── Persistent refs ──
     const prevCoordRef   = useRef<Coord>({ latitude, longitude });
@@ -169,6 +181,12 @@ const DriverMarker = React.memo(
       },
       [],
     );
+
+    // Disable view-tracking after first capture (image is static — no re-render needed)
+    useEffect(() => {
+      const t = setTimeout(() => setTracksViewChanges(false), 600);
+      return () => clearTimeout(t);
+    }, []);
 
     // ── Main GPS update ──
     useEffect(() => {
@@ -254,11 +272,18 @@ const DriverMarker = React.memo(
         rotation={rotation}
         anchor={{ x: 0.5, y: 0.5 }}
         flat
-        tracksViewChanges={false}
-        image={CAR_IMAGE}
+        tracksViewChanges={tracksViewChanges}
         zIndex={10}
         onPress={onPress}
-      />
+      >
+        {/* Fixed dp size — same on all screens/densities/emulators */}
+        <Image
+          source={CAR_IMAGE}
+          style={{ width: MARKER_SIZE_DP, height: MARKER_SIZE_DP }}
+          resizeMode="contain"
+          fadeDuration={0}
+        />
+      </Marker>
     );
   },
 );

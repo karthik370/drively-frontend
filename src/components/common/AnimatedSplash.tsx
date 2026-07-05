@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+﻿import React, { useEffect, useRef } from 'react';
 import {
   Animated,
   Dimensions,
@@ -186,7 +186,7 @@ const AnimatedSplash: React.FC<AnimatedSplashProps> = ({ onFinish }) => {
           marginTop: 28,
         }}
       >
-        <Text style={styles.appName}>Drively</Text>
+        <Text style={styles.appName}>DriveGaadi</Text>
       </Animated.View>
 
       {/* Tagline */}

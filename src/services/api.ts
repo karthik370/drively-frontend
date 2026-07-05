@@ -715,22 +715,27 @@ export const submitKycSelfie = async (base64: string, mimeType: string = 'image/
 
 // ── DigiLocker Verification ──────────────────────────────────────────────
 
-export const initiateDigiLocker = async (): Promise<DigiLockerInitiateResponse> => {
+// ── Aadhaar Direct Verification (Didit — replaces DigiLocker) ───────────────
+// Driver types their 12-digit Aadhaar number, backend validates against UIDAI via Didit.
+// No WebView, no OTP, no redirect — instant result.
+export const verifyAadhaarDirect = async (aadhaarNumber: string): Promise<KycStatusResponse> => {
   try {
-    const res = await api.post<ApiResponse<DigiLockerInitiateResponse>>('/kyc/digilocker/initiate', {});
+    const res = await api.post<ApiResponse<KycStatusResponse>>('/kyc/aadhaar', {
+      aadhaarNumber: aadhaarNumber.replace(/\s/g, '').trim(),
+    });
     return unwrap(res);
   } catch (error) {
     return handleAxiosError(error);
   }
 };
 
+// DEPRECATED — kept only to avoid import errors, these now return 410 from backend
+export const initiateDigiLocker = async (): Promise<DigiLockerInitiateResponse> => {
+  throw new Error('DigiLocker is no longer supported. Please use Aadhaar direct verification.');
+};
+
 export const checkDigiLockerStatus = async (): Promise<KycStatusResponse> => {
-  try {
-    const res = await api.post<ApiResponse<KycStatusResponse>>('/kyc/digilocker/check', {});
-    return unwrap(res);
-  } catch (error) {
-    return handleAxiosError(error);
-  }
+  throw new Error('DigiLocker is no longer supported.');
 };
 
 export type GeocodeResponse = {

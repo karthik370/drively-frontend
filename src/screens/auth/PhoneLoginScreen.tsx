@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
@@ -241,11 +241,21 @@ const PhoneLoginScreen = ({ navigation }: any) => {
             </View>
             <TextInput
               style={styles.phoneInput}
-              placeholder="9876543210"
+              placeholder="Enter Your Phone Number"
+              placeholderTextColor={G.textMuted}
               keyboardType="phone-pad"
               value={phoneNumber}
-              onChangeText={setPhoneNumber}
-              maxLength={10}
+              onChangeText={(text) => {
+                const digits = text.replace(/\D/g, '');
+                if (digits.length > phoneNumber.length + 1) {
+                  // Paste detected (jumped by more than 1 digit at once)
+                  // Strip country code → take LAST 10 (handles +91XXXXXXXXXX)
+                  setPhoneNumber(digits.slice(-10));
+                } else {
+                  // Normal key-by-key typing → cap at FIRST 10 (first digit never drops)
+                  setPhoneNumber(digits.slice(0, 10));
+                }
+              }}
               autoFocus
             />
           </View>

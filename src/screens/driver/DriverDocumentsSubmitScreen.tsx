@@ -4,7 +4,6 @@ import {
   Animated,
   Easing,
   Image,
-  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,7 +12,6 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { WebView } from 'react-native-webview';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useAppDispatch, useAppSelector } from '../../redux/store';
@@ -23,8 +21,7 @@ import { showAlert } from '../../components/common/CustomAlert';
 import { G, glass } from '../../constants/glassStyles';
 import {
   initiateKyc,
-  initiateDigiLocker,
-  checkDigiLockerStatus,
+  verifyAadhaarDirect,
   submitKycFallback,
   submitKycSelfie,
   KycStatusResponse,
@@ -84,8 +81,7 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
   const kycLoading = useAppSelector((s) => s.driver.kycLoading);
 
   const [loading, setLoading] = useState(false);
-  const [digilockerUrl, setDigilockerUrl] = useState<string | null>(null);
-  const [showWebView, setShowWebView] = useState(false);
+  const [aadhaarNumber, setAadhaarNumber] = useState('');
   const [panNumber, setPanNumber] = useState('');
   const [dlNumber, setDlNumber] = useState('');
   const [dobInput, setDobInput] = useState('');
@@ -109,6 +105,25 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
     }
   }, [kyc?.aadhaarDob]);
 
+  // ── Step 1: Aadhaar Direct Verification (Didit — no WebView, no OTP) ─────────
+  const handleVerifyAadhaar = useCallback(async () => {
+    const cleaned = aadhaarNumber.replace(/\s/g, '');
+    if (cleaned.length !== 12 || !/^\d{12}$/.test(cleaned)) {
+      showAlert('Invalid Aadhaar', 'Please enter a valid 12-digit Aadhaar number.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const status = await verifyAadhaarDirect(cleaned);
+      dispatch(setKycStatus(status));
+      showAlert('Aadhaar Verified ✅', 'Your Aadhaar has been verified successfully!');
+    } catch (e: any) {
+      showAlert('Verification Failed', e?.message || 'Aadhaar could not be verified. Please check the number and try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [aadhaarNumber, dispatch]);
+
   // Cleanup polling on unmount
   useEffect(() => {
     return () => {
@@ -121,79 +136,6 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
 
   const activeStep = getActiveStep(kyc);
   const progress = getProgressPercent(kyc);
-
-  // ── Auto-poll: check DigiLocker completion while WebView is open ────────
-  const startPolling = useCallback(() => {
-    // Clear any existing polling
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-    }
-
-    pollingRef.current = setInterval(async () => {
-      try {
-        const status = await checkDigiLockerStatus();
-        if (status.aadhaarVerified) {
-          // Stop polling
-          if (pollingRef.current) {
-            clearInterval(pollingRef.current);
-            pollingRef.current = null;
-          }
-          // Close WebView and update state
-          setShowWebView(false);
-          setDigilockerUrl(null);
-          dispatch(setKycStatus(status));
-          showAlert('Success! ✅', 'Aadhaar verified via DigiLocker.');
-        }
-      } catch {
-        // Silently ignore polling errors — will retry on next interval
-      }
-    }, 5000); // Poll every 5 seconds
-  }, [dispatch]);
-
-  const stopPolling = useCallback(() => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-      pollingRef.current = null;
-    }
-  }, []);
-
-  // ── Step 1: DigiLocker Aadhaar Verification ─────────────────────────────
-  const handleStartDigiLocker = useCallback(async () => {
-    setLoading(true);
-    try {
-      const result = await initiateDigiLocker();
-      if (result.digilockerUrl) {
-        setDigilockerUrl(result.digilockerUrl);
-        setShowWebView(true);
-        // Start polling for completion
-        startPolling();
-      } else {
-        showAlert('Error', 'Failed to get DigiLocker URL. Please try again.');
-      }
-    } catch (e: any) {
-      showAlert('Error', e?.message || 'Failed to start DigiLocker verification.');
-    } finally {
-      setLoading(false);
-    }
-  }, [startPolling]);
-
-  const handleCheckDigiLocker = useCallback(async () => {
-    setLoading(true);
-    try {
-      const status = await checkDigiLockerStatus();
-      dispatch(setKycStatus(status));
-      if (status.aadhaarVerified) {
-        setShowWebView(false);
-        setDigilockerUrl(null);
-        stopPolling();
-        showAlert('Success! ✅', 'Aadhaar verified via DigiLocker.');
-      }
-    } catch (e: any) {
-      showAlert('Error', e?.message || 'Failed to check verification status.');
-    } finally {
-      setLoading(false);
-    }
-  }, [dispatch, stopPolling]);
 
   // ── Step 2: Fallback (PAN / DL) ─────────────────────────────────────────
   const handleSubmitFallback = useCallback(async () => {
@@ -408,7 +350,7 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
     </View>
   );
 
-  // ── Step 1: DigiLocker Aadhaar Step UI (only shown when WebView is NOT active) ────
+  // ── Step 1: Aadhaar Direct Input UI ──────────────────────────────────
   const renderAadhaarStep = () => {
     return (
       <View style={[glass.card, styles.stepCard]}>
@@ -419,7 +361,7 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
           <View style={{ flex: 1 }}>
             <Text style={styles.stepTitle}>Aadhaar Verification</Text>
             <Text style={styles.stepSubtitle}>
-              Verify your Aadhaar via DigiLocker. You will be redirected to the official DigiLocker portal.
+              Enter your 12-digit Aadhaar number. We’ll verify it instantly.
             </Text>
           </View>
         </View>
@@ -441,43 +383,56 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
         {!kyc?.aadhaarVerified && (
           <>
             <View style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 16, marginBottom: 16 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
                 <Icon name="information" size={20} color={G.accent} style={{ marginRight: 8 }} />
-                <Text style={[styles.stepSubtitle, { fontWeight: '600', color: G.textPrimary }]}>How it works</Text>
+                <Text style={[styles.stepSubtitle, { fontWeight: '600', color: G.textPrimary }]}>Instant verification</Text>
               </View>
-              <Text style={[styles.stepSubtitle, { marginBottom: 4 }]}>1. Tap "Open DigiLocker" below</Text>
-              <Text style={[styles.stepSubtitle, { marginBottom: 4 }]}>2. Log in with your Aadhaar-linked mobile</Text>
-              <Text style={[styles.stepSubtitle, { marginBottom: 4 }]}>3. Grant consent to share your Aadhaar details</Text>
-              <Text style={styles.stepSubtitle}>4. You'll be redirected back automatically</Text>
+              <Text style={[styles.stepSubtitle, { marginBottom: 4 }]}>• No OTP or redirect needed
+              </Text>
+              <Text style={[styles.stepSubtitle, { marginBottom: 4 }]}>• Your Aadhaar is validated against UIDAI database
+              </Text>
+              <Text style={styles.stepSubtitle}>• Data is encrypted and secure
+              </Text>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Aadhaar Number *</Text>
+              <TextInput
+                style={[glass.input, styles.inputField]}
+                placeholder="Enter 12-digit Aadhaar number"
+                placeholderTextColor={G.textMuted}
+                value={aadhaarNumber}
+                onChangeText={(t) => {
+                  // Only allow digits, max 12
+                  const digits = t.replace(/\D/g, '').slice(0, 12);
+                  setAadhaarNumber(digits);
+                }}
+                keyboardType="number-pad"
+                maxLength={12}
+                secureTextEntry={false}
+              />
+              {aadhaarNumber.length > 0 && aadhaarNumber.length < 12 && (
+                <Text style={[styles.aadhaarDobHint, { color: G.textMuted }]}>
+                  {12 - aadhaarNumber.length} digits remaining
+                </Text>
+              )}
             </View>
 
             <TouchableOpacity
-              style={[glass.buttonPrimary, styles.actionBtn, loading && styles.disabledBtn]}
+              style={[glass.buttonPrimary, styles.actionBtn, (loading || aadhaarNumber.length !== 12) && styles.disabledBtn]}
               activeOpacity={0.85}
-              disabled={loading}
-              onPress={handleStartDigiLocker}
+              disabled={loading || aadhaarNumber.length !== 12}
+              onPress={handleVerifyAadhaar}
             >
               {loading ? (
                 <ActivityIndicator color="#0A0A0A" />
               ) : (
                 <>
                   <Icon name="shield-check" size={18} color="#0A0A0A" style={{ marginRight: 8 }} />
-                  <Text style={styles.actionBtnText}>Open DigiLocker</Text>
+                  <Text style={styles.actionBtnText}>Verify Aadhaar</Text>
                 </>
               )}
             </TouchableOpacity>
-
-            {kyc?.status === 'DIGILOCKER_PENDING' && kyc?.digilockerUrl && (
-              <TouchableOpacity
-                style={[glass.buttonGhost, styles.actionBtn, { marginTop: 10 }]}
-                activeOpacity={0.85}
-                disabled={loading}
-                onPress={handleCheckDigiLocker}
-              >
-                <Icon name="refresh" size={18} color={G.textPrimary} style={{ marginRight: 8 }} />
-                <Text style={styles.ghostBtnText}>Check Verification Status</Text>
-              </TouchableOpacity>
-            )}
           </>
         )}
       </View>
@@ -717,72 +672,8 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
 
   // ── Render ──────────────────────────────────────────────────────────────
 
-  // Full-screen WebView mode — completely outside the ScrollView to fix scroll conflict
-  if (showWebView && digilockerUrl) {
-    return (
-      <SafeAreaView style={styles.webviewContainer} edges={['top', 'bottom']}>
-        {/* Thin header bar */}
-        <View style={styles.webviewHeader}>
-          <TouchableOpacity
-            style={styles.webviewBackBtn}
-            onPress={() => {
-              setShowWebView(false);
-              setDigilockerUrl(null);
-              stopPolling();
-            }}
-            activeOpacity={0.8}
-          >
-            <Icon name="arrow-left" size={20} color={G.accent} />
-          </TouchableOpacity>
-          <View style={styles.webviewTitleWrap}>
-            <Icon name="shield-lock" size={16} color={G.accent} style={{ marginRight: 6 }} />
-            <Text style={styles.webviewTitle}>DigiLocker Verification</Text>
-          </View>
-          {/* Check status button on the right */}
-          <TouchableOpacity
-            style={styles.webviewCheckBtn}
-            onPress={handleCheckDigiLocker}
-            activeOpacity={0.8}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator size="small" color={G.accent} />
-            ) : (
-              <Icon name="refresh" size={20} color={G.accent} />
-            )}
-          </TouchableOpacity>
-        </View>
+  // WebView removed — Aadhaar is now verified directly (no WebView needed)
 
-        {/* Status bar — auto-polling indicator */}
-        <View style={styles.webviewStatusBar}>
-          <PulsingDot color={G.accent} />
-          <Text style={styles.webviewStatusText}>
-            Waiting for DigiLocker… The app will update automatically when done.
-          </Text>
-        </View>
-
-        {/* Full-screen WebView — fills all remaining space */}
-        <WebView
-          source={{ uri: digilockerUrl }}
-          style={styles.fullWebView}
-          javaScriptEnabled
-          domStorageEnabled
-          thirdPartyCookiesEnabled
-          startInLoadingState
-          scalesPageToFit={false}
-          onShouldStartLoadWithRequest={() => true}
-          renderLoading={() => (
-            <View style={styles.webviewLoading}>
-              <ActivityIndicator size="large" color={G.accent} />
-              <Text style={[styles.stepSubtitle, { marginTop: 14, textAlign: 'center' }]}>
-                Loading DigiLocker…
-              </Text>
-            </View>
-          )}
-        />
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>

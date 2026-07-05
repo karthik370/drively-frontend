@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Image } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import {
@@ -2212,7 +2212,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
                   const pickAddr = (booking as any)?.pickupAddress || '';
                   const dAddr = (booking as any)?.dropAddress || '';
 
-                  let msg = `🚗 Track my Drively ride live!\n`;
+                  let msg = `🚗 Track my DriveGaadi ride live!\n`;
                   if (dName) msg += `\nDriver: ${dName}`;
                   if (pickAddr) msg += `\nFrom: ${pickAddr}`;
                   if (dAddr) msg += `\nTo: ${dAddr}`;

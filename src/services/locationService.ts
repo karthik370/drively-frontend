@@ -1,4 +1,4 @@
-import * as Location from 'expo-location';
+﻿import * as Location from 'expo-location';
 import { store } from '../redux/store';
 import { updateLocation } from '../redux/slices/locationSlice';
 import socketService from './socketService';
@@ -241,7 +241,7 @@ class LocationService {
         pausesUpdatesAutomatically: false,
         showsBackgroundLocationIndicator: true,
         foregroundService: {
-          notificationTitle: 'Drively - You\'re Online',
+          notificationTitle: 'DriveGaadi - You\'re Online',
           notificationBody: 'Location tracking is active while you\'re online',
           notificationColor: '#34C759',
         },

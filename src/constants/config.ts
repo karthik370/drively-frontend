@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+﻿import { Platform } from 'react-native';
 
 const DEFAULT_HOST = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
 
@@ -41,9 +41,9 @@ export const MSG91_WIDGET_ID = process.env.EXPO_PUBLIC_MSG91_WIDGET_ID || '';
 export const MSG91_TOKEN_AUTH = process.env.EXPO_PUBLIC_MSG91_TOKEN_AUTH || '';
 
 export const APP_CONFIG = {
-  name: 'Drively',
+  name: 'DriveGaadi',
   version: '1.0.0',
-  supportEmail: 'support.drively@gmail.com',
+  supportEmail: 'support.drivegaadi@gmail.com',
   supportPhone: '+916304767391',
 };
 
@@ -54,6 +54,6 @@ export const LOCATION_CONFIG = {
 };
 
 export const NOTIFICATION_CONFIG = {
-  channelId: 'drively-default',
-  channelName: 'Drively Notifications',
+  channelId: 'drivegaadi-default',
+  channelName: 'DriveGaadi Notifications',
 };

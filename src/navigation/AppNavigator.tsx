@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
 import { AppState, AppStateStatus, ActivityIndicator, View, StyleSheet, Linking } from 'react-native';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { navigationTheme } from '../theme';
@@ -31,7 +31,7 @@ const navigationRef = createNavigationContainerRef<any>();
 
 // Deep linking configuration for trip sharing
 const linking = {
-  prefixes: ['drively://', 'https://v2.kurnm.click'],
+  prefixes: ['drivegaadi://', 'https://v2.kurnm.click'],
   config: {
     screens: {
       Main: {

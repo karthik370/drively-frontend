@@ -162,7 +162,7 @@ const EmergencyContactsScreen = ({ navigation }: any) => {
                             const mapsLink = latitude !== 0
                                 ? `https://maps.google.com/?q=${latitude},${longitude}`
                                 : '';
-                            const msg = `🚨 SOS EMERGENCY!\n\nI need immediate help. Please call me now!\n${mapsLink ? `\nMy location: ${mapsLink}` : ''}${booking?.id ? `\n\nDrively Ride #${booking.id}` : ''}`;
+                            const msg = `\ud83d\udea8 SOS EMERGENCY!\n\nI need immediate help. Please call me now!\n${mapsLink ? `\nMy location: ${mapsLink}` : ''}${booking?.id ? `\n\nDriveGaadi Ride #${booking.id}` : ''}`;
 
                             const phones = contacts.map((c) => c.phone).join(',');
                             const smsUrl = Platform.OS === 'android'

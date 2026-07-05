@@ -1,5 +1,5 @@
-/**
- * Drively Premium Dark Mode Design System
+﻿/**
+ * DriveGaadi Premium Dark Mode Design System
  * ─────────────────────────────────────────
  * Luxury dark theme with gold accents.
  */
@@ -33,7 +33,7 @@ export const colors = {
     goldDark: '#8B6914',
     goldGlow: 'rgba(201, 168, 76, 0.5)',
     goldSubtle: 'rgba(201, 168, 76, 0.08)',
-    goldPress: 'rgba(201, 168, 76, 0.1)',
+    goldPress: 'rgba(30, 26, 17, 0.1)',
 
     // Status
     success: '#22C55E',

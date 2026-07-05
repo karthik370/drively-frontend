@@ -26,7 +26,7 @@ import {
   updateBookingStatus,
 } from '../redux/slices/bookingSlice';
 import { updateUser } from '../redux/slices/authSlice';
-import { setDriverVerification } from '../redux/slices/driverSlice';
+import { setDriverOnline, setDriverVerification } from '../redux/slices/driverSlice';
 import { addNotification } from '../redux/slices/notificationSlice';
 import { getBookingDetails } from './api';
 import { BookingStatus, PaymentMethod, VehicleType } from '../types';
@@ -153,6 +153,31 @@ class SocketService {
           bookingId,
         })
       );
+    });
+
+    // ── Auto-offline by server (inactivity after 3h with no bookings) ─────────────
+    this.socket.on('driver:force_offline', (data: any) => {
+      const msg: string = typeof data?.message === 'string'
+        ? data.message
+        : 'You have been automatically taken offline due to inactivity.';
+
+      // 1. Flip Redux state
+      store.dispatch(setDriverOnline(false));
+
+      // 2. Clear the SecureStore persistence flag so the app doesn't auto-restore online on next launch
+      void SecureStore.deleteItemAsync('driver_was_online').catch(() => {});
+
+      // 3. Show a clear alert so the driver knows why they went offline
+      Notifications.scheduleNotificationAsync({
+        content: {
+          title: '⏸️ Automatically taken offline',
+          body: msg,
+        },
+        trigger: null,
+      }).catch(() => {});
+
+      // 4. Log for debugging
+      console.info('[SocketService] driver:force_offline received:', data?.reason);
     });
 
     this.socket.on('booking:status', (data: any) => {

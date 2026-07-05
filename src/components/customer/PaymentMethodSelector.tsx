@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+﻿import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { G } from '../../constants/glassStyles';
@@ -14,7 +14,7 @@ interface Props {
 const METHODS: { key: PaymentOption; icon: string; label: string; desc: string; color: string }[] = [
     { key: 'CASH', icon: 'cash', label: 'Cash', desc: 'Pay the driver directly', color: '#10b981' },
     { key: 'UPI', icon: 'cellphone-nfc', label: 'UPI', desc: 'GPay, PhonePe, Paytm', color: '#7c3aed' },
-    { key: 'WALLET', icon: 'wallet', label: 'Wallet', desc: 'Pay from Drively wallet', color: G.accent },
+    { key: 'WALLET', icon: 'wallet', label: 'Wallet', desc: 'Pay from DriveGaadi wallet', color: G.accent },
     { key: 'CARD', icon: 'credit-card', label: 'Card', desc: 'Debit / Credit card', color: '#f59e0b' },
 ];
 

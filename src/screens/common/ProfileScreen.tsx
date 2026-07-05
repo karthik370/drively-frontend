@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Switch, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
@@ -10,6 +10,10 @@ import { setDriverOnline } from '../../redux/slices/driverSlice';
 import { ScaleIn, SlideUp, PressableScale } from '../../components/premium/AnimatedComponents';
 import { showAlert } from '../../components/common/CustomAlert';
 import { G } from '../../constants/glassStyles';
+
+let LinearGradient: any;
+try { LinearGradient = require('expo-linear-gradient').LinearGradient; }
+catch { LinearGradient = ({ style, children }: any) => <View style={[style, { backgroundColor: '#1C1600' }]}>{children}</View>; }
 
 const ProfileScreen = ({ navigation }: any) => {
   const dispatch = useAppDispatch();
@@ -117,32 +121,75 @@ const ProfileScreen = ({ navigation }: any) => {
     );
   };
 
+  // User-type label
+  const userTypeLabel = user?.userType === UserType.BOTH ? 'Driver & Customer'
+    : user?.userType === UserType.DRIVER ? 'Driver'
+    : 'Customer';
+  const userTypeBg   = user?.userType === UserType.DRIVER ? 'rgba(16,185,129,0.18)' : 'rgba(201,168,76,0.18)';
+  const userTypeColor= user?.userType === UserType.DRIVER ? '#10B981' : '#C9A84C';
+  const userTypeIcon = user?.userType === UserType.DRIVER ? 'steering' : 'account';
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <ScrollView>
         <ScaleIn delay={100}>
-          <View style={styles.header}>
-            <View style={styles.avatarContainer}>
-              {user?.profileImage ? (
-                <Image source={{ uri: String(user.profileImage) }} style={styles.avatarImage} />
-              ) : (
-                <Text style={styles.avatarText}>
-                  {user?.firstName?.charAt(0)}
-                  {user?.lastName?.charAt(0)}
-                </Text>
-              )}
+          {/* ── Premium profile card ── */}
+          <LinearGradient
+            colors={['#1C1600', '#0F0D00', '#0A0A0A']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.header}
+          >
+            {/* User-type badge — top right */}
+            <View style={[styles.userTypeBadge, { backgroundColor: userTypeBg }]}>
+              <Icon name={userTypeIcon as any} size={11} color={userTypeColor} />
+              <Text style={[styles.userTypeBadgeText, { color: userTypeColor }]}>{userTypeLabel}</Text>
             </View>
-            <Text style={styles.name}>{user?.firstName} {user?.lastName}</Text>
-            <Text style={styles.phone}>{user?.phoneNumber}</Text>
-            {user?.email && <Text style={styles.email}>{user.email}</Text>}
+
+            {/* Avatar with glow ring */}
+            <View style={styles.avatarGlowRing}>
+              <View style={styles.avatarContainer}>
+                {user?.profileImage ? (
+                  <Image source={{ uri: String(user.profileImage) }} style={styles.avatarImage} />
+                ) : (
+                  <Text style={styles.avatarText}>
+                    {user?.firstName?.charAt(0)}{user?.lastName?.charAt(0)}
+                  </Text>
+                )}
+              </View>
+            </View>
+
+            {/* Name */}
+            <View style={styles.nameContainer}>
+              <Text style={styles.name}>{user?.firstName} {user?.lastName}</Text>
+              <Icon name="check-decagram" size={18} color="#C9A84C" style={styles.verifiedIcon} />
+            </View>
+
+            {/* Info chips row */}
+            <View style={styles.infoChipsRow}>
+              <View style={styles.infoChip}>
+                <Icon name="phone" size={13} color="#C9A84C" />
+                <Text style={styles.infoChipText}>{user?.phoneNumber || '—'}</Text>
+              </View>
+              {user?.email ? (
+                <View style={styles.infoChip}>
+                  <Icon name="email-outline" size={13} color="#C9A84C" />
+                  <Text style={styles.infoChipText} numberOfLines={1}>{user.email}</Text>
+                </View>
+              ) : null}
+            </View>
+
+            {/* Rating pill (drivers only) */}
             {isDriver ? (
               <View style={styles.ratingContainer}>
-                <Icon name="star" size={16} color="#f59e0b" />
+                <Icon name="star" size={15} color="#f59e0b" />
                 <Text style={styles.rating}>{ratingNumber !== null ? ratingNumber.toFixed(1) : '0.0'}</Text>
-                <Text style={styles.ratingCount}>({totalRatingsNumber} ratings)</Text>
+                <View style={styles.ratingDivider} />
+                <Icon name="account-star" size={14} color="#9ca3af" />
+                <Text style={styles.ratingCount}>{totalRatingsNumber} ratings</Text>
               </View>
             ) : null}
-          </View>
+          </LinearGradient>
         </ScaleIn>
 
         {isDriver ? (
@@ -269,78 +316,158 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: G.bg,
   },
+
+  // ── Profile card ───────────────────────────────────────────
   header: {
-    backgroundColor: G.glass3,
-    paddingVertical: 28,
-    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
     alignItems: 'center',
     marginHorizontal: 16,
     marginTop: 12,
     borderRadius: 22,
     borderWidth: 1.5,
-    borderColor: G.borderAccent,
-    shadowColor: G.accent,
+    borderColor: 'rgba(201,168,76,0.28)',
+    shadowColor: '#C9A84C',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.2,
-    shadowRadius: 16,
+    shadowRadius: 15,
     elevation: 10,
+    overflow: 'hidden',
+  },
+
+  // User type badge (absolute top-right)
+  userTypeBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  userTypeBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+
+  // Avatar glow ring
+  avatarGlowRing: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+    backgroundColor: 'rgba(201,168,76,0.12)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(201,168,76,0.35)',
+    shadowColor: '#C9A84C',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 8,
   },
   avatarContainer: {
-    width: 86,
-    height: 86,
-    borderRadius: 43,
-    backgroundColor: G.accentSoft,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#1C1600',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 14,
     overflow: 'hidden',
-    borderWidth: 3,
-    borderColor: G.borderAccent,
+    borderWidth: 2,
+    borderColor: '#C9A84C',
   },
   avatarImage: {
-    width: 86,
-    height: 86,
+    width: 70,
+    height: 70,
   },
   avatarText: {
-    color: G.accent,
-    fontSize: 30,
+    color: '#C9A84C',
+    fontSize: 26,
     fontWeight: '800',
+    letterSpacing: 1,
+  },
+
+  // Name & info
+  nameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    marginBottom: 8,
   },
   name: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: G.textPrimary,
-    marginBottom: 4,
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+    textAlign: 'center',
   },
-  phone: {
-    fontSize: 14,
-    color: G.textSecondary,
-    marginBottom: 2,
+  verifiedIcon: {
+    alignSelf: 'center',
   },
-  email: {
-    fontSize: 14,
-    color: G.textSecondary,
+
+  // Info chips (phone, email)
+  infoChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    width: '100%',
+    marginBottom: 10,
   },
+  infoChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(201,168,76,0.08)',
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(201,168,76,0.15)',
+    maxWidth: '90%',
+  },
+  infoChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#E5C97A',
+    letterSpacing: 0.3,
+  },
+
+  // Rating pill
   ratingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 12,
-    gap: 4,
-    backgroundColor: G.warningSoft,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
+    gap: 5,
+    backgroundColor: 'rgba(245,158,11,0.12)',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(245,158,11,0.25)',
   },
   rating: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: G.textPrimary,
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#f59e0b',
+  },
+  ratingDivider: {
+    width: 1,
+    height: 12,
+    backgroundColor: 'rgba(245,158,11,0.3)',
+    marginHorizontal: 2,
   },
   ratingCount: {
-    fontSize: 13,
-    color: G.textSecondary,
+    fontSize: 12,
+    color: '#9ca3af',
+    fontWeight: '500',
   },
   section: {
     backgroundColor: G.glass2,

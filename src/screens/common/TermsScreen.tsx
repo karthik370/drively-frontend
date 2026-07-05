@@ -17,8 +17,8 @@ const TermsScreen = ({ navigation }: any) => {
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.card}>
-          <Text style={styles.title}>Drively Terms</Text>
-          <Text style={styles.text}>By using Drively, you agree to follow these basic terms.</Text>
+          <Text style={styles.title}>DriveGaadi Terms</Text>
+          <Text style={styles.text}>By using DriveGaadi, you agree to follow these basic terms.</Text>
         </View>
 
         <View style={styles.card}>

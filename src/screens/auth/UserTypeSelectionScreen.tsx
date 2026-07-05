@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
@@ -43,7 +43,7 @@ const UserTypeSelectionScreen = ({ route, navigation }: any) => {
       <View style={styles.content}>
         <View style={styles.titleContainer}>
           <Text style={styles.title}>
-            How would you like to use <Text style={styles.brandText}>Drively</Text>?
+            How would you like to use <Text style={styles.brandText}>DriveGaadi</Text>?
           </Text>
           <Text style={styles.subtitle}>
             Select one option to create your account

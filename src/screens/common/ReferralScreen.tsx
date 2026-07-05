@@ -49,8 +49,8 @@ const ReferralScreen = ({ navigation }: any) => {
     if (!referralCode) return;
     try {
       const msg = isDriver
-        ? `Join Drively as a driver! Use my referral code: ${referralCode} and earn ₹${referredReward} on your first ride. Download: https://play.google.com/store/apps/details?id=com.drively.driver`
-        : `Get ₹${referredReward} off your first Drively ride! Use code: ${referralCode}. Download: https://play.google.com/store/apps/details?id=com.drively.app`;
+        ? `Join DriveGaadi as a driver! Use my referral code: ${referralCode} and earn ₹${referredReward} on your first ride. Download: https://play.google.com/store/apps/details?id=com.drively.driver`
+        : `Get ₹${referredReward} off your first DriveGaadi ride! Use code: ${referralCode}. Download: https://play.google.com/store/apps/details?id=com.drively.app`;
       await Share.share({ message: msg });
     } catch { }
   };

@@ -97,7 +97,7 @@ const SOSButton = ({ bookingId, compact = false }: Props) => {
                 const mapsLink = latitude !== 0
                     ? `https://maps.google.com/?q=${latitude},${longitude}`
                     : '';
-                const msg = `🚨 SOS EMERGENCY from Drively!\n\nI need help immediately. Please call me now!\n${mapsLink ? `\nMy location: ${mapsLink}` : ''}${bookingId ? `\n\nDrively Ride Booking #${bookingId}` : ''}`;
+                const msg = `🚨 SOS EMERGENCY from DriveGaadi!\n\nI need help immediately. Please call me now!\n${mapsLink ? `\nMy location: ${mapsLink}` : ''}${bookingId ? `\n\nDriveGaadi Ride Booking #${bookingId}` : ``}`;
 
                 const phones = contacts.map((c: any) => c.phone).join(',');
                 const smsUrl = Platform.OS === 'android'

@@ -19,7 +19,7 @@ const SafetyScreen = ({ navigation }: any) => {
         <View style={styles.card}>
           <Text style={styles.title}>Drive safe. Earn more. Stay protected.</Text>
           <Text style={styles.text}>
-            Drively is built for professional drivers. Your safety and the customer's safety are the top priority.
+            DriveGaadi is built for professional drivers. Your safety and the customer's safety are the top priority.
           </Text>
         </View>
 

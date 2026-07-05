@@ -1,6 +1,6 @@
-{
+﻿{
   "expo": {
-    "name": "Drively",
+    "name": "DriveGaadi",
     "slug": "drivemate",
     "version": "1.0.4",
     "orientation": "portrait",
@@ -19,10 +19,10 @@
       "bundleIdentifier": "com.drively.app",
       "buildNumber": "1",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Drively needs your location to show nearby drivers and track your ride.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Drively needs your location to provide real-time tracking during rides.",
-        "NSCameraUsageDescription": "Drively needs camera access to capture documents and profile photos.",
-        "NSPhotoLibraryUsageDescription": "Drively needs photo library access to upload documents and profile photos."
+        "NSLocationWhenInUseUsageDescription": "DriveGaadi needs your location to show nearby drivers and track your ride.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "DriveGaadi needs your location to provide real-time tracking during rides.",
+        "NSCameraUsageDescription": "DriveGaadi needs camera access to capture documents and profile photos.",
+        "NSPhotoLibraryUsageDescription": "DriveGaadi needs photo library access to upload documents and profile photos."
       },
       "config": {
         "googleMapsApiKey": "USE_ENV_VAR_EXPO_PUBLIC_GOOGLE_MAPS_API_KEY"
@@ -63,9 +63,9 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Drively needs your location for real-time ride tracking.",
-          "locationAlwaysPermission": "Drively needs background location access to track active rides.",
-          "locationWhenInUsePermission": "Drively needs your location to show nearby drivers.",
+          "locationAlwaysAndWhenInUsePermission": "DriveGaadi needs your location for real-time ride tracking.",
+          "locationAlwaysPermission": "DriveGaadi needs background location access to track active rides.",
+          "locationWhenInUsePermission": "DriveGaadi needs your location to show nearby drivers.",
           "isAndroidBackgroundLocationEnabled": true
         }
       ],
@@ -79,8 +79,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Drively needs photo access to upload documents and profile photos.",
-          "cameraPermission": "Drively needs camera access to take document photos."
+          "photosPermission": "DriveGaadi needs photo access to upload documents and profile photos.",
+          "cameraPermission": "DriveGaadi needs camera access to take document photos."
         }
       ],
       "@react-native-community/datetimepicker",
@@ -91,7 +91,7 @@
         "projectId": "f83fb1ee-b304-4120-bb2d-6d950b6f569a"
       }
     },
-    "scheme": "drively",
+    "scheme": "drivegaadi",
     "owner": "govardhan30",
     "runtimeVersion": {
       "policy": "appVersion"

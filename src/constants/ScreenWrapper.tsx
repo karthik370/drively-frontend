@@ -1,5 +1,5 @@
-/**
- * ScreenWrapper — Universal safe area handler for all Drively screens.
+﻿/**
+ * ScreenWrapper — Universal safe area handler for all DriveGaadi screens.
  *
  * Usage:
  *   <ScreenWrapper>          — handles top + bottom (standard full screen)

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, Share, Linking, Animated } from 'react-native';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { G } from '../../constants/glassStyles';
@@ -83,7 +83,7 @@ const DriverArrivingCard = ({
         if (shareUrl) {
             try {
                 await Share.share({
-                    message: `Track my Drively ride: ${shareUrl}`,
+                    message: `Track my DriveGaadi ride: ${shareUrl}`,
                     url: shareUrl,
                 });
             } catch { }
