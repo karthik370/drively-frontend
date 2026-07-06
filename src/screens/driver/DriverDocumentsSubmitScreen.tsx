@@ -88,6 +88,9 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
 
   const [loading, setLoading] = useState(false);
   const [aadhaarNumber, setAadhaarNumber] = useState('');
+  const [fullName, setFullName] = useState('');         // required by Didit for Aadhaar
+  const [aadhaarPan, setAadhaarPan] = useState('');     // required by Didit alongside Aadhaar
+  const [aadhaarDobInput, setAadhaarDobInput] = useState(''); // required by Didit for Aadhaar
   const [panNumber, setPanNumber] = useState('');
   const [dlNumber, setDlNumber] = useState('');
   const [dobInput, setDobInput] = useState('');
@@ -112,24 +115,50 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
     }
   }, [kyc?.aadhaarDob]);
 
-  // ── Step 1: Aadhaar Direct Verification (Didit — no WebView, no OTP) ─────────
+  // ── Step 1: Aadhaar Verification (Didit — requires 4 fields) ──────────────
   const handleVerifyAadhaar = useCallback(async () => {
     const cleaned = aadhaarNumber.replace(/\s/g, '');
     if (cleaned.length !== 12 || !/^\d{12}$/.test(cleaned)) {
       showAlert('Invalid Aadhaar', 'Please enter a valid 12-digit Aadhaar number.');
       return;
     }
+    if (!fullName.trim()) {
+      showAlert('Name Required', 'Please enter your full name as shown on Aadhaar.');
+      return;
+    }
+    const cleanPan = aadhaarPan.trim().toUpperCase();
+    if (!/^[A-Z]{5}\d{4}[A-Z]$/.test(cleanPan)) {
+      showAlert('Invalid PAN', 'Please enter a valid PAN number (e.g. ABCDE1234F).');
+      return;
+    }
+    // Parse and validate DOB
+    let dobFormatted = '';
+    const dobTrimmed = aadhaarDobInput.trim();
+    const slashMatch = dobTrimmed.match(/^(\d{2})[/\-](\d{2})[/\-](\d{4})$/);
+    if (slashMatch) {
+      dobFormatted = `${slashMatch[3]}-${slashMatch[2]}-${slashMatch[1]}`;
+    } else if (/^\d{4}-\d{2}-\d{2}$/.test(dobTrimmed)) {
+      dobFormatted = dobTrimmed;
+    } else {
+      showAlert('Invalid Date', 'Please enter your date of birth as DD/MM/YYYY.');
+      return;
+    }
+    if (isNaN(new Date(dobFormatted).getTime())) {
+      showAlert('Invalid Date', 'Please enter a valid date of birth.');
+      return;
+    }
+
     setLoading(true);
     try {
-      const status = await verifyAadhaarDirect(cleaned);
+      const status = await verifyAadhaarDirect(cleaned, fullName.trim(), cleanPan, dobFormatted);
       dispatch(setKycStatus(status));
       showAlert('Aadhaar Verified ✅', 'Your Aadhaar has been verified successfully!');
     } catch (e: any) {
-      showAlert('Verification Failed', e?.message || 'Aadhaar could not be verified. Please check the number and try again.');
+      showAlert('Verification Failed', e?.message || 'Aadhaar could not be verified. Please check your details and try again.');
     } finally {
       setLoading(false);
     }
-  }, [aadhaarNumber, dispatch]);
+  }, [aadhaarNumber, fullName, aadhaarPan, aadhaarDobInput, dispatch]);
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -418,7 +447,7 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
     </View>
   );
 
-  // ── Progress Bar ────────────────────────────────────────────────────────
+  // ── Progress Bar ────────────────────────────────────────────────────────────────
   const renderProgressBar = () => (
     <View style={styles.progressContainer}>
       <View style={styles.progressTrack}>
@@ -430,6 +459,11 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
 
   // ── Step 1: Aadhaar Direct Input UI ──────────────────────────────────
   const renderAadhaarStep = () => {
+    const isFormReady = aadhaarNumber.length === 12 &&
+      fullName.trim().length > 2 &&
+      /^[A-Z]{5}\d{4}[A-Z]$/.test(aadhaarPan.trim().toUpperCase()) &&
+      aadhaarDobInput.trim().length >= 8;
+
     return (
       <View style={[glass.card, styles.stepCard]}>
         <View style={styles.stepHeader}>
@@ -439,7 +473,7 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
           <View style={{ flex: 1 }}>
             <Text style={styles.stepTitle}>Aadhaar Verification</Text>
             <Text style={styles.stepSubtitle}>
-              Enter your 12-digit Aadhaar number. We’ll verify it instantly.
+              Required for identity verification. All fields are cross-checked with UIDAI.
             </Text>
           </View>
         </View>
@@ -460,19 +494,26 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
 
         {!kyc?.aadhaarVerified && (
           <>
-            <View style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 16, marginBottom: 16 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-                <Icon name="information" size={20} color={G.accent} style={{ marginRight: 8 }} />
-                <Text style={[styles.stepSubtitle, { fontWeight: '600', color: G.textPrimary }]}>Instant verification</Text>
-              </View>
-              <Text style={[styles.stepSubtitle, { marginBottom: 4 }]}>• No OTP or redirect needed
-              </Text>
-              <Text style={[styles.stepSubtitle, { marginBottom: 4 }]}>• Your Aadhaar is validated against UIDAI database
-              </Text>
-              <Text style={styles.stepSubtitle}>• Data is encrypted and secure
+            <View style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 14, marginBottom: 16 }}>
+              <Text style={[styles.stepSubtitle, { color: G.textMuted, lineHeight: 20 }]}>
+                ℹ️  Didit requires your name, Aadhaar, PAN, and date of birth to verify your identity against UIDAI records. No OTP needed.
               </Text>
             </View>
 
+            {/* Full Name */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Full Name (as on Aadhaar) *</Text>
+              <TextInput
+                style={[glass.input, styles.inputField]}
+                placeholder="e.g. Govardhan Reddy"
+                placeholderTextColor={G.textMuted}
+                value={fullName}
+                onChangeText={setFullName}
+                autoCapitalize="words"
+              />
+            </View>
+
+            {/* Aadhaar Number */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Aadhaar Number *</Text>
               <TextInput
@@ -480,14 +521,9 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
                 placeholder="Enter 12-digit Aadhaar number"
                 placeholderTextColor={G.textMuted}
                 value={aadhaarNumber}
-                onChangeText={(t) => {
-                  // Only allow digits, max 12
-                  const digits = t.replace(/\D/g, '').slice(0, 12);
-                  setAadhaarNumber(digits);
-                }}
+                onChangeText={(t) => setAadhaarNumber(t.replace(/\D/g, '').slice(0, 12))}
                 keyboardType="number-pad"
                 maxLength={12}
-                secureTextEntry={false}
               />
               {aadhaarNumber.length > 0 && aadhaarNumber.length < 12 && (
                 <Text style={[styles.aadhaarDobHint, { color: G.textMuted }]}>
@@ -496,10 +532,37 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
               )}
             </View>
 
+            {/* PAN Number */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>PAN Number *</Text>
+              <TextInput
+                style={[glass.input, styles.inputField]}
+                placeholder="e.g. ABCDE1234F"
+                placeholderTextColor={G.textMuted}
+                value={aadhaarPan}
+                onChangeText={(t) => setAadhaarPan(t.toUpperCase())}
+                autoCapitalize="characters"
+                maxLength={10}
+              />
+            </View>
+
+            {/* Date of Birth */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Date of Birth *</Text>
+              <TextInput
+                style={[glass.input, styles.inputField]}
+                placeholder="DD/MM/YYYY"
+                placeholderTextColor={G.textMuted}
+                value={aadhaarDobInput}
+                onChangeText={setAadhaarDobInput}
+                keyboardType="numbers-and-punctuation"
+              />
+            </View>
+
             <TouchableOpacity
-              style={[glass.buttonPrimary, styles.actionBtn, (loading || aadhaarNumber.length !== 12) && styles.disabledBtn]}
+              style={[glass.buttonPrimary, styles.actionBtn, (!isFormReady || loading) && styles.disabledBtn]}
               activeOpacity={0.85}
-              disabled={loading || aadhaarNumber.length !== 12}
+              disabled={loading || !isFormReady}
               onPress={handleVerifyAadhaar}
             >
               {loading ? (

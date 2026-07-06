@@ -733,12 +733,20 @@ export const submitKycDLPhoto = async (base64: string, mimeType: string = 'image
 // ── DigiLocker Verification ──────────────────────────────────────────────
 
 // ── Aadhaar Direct Verification (Didit — replaces DigiLocker) ───────────────
-// Driver types their 12-digit Aadhaar number, backend validates against UIDAI via Didit.
-// No WebView, no OTP, no redirect — instant result.
-export const verifyAadhaarDirect = async (aadhaarNumber: string): Promise<KycStatusResponse> => {
+// Didit requires: aadhaarNumber, fullName, pan, dob — all 4 are mandatory.
+// Docs: https://docs.didit.me/api-reference/database-validation/india/aadhaar
+export const verifyAadhaarDirect = async (
+  aadhaarNumber: string,
+  fullName: string,
+  pan: string,
+  dob: string  // YYYY-MM-DD
+): Promise<KycStatusResponse> => {
   try {
     const res = await api.post<ApiResponse<KycStatusResponse>>('/kyc/aadhaar', {
       aadhaarNumber: aadhaarNumber.replace(/\s/g, '').trim(),
+      fullName: fullName.trim(),
+      pan: pan.trim().toUpperCase(),
+      dob,
     });
     return unwrap(res);
   } catch (error) {
