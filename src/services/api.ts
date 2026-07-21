@@ -614,6 +614,8 @@ export type KycStatusValue =
   | 'DIGILOCKER_COMPLETED'
   | 'FALLBACK_PENDING'
   | 'FACE_MATCH_PENDING'
+  | 'IN_PROGRESS'
+  | 'REVIEW_PENDING'
   | 'COMPLETED'
   | 'FAILED';
 
@@ -655,6 +657,9 @@ export type KycStatusResponse = {
   // Populated after Aadhaar verification — used to pre-fill DL DOB field
   aadhaarDob?: string | null;    // YYYY-MM-DD
   aadhaarName?: string | null;
+  // Didit session fields — used for resuming sessions
+  diditSessionId?: string | null;
+  diditSessionUrl?: string | null;
 };
 
 export type KycSelfieResponse = {

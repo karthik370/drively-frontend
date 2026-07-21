@@ -67,8 +67,19 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
     return unsubscribe;
   }, [navigation, dispatch]);
 
-  // ── Start Didit Session ─────────────────────────────────────────────────
+  // ── Start or Resume Didit Session ──────────────────────────────────────
   const handleStartVerification = useCallback(async () => {
+    // If there's an existing in-progress session URL, resume it directly
+    if (kyc?.diditSessionUrl && kyc?.diditSessionId &&
+        (kyc.status === 'IN_PROGRESS' || kyc.status === 'NOT_STARTED')) {
+      navigation.navigate('KycWebView' as never, {
+        verificationUrl: kyc.diditSessionUrl,
+        sessionId: kyc.diditSessionId,
+      } as never);
+      return;
+    }
+
+    // Otherwise create a new session
     setSessionLoading(true);
     try {
       const session = await createKycSession();
@@ -84,12 +95,14 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
     } finally {
       setSessionLoading(false);
     }
-  }, [navigation]);
+  }, [navigation, kyc]);
 
   // ── Determine what to show ──────────────────────────────────────────────
-  const isCompleted = kyc?.status === 'COMPLETED';
-  const isFailed = kyc?.status === 'FAILED';
-  const isLoading = kycLoading && !kyc;
+  const isCompleted     = kyc?.status === 'COMPLETED';
+  const isFailed        = kyc?.status === 'FAILED';
+  const isReviewPending = kyc?.status === 'REVIEW_PENDING';
+  const isInProgress    = kyc?.status === 'IN_PROGRESS';
+  const isLoading       = kycLoading && !kyc;
 
   // ── Render ──────────────────────────────────────────────────────────────
   return (
@@ -153,17 +166,41 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
           </View>
         )}
 
+        {/* ── Under Review State ──────────────────────────────────── */}
+        {isReviewPending && (
+          <View style={[glass.cardAccent, styles.completedCard]}>
+            <View style={[styles.completedIconWrap, { backgroundColor: 'rgba(245,158,11,0.12)' }]}>
+              <Icon name="clock-check-outline" size={48} color="#F59E0B" />
+            </View>
+            <Text style={styles.completedTitle}>Under Review ⏳</Text>
+            <Text style={styles.completedSubtitle}>
+              Your verification is being reviewed by our team. This usually takes a few hours. We'll notify you once it's complete.
+            </Text>
+
+            <View style={[styles.verifiedDetails, { marginTop: 16 }]}>
+              <View style={[styles.verifiedRow, { backgroundColor: 'rgba(245,158,11,0.08)' }]}>
+                <PulsingDot color="#F59E0B" />
+                <Text style={[styles.verifiedText, { color: '#F59E0B' }]}>Manual review in progress</Text>
+              </View>
+            </View>
+          </View>
+        )}
+
         {/* ── Not Completed — Start Verification ───────────────────── */}
-        {!isCompleted && !isLoading && (
+        {!isCompleted && !isReviewPending && !isLoading && (
           <>
             {/* Explainer Card */}
             <View style={[glass.cardAccent, styles.explainerCard]}>
               <View style={styles.shieldWrap}>
                 <Icon name="shield-check-outline" size={56} color={G.accent} />
               </View>
-              <Text style={styles.explainerTitle}>Verify Your Identity</Text>
+              <Text style={styles.explainerTitle}>
+                {isInProgress ? 'Resume Verification' : 'Verify Your Identity'}
+              </Text>
               <Text style={styles.explainerText}>
-                To start driving, we need to verify your identity. Our automated system will scan your documents and match your face — all in one quick step.
+                {isInProgress
+                  ? 'You have an ongoing verification session. Tap below to resume where you left off.'
+                  : 'To start driving, we need to verify your identity. Our automated system will scan your documents and match your face — all in one quick step.'}
               </Text>
 
               {/* What you need */}
@@ -212,9 +249,9 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
                   <ActivityIndicator size="small" color="#000" />
                 ) : (
                   <>
-                    <Icon name="shield-check" size={20} color="#000" />
+                    <Icon name={isInProgress ? 'play-circle' : 'shield-check'} size={20} color="#000" />
                     <Text style={styles.startBtnText}>
-                      {isFailed ? 'Retry Verification' : 'Start Verification'}
+                      {isInProgress ? 'Resume Verification' : isFailed ? 'Retry Verification' : 'Start Verification'}
                     </Text>
                   </>
                 )}
@@ -228,7 +265,7 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
         )}
 
         {/* ── Help Link (always visible when not completed) ─────────── */}
-        {!isCompleted && !isLoading && (
+        {!isCompleted && !isReviewPending && !isLoading && (
           <TouchableOpacity
             style={styles.helpLink}
             activeOpacity={0.7}
