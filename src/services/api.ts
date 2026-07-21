@@ -729,6 +729,52 @@ export const submitKycDLPhoto = async (base64: string, mimeType: string = 'image
   }
 };
 
+// ── Didit Hosted Session (Workflow Sessions) ─────────────────────────────────
+// Creates a hosted KYC session. User is redirected to Didit's own UI.
+// Returns a verificationUrl to open in a WebView or browser.
+
+export type CreateKycSessionResponse = {
+  sessionId: string;
+  verificationUrl: string;
+  status: string;
+};
+
+export const createKycSession = async (): Promise<CreateKycSessionResponse> => {
+  try {
+    const res = await api.post<ApiResponse<CreateKycSessionResponse>>('/kyc/session/create', {});
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export const getKycSessionDecision = async (sessionId: string): Promise<any> => {
+  try {
+    const res = await api.get<ApiResponse<any>>(`/kyc/session/${sessionId}/decision`);
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
+
+export type ConfirmKycSessionResponse = {
+  sessionId: string;
+  status: string;        // Approved | Declined | In Review | In Progress | Not Started
+  kycCompleted: boolean; // true only when Approved
+};
+
+/**
+ * Confirm a Didit session decision.
+ * Called after deep-link callback — fetches decision from Didit server-side and updates DB.
+ */
+export const confirmKycSession = async (sessionId: string): Promise<ConfirmKycSessionResponse> => {
+  try {
+    const res = await api.post<ApiResponse<ConfirmKycSessionResponse>>(`/kyc/session/${sessionId}/confirm`, {});
+    return unwrap(res);
+  } catch (error) {
+    return handleAxiosError(error);
+  }
+};
 
 // ── DigiLocker Verification ──────────────────────────────────────────────
 

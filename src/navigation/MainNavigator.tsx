@@ -57,6 +57,7 @@ import TipDriverScreen from '../screens/customer/TipDriverScreen';
 import DriverDocumentsSubmitScreen from '../screens/driver/DriverDocumentsSubmitScreen';
 import DriverVerificationPendingScreen from '../screens/driver/DriverVerificationPendingScreen';
 import DriverVerificationRejectedScreen from '../screens/driver/DriverVerificationRejectedScreen';
+import KycWebViewScreen from '../screens/driver/KycWebViewScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -297,6 +298,11 @@ const MainNavigator = () => {
       <Stack.Screen name="TripPhotos" component={TripPhotoScreen} />
       <Stack.Screen name="DriverBadges" component={DriverBadgesScreen} />
       <Stack.Screen name="SharedTrip" component={SharedTripScreen} />
+      <Stack.Screen
+        name="KycWebView"
+        component={KycWebViewScreen}
+        options={{ animation: 'slide_from_bottom', gestureEnabled: false }}
+      />
     </Stack.Navigator>
   );
 };
