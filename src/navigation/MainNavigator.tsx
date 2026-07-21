@@ -57,6 +57,7 @@ import TipDriverScreen from '../screens/customer/TipDriverScreen';
 import DriverDocumentsSubmitScreen from '../screens/driver/DriverDocumentsSubmitScreen';
 import DriverVerificationPendingScreen from '../screens/driver/DriverVerificationPendingScreen';
 import DriverVerificationRejectedScreen from '../screens/driver/DriverVerificationRejectedScreen';
+import DriverSelfieGateScreen from '../screens/driver/DriverSelfieGateScreen';
 import KycWebViewScreen from '../screens/driver/KycWebViewScreen';
 
 const Tab = createBottomTabNavigator();
@@ -229,11 +230,18 @@ const MainNavigator = () => {
     );
   }
 
+  const hasProfilePhoto = !!(user as any)?.profileImage;
+
   const tabsComponent = (() => {
     if (!user) return CustomerTabs;
     if (effectiveUserType === UserType.CUSTOMER) return CustomerTabs;
     if (effectiveUserType === UserType.DRIVER) {
       if (verification.documentsVerified) {
+        // KYC approved — but MUST have a profile photo before reaching home screen.
+        // If Didit auto-extraction failed (source_image was null), force manual selfie capture.
+        if (!hasProfilePhoto) {
+          return DriverSelfieGateScreen as any;
+        }
         return DriverTabs;
       }
 
@@ -255,11 +263,12 @@ const MainNavigator = () => {
       <Stack.Screen
         name="Tabs"
         component={tabsComponent}
-        key={`tabs-${effectiveUserType ?? 'NONE'}-${roleOverride ?? 'NO_OVERRIDE'}-${verification.documentsVerified ? 'VERIFIED' : 'UNVERIFIED'}-${verification.submitted ? 'SUB' : 'NOSUB'}-${verification.backgroundCheckStatus}`}
+        key={`tabs-${effectiveUserType ?? 'NONE'}-${roleOverride ?? 'NO_OVERRIDE'}-${verification.documentsVerified ? 'VERIFIED' : 'UNVERIFIED'}-${verification.submitted ? 'SUB' : 'NOSUB'}-${verification.backgroundCheckStatus}-${hasProfilePhoto ? 'HAS_PHOTO' : 'NO_PHOTO'}`}
       />
       <Stack.Screen name="DriverDocumentsSubmit" component={DriverDocumentsSubmitScreen} />
       <Stack.Screen name="DriverVerificationPending" component={DriverVerificationPendingScreen} />
       <Stack.Screen name="DriverVerificationRejected" component={DriverVerificationRejectedScreen} />
+      <Stack.Screen name="DriverSelfieGate" component={DriverSelfieGateScreen} />
       <Stack.Screen name="DriverBookingRequestDetails" component={DriverBookingRequestDetailsScreen} />
       <Stack.Screen name="LocationSearch" component={LocationSearchScreen} />
       <Stack.Screen name="RideConfirm" component={RideConfirmScreen} />
