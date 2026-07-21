@@ -134,9 +134,10 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
 
 
   const handleStartVerification = useCallback(async () => {
-    // If there's an existing in-progress session URL, resume it directly
-    if (kyc?.diditSessionUrl && kyc?.diditSessionId &&
-        (kyc.status === 'IN_PROGRESS' || kyc.status === 'NOT_STARTED')) {
+    // Resume any existing session URL directly — don't create a new one
+    // Covers: IN_PROGRESS (mid-flow), REVIEW_PENDING (all steps done, under review),
+    // FAILED (retry same session — Didit allows re-entry), NOT_STARTED (had URL but abandoned)
+    if (kyc?.diditSessionUrl && kyc?.diditSessionId) {
       navigation.navigate('KycWebView' as never, {
         verificationUrl: kyc.diditSessionUrl,
         sessionId: kyc.diditSessionId,
@@ -144,7 +145,7 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
       return;
     }
 
-    // Otherwise create a new session
+    // No session URL in DB → create a brand new session
     setSessionLoading(true);
     try {
       const session = await createKycSession();
@@ -310,6 +311,18 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
                 <Text style={[styles.verifiedText, { color: '#F59E0B' }]}>Manual review in progress</Text>
               </View>
             </View>
+
+            {/* Reopen session button — resume same Didit session */}
+            {kyc?.diditSessionUrl && (
+              <TouchableOpacity
+                style={[styles.startBtn, { marginTop: 16, backgroundColor: 'rgba(245,158,11,0.15)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.4)' }]}
+                onPress={handleStartVerification}
+                activeOpacity={0.85}
+              >
+                <Icon name="eye-check-outline" size={20} color="#F59E0B" />
+                <Text style={[styles.startBtnText, { color: '#F59E0B' }]}>Check Verification Status</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -365,7 +378,7 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
                 </View>
               )}
 
-              {/* Start button */}
+              {/* Start / Resume button */}
               <TouchableOpacity
                 style={[styles.startBtn, sessionLoading && styles.startBtnDisabled]}
                 onPress={handleStartVerification}
@@ -376,9 +389,17 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
                   <ActivityIndicator size="small" color="#000" />
                 ) : (
                   <>
-                    <Icon name={isInProgress ? 'play-circle' : 'shield-check'} size={20} color="#000" />
+                    <Icon
+                      name={isInProgress || (kyc?.diditSessionUrl && kyc?.diditSessionId) ? 'play-circle' : 'shield-check'}
+                      size={20}
+                      color="#000"
+                    />
                     <Text style={styles.startBtnText}>
-                      {isInProgress ? 'Resume Verification' : isFailed ? 'Retry Verification' : 'Start Verification'}
+                      {isInProgress || (kyc?.diditSessionUrl && kyc?.diditSessionId)
+                        ? 'Resume Verification'
+                        : isFailed
+                        ? 'Retry Verification'
+                        : 'Start Verification'}
                     </Text>
                   </>
                 )}
