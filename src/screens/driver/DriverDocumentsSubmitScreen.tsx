@@ -229,15 +229,15 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
               )}
             </View>
 
-            {/* ── Profile Photo Card (only if no photo yet) ─────────── */}
+            {/* ── Profile Photo Card (fallback if auto-upload from Didit failed) ── */}
             {!hasProfilePhoto && (
               <View style={styles.photoCard}>
                 <View style={styles.photoCardHeader}>
-                  <Icon name="camera-account" size={22} color={G.accent} />
-                  <Text style={styles.photoCardTitle}>Add Your Profile Photo</Text>
+                  <Icon name="camera-account" size={22} color="#F59E0B" />
+                  <Text style={styles.photoCardTitle}>Profile Photo Missing</Text>
                 </View>
                 <Text style={styles.photoCardSubtitle}>
-                  Used as your driver avatar in-app and shown to customers during trips.
+                  Your profile photo is normally captured automatically during verification. If it wasn't set, please take one below — it's shown to customers during trips.
                 </Text>
 
                 {/* Preview */}
@@ -252,7 +252,7 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
                 ) : (
                   <TouchableOpacity style={styles.cameraBtn} onPress={handleTakePhoto} activeOpacity={0.85}>
                     <Icon name="camera-plus" size={22} color="#000" />
-                    <Text style={styles.cameraBtnText}>Take Selfie</Text>
+                    <Text style={styles.cameraBtnText}>Take Selfie Now</Text>
                   </TouchableOpacity>
                 )}
 
@@ -277,7 +277,7 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
               </View>
             )}
 
-            {/* ── Profile photo already set ───────────────────────────── */}
+            {/* ── Profile photo set (auto from Didit or manual) ─────────── */}
             {hasProfilePhoto && (
               <View style={styles.photoSetRow}>
                 <Image
@@ -286,7 +286,7 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
                 />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.photoSetTitle}>Profile Photo Set ✅</Text>
-                  <Text style={styles.photoSetSub}>Visible to customers during trips</Text>
+                  <Text style={styles.photoSetSub}>Shown to customers during trips</Text>
                 </View>
               </View>
             )}
