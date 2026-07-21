@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -22,15 +23,19 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useAppDispatch, useAppSelector } from '../../redux/store';
 import { loadKycStatus } from '../../redux/slices/driverSlice';
+import { loadUser } from '../../redux/slices/authSlice';
 import { logout } from '../../redux/slices/authSlice';
 import { showAlert } from '../../components/common/CustomAlert';
 import { G, glass } from '../../constants/glassStyles';
 import {
   createKycSession,
   createOnboardingSupportTicket,
+  uploadDriverImage,
+  updateMyProfile,
 } from '../../services/api';
 
 // ── Pulsing Dot (for "Under Review" indicator) ─────────────────────────────
@@ -52,7 +57,13 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
   const dispatch = useAppDispatch();
   const kyc = useAppSelector((s) => s.driver.kyc);
   const kycLoading = useAppSelector((s) => s.driver.kycLoading);
+  const user = useAppSelector((s) => s.auth.user);
   const [sessionLoading, setSessionLoading] = useState(false);
+
+  // ── Profile Photo State ──────────────────────────────────────────────────
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const hasProfilePhoto = !!(user?.profileImage || photoUri);
 
   // Load KYC status on mount & on screen focus
   useEffect(() => {
@@ -67,7 +78,61 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
     return unsubscribe;
   }, [navigation, dispatch]);
 
-  // ── Start or Resume Didit Session ──────────────────────────────────────
+  // ── Profile Photo Capture + Upload ──────────────────────────────────────
+  const handleTakePhoto = useCallback(async () => {
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        showAlert('Camera Permission Required', 'Please allow camera access to take your profile photo.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],  // square crop for profile photo
+        quality: 0.5,
+        base64: false,
+      });
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        setPhotoUri(result.assets[0].uri);
+      }
+    } catch (e: any) {
+      showAlert('Camera Error', e?.message || 'Could not open camera.');
+    }
+  }, []);
+
+  const handleUploadPhoto = useCallback(async () => {
+    if (!photoUri) return;
+    setPhotoUploading(true);
+    try {
+      // Upload image to Cloudinary via backend
+      const uploaded = await uploadDriverImage({
+        uri: photoUri,
+        mimeType: 'image/jpeg',
+        fileName: `profile_${Date.now()}.jpg`,
+        kind: 'profile',
+      });
+
+      // Save the Cloudinary URL to user profile (include required name fields)
+      await updateMyProfile({
+        firstName: user?.firstName || '',
+        lastName: user?.lastName || '',
+        profileImage: uploaded.fileUrl,
+      });
+
+      // Refresh user in Redux so profileImage is updated everywhere
+      await dispatch(loadUser());
+
+      showAlert('Profile Photo Saved! ✅', 'Your profile photo has been updated.');
+      setPhotoUri(null);
+    } catch (e: any) {
+      showAlert('Upload Failed', e?.message || 'Could not upload photo. Please try again.');
+    } finally {
+      setPhotoUploading(false);
+    }
+  }, [photoUri, dispatch]);
+
+
   const handleStartVerification = useCallback(async () => {
     // If there's an existing in-progress session URL, resume it directly
     if (kyc?.diditSessionUrl && kyc?.diditSessionId &&
@@ -163,6 +228,68 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
                 </View>
               )}
             </View>
+
+            {/* ── Profile Photo Card (only if no photo yet) ─────────── */}
+            {!hasProfilePhoto && (
+              <View style={styles.photoCard}>
+                <View style={styles.photoCardHeader}>
+                  <Icon name="camera-account" size={22} color={G.accent} />
+                  <Text style={styles.photoCardTitle}>Add Your Profile Photo</Text>
+                </View>
+                <Text style={styles.photoCardSubtitle}>
+                  Used as your driver avatar in-app and shown to customers during trips.
+                </Text>
+
+                {/* Preview */}
+                {photoUri ? (
+                  <View style={styles.photoPreviewWrap}>
+                    <Image source={{ uri: photoUri }} style={styles.photoPreview} />
+                    <TouchableOpacity style={styles.retakeBtn} onPress={handleTakePhoto}>
+                      <Icon name="camera-retake" size={16} color="#fff" />
+                      <Text style={styles.retakeBtnText}>Retake</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity style={styles.cameraBtn} onPress={handleTakePhoto} activeOpacity={0.85}>
+                    <Icon name="camera-plus" size={22} color="#000" />
+                    <Text style={styles.cameraBtnText}>Take Selfie</Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* Upload button — only show after photo is taken */}
+                {photoUri && (
+                  <TouchableOpacity
+                    style={[styles.uploadBtn, photoUploading && styles.uploadBtnDisabled]}
+                    onPress={handleUploadPhoto}
+                    disabled={photoUploading}
+                    activeOpacity={0.85}
+                  >
+                    {photoUploading ? (
+                      <ActivityIndicator size="small" color="#000" />
+                    ) : (
+                      <>
+                        <Icon name="cloud-upload" size={18} color="#000" />
+                        <Text style={styles.uploadBtnText}>Save as Profile Photo</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
+            {/* ── Profile photo already set ───────────────────────────── */}
+            {hasProfilePhoto && (
+              <View style={styles.photoSetRow}>
+                <Image
+                  source={{ uri: user?.profileImage || photoUri || undefined }}
+                  style={styles.profileThumb}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.photoSetTitle}>Profile Photo Set ✅</Text>
+                  <Text style={styles.photoSetSub}>Visible to customers during trips</Text>
+                </View>
+              </View>
+            )}
           </View>
         )}
 
@@ -502,11 +629,126 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
 
-  // Pulsing dot (for future use if needed)
+  // Pulsing dot
   pulsingDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
+  },
+
+  // ── Profile Photo Card ─────────────────────────────────────────────────
+  photoCard: {
+    marginTop: 20,
+    width: '100%',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    padding: 16,
+    gap: 12,
+  },
+  photoCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  photoCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: G.textPrimary,
+  },
+  photoCardSubtitle: {
+    fontSize: 12,
+    color: G.textMuted,
+    lineHeight: 18,
+  },
+  cameraBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: G.accent,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    marginTop: 4,
+  },
+  cameraBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#000',
+  },
+  photoPreviewWrap: {
+    alignItems: 'center',
+    gap: 10,
+  },
+  photoPreview: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    borderWidth: 2,
+    borderColor: G.accent,
+  },
+  retakeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+  },
+  retakeBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  uploadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: G.accent,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+  },
+  uploadBtnDisabled: {
+    opacity: 0.6,
+  },
+  uploadBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#000',
+  },
+  photoSetRow: {
+    marginTop: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: 'rgba(16,185,129,0.08)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(16,185,129,0.2)',
+    padding: 12,
+    width: '100%',
+  },
+  profileThumb: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 2,
+    borderColor: G.success,
+  },
+  photoSetTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: G.success,
+  },
+  photoSetSub: {
+    fontSize: 12,
+    color: G.textMuted,
+    marginTop: 2,
   },
 });
 
