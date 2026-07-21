@@ -771,10 +771,17 @@ export type ConfirmKycSessionResponse = {
 /**
  * Confirm a Didit session decision.
  * Called after deep-link callback — fetches decision from Didit server-side and updates DB.
+ * verificationUrl is sent back so the backend can backfill DB if diditSessionUrl was null.
  */
-export const confirmKycSession = async (sessionId: string): Promise<ConfirmKycSessionResponse> => {
+export const confirmKycSession = async (
+  sessionId: string,
+  verificationUrl?: string
+): Promise<ConfirmKycSessionResponse> => {
   try {
-    const res = await api.post<ApiResponse<ConfirmKycSessionResponse>>(`/kyc/session/${sessionId}/confirm`, {});
+    const res = await api.post<ApiResponse<ConfirmKycSessionResponse>>(
+      `/kyc/session/${sessionId}/confirm`,
+      { verificationUrl }   // backend backfills diditSessionUrl if it was null in DB
+    );
     return unwrap(res);
   } catch (error) {
     return handleAxiosError(error);

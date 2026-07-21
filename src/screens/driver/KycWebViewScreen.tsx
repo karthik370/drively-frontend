@@ -76,8 +76,9 @@ const KycWebViewScreen = () => {
     try {
       const sid = diditSessionId || sessionId;
 
-      // Call server to confirm the decision and update DB
-      const result = await confirmKycSession(sid);
+      // Call server to confirm the decision and update DB.
+      // Pass verificationUrl so backend can backfill diditSessionUrl if it was null in DB.
+      const result = await confirmKycSession(sid, verificationUrl);
 
       // Refresh Redux KYC status
       await dispatch(loadKycStatus());
