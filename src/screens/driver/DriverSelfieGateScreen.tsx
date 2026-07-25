@@ -8,7 +8,7 @@
  * Blocks the driver from reaching the home screen until a selfie is captured
  * and successfully uploaded to Cloudinary.
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -24,6 +24,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useAppDispatch, useAppSelector } from '../../redux/store';
 import { loadUser } from '../../redux/slices/authSlice';
+import { loadDriverVerificationStatus } from '../../redux/slices/driverSlice';
 import { uploadDriverImage, updateMyProfile } from '../../services/api';
 
 const DriverSelfieGateScreen = () => {
@@ -33,6 +34,24 @@ const DriverSelfieGateScreen = () => {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
+  const [checking, setChecking] = useState(true);
+
+  // ── Auto-check: maybe the webhook already uploaded the selfie ──────────
+  // If profileImage was set by Didit auto-upload (webhook), loadUser() will
+  // update Redux → MainNavigator re-evaluates → this screen disappears.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        await dispatch(loadUser());
+        // Also refresh driver verification status
+        await dispatch(loadDriverVerificationStatus());
+      } finally {
+        if (!cancelled) setChecking(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [dispatch]);
 
   // ── Open camera ────────────────────────────────────────────────────────────
   const handleTakePhoto = useCallback(async () => {
@@ -100,6 +119,20 @@ const DriverSelfieGateScreen = () => {
       setUploading(false);
     }
   }, [photoUri, user, dispatch]);
+
+  // While auto-checking if profileImage was already set by webhook, show a spinner
+  if (checking) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color="#C9A84C" />
+          <Text style={{ color: '#94a3b8', marginTop: 12, fontSize: 14 }}>
+            Checking profile photo...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe}>

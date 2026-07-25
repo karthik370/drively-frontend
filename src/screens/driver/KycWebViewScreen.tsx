@@ -27,6 +27,7 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useAppDispatch } from '../../redux/store';
 import { loadKycStatus } from '../../redux/slices/driverSlice';
+import { loadUser } from '../../redux/slices/authSlice';
 import { confirmKycSession } from '../../services/api';
 import { colors } from '../../theme';
 import { showAlert } from '../../components/common/CustomAlert';
@@ -80,10 +81,14 @@ const KycWebViewScreen = () => {
       // Pass verificationUrl so backend can backfill diditSessionUrl if it was null in DB.
       const result = await confirmKycSession(sid, verificationUrl);
 
-      // Refresh Redux KYC status
+      // Refresh Redux KYC status + user object (profileImage may have been set by webhook)
       await dispatch(loadKycStatus());
+      await dispatch(loadUser());
 
       if (result.kycCompleted) {
+        // Webhook may still be uploading selfie to Cloudinary — give it 3s then refresh again
+        setTimeout(() => { dispatch(loadUser()); }, 3000);
+
         // ✅ Approved — go back to DriverDocumentsSubmitScreen which will show completed state
         showAlert(
           '🎉 Verification Complete!',

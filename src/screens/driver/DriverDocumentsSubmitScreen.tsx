@@ -26,7 +26,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useAppDispatch, useAppSelector } from '../../redux/store';
-import { loadKycStatus } from '../../redux/slices/driverSlice';
+import { loadKycStatus, loadDriverVerificationStatus } from '../../redux/slices/driverSlice';
 import { loadUser } from '../../redux/slices/authSlice';
 import { logout } from '../../redux/slices/authSlice';
 import { showAlert } from '../../components/common/CustomAlert';
@@ -70,10 +70,14 @@ const DriverDocumentsSubmitScreen = ({ navigation }: any) => {
     dispatch(loadKycStatus());
   }, [dispatch]);
 
-  // Re-fetch KYC on focus (e.g. coming back from WebView)
+  // Re-fetch KYC + user on focus (e.g. coming back from WebView)
+  // loadUser() picks up profileImage if webhook auto-uploaded the selfie
+  // loadDriverVerificationStatus() re-evaluates the navigator gate
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       dispatch(loadKycStatus());
+      dispatch(loadUser());
+      dispatch(loadDriverVerificationStatus());
     });
     return unsubscribe;
   }, [navigation, dispatch]);
