@@ -25,7 +25,7 @@ import {
   updateBookingFare,
   updateBookingStatus,
 } from '../redux/slices/bookingSlice';
-import { updateUser } from '../redux/slices/authSlice';
+import { updateUser, loadUser } from '../redux/slices/authSlice';
 import { setDriverOnline, setDriverVerification } from '../redux/slices/driverSlice';
 import { addNotification } from '../redux/slices/notificationSlice';
 import { getBookingDetails } from './api';
@@ -624,6 +624,11 @@ class SocketService {
           reason: typeof data?.reason === 'string' ? data.reason : null,
         })
       );
+
+      // Also refresh the user object — profileImage may have been set by
+      // the backend (Didit selfie auto-upload). Without this, the selfie
+      // gate in MainNavigator would still see profileImage=null.
+      store.dispatch(loadUser() as any);
     });
 
     // DISABLED: Socket eta:update competes with frontend's route-based ETA (single source of truth).
