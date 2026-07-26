@@ -154,9 +154,10 @@ const DriverArrivingCard = ({
                 {onDriverPress ? <Icon name="chevron-right" size={20} color="#8A8A8A" /> : null}
             </TouchableOpacity>
 
-            {/* Action buttons — always visible */}
+            {/* Action buttons */}
             <View style={styles.actions}>
-                {(onCall || phoneNumber) ? (
+                {/* Call and Chat: only before trip starts */}
+                {status !== 'STARTED' && status !== 'IN_PROGRESS' && (onCall || phoneNumber) ? (
                 <TouchableOpacity style={styles.actionBtn} onPress={handleCall}>
                     <View style={[styles.actionIcon, { backgroundColor: G.glass2 }]}>
                         <Icon name="phone" size={18} color="#16a34a" />
@@ -165,15 +166,16 @@ const DriverArrivingCard = ({
                 </TouchableOpacity>
                 ) : null}
 
-                {onChat && (
+                {status !== 'STARTED' && status !== 'IN_PROGRESS' && onChat ? (
                     <TouchableOpacity style={styles.actionBtn} onPress={onChat}>
                         <View style={[styles.actionIcon, { backgroundColor: G.glass2 }]}>
                             <Icon name="message-text" size={18} color="#C9A84C" />
                         </View>
                         <Text style={styles.actionLabel}>Chat</Text>
                     </TouchableOpacity>
-                )}
+                ) : null}
 
+                {/* Share — always visible once driver is assigned */}
                 <TouchableOpacity style={styles.actionBtn} onPress={handleShare}>
                     <View style={[styles.actionIcon, { backgroundColor: 'rgba(236,72,153,0.1)' }]}>
                         <Icon name="share-variant" size={18} color="#db2777" />

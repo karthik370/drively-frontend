@@ -391,6 +391,19 @@ const DriverOnlineScreen = ({ navigation }: any) => {
     if (!driverLocation) return;
     if (hasActiveTrip) return;
 
+    // Clear any stale requests that don't match the new filter
+    const selected = String(tripFilter || 'ALL').toUpperCase();
+    for (const existing of bookingRequestsRef.current) {
+      const t = String((existing as any)?.tripType || '').toUpperCase();
+      if (selected !== 'ALL') {
+        const matches =
+          selected === 'ROUND_TRIP' ? t === 'ROUND_TRIP' :
+          selected === 'OUTSTATION' ? t === 'OUTSTATION' :
+          (!t || t === 'ONE_WAY');
+        if (!matches) dispatch(removeBookingRequest(String(existing.id)));
+      }
+    }
+
     let active = true;
     const pollMs = 8000;
 
@@ -407,17 +420,24 @@ const DriverOnlineScreen = ({ navigation }: any) => {
           return;
         }
 
+        // Filter fetched items to only the current trip type selection
+        const currentFilter = String(tripFilter || 'ALL').toUpperCase();
+        const matchingItems = currentFilter === 'ALL'
+          ? items
+          : items.filter((it: any) => {
+              const t = String((it as any)?.tripType || '').toUpperCase();
+              if (currentFilter === 'ROUND_TRIP') return t === 'ROUND_TRIP';
+              if (currentFilter === 'OUTSTATION') return t === 'OUTSTATION';
+              return !t || t === 'ONE_WAY';
+            });
+
         const ids = new Set(
-          (Array.isArray(items) ? items : [])
+          matchingItems
             .map((it: any) => String(it?.bookingId ?? it?.id ?? ''))
             .filter((id: string) => Boolean(id))
         );
 
-        if (ids.size === 0) {
-          return;
-        }
-
-        for (const it of Array.isArray(items) ? items : []) {
+        for (const it of matchingItems) {
           const bookingId = String((it as any)?.bookingId ?? (it as any)?.id ?? '');
           if (!bookingId) continue;
           // Skip bookings the driver declined or cancelled this session
@@ -441,6 +461,7 @@ const DriverOnlineScreen = ({ navigation }: any) => {
           );
         }
 
+        // Remove bookings no longer in the matching set
         for (const existing of bookingRequestsRef.current) {
           if (!ids.has(String(existing.id))) {
             dispatch(removeBookingRequest(String(existing.id)));
@@ -463,7 +484,7 @@ const DriverOnlineScreen = ({ navigation }: any) => {
       clearInterval(interval);
       pollInFlightRef.current = false;
     };
-  }, [dispatch, driverLocation, hasActiveTrip, isOnline]);
+  }, [dispatch, driverLocation, hasActiveTrip, isOnline, tripFilter]);
 
   const header = useMemo(() => {
     const requestCount = isOnline ? filteredRequests.length : 0;
