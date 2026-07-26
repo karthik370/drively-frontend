@@ -1,4 +1,4 @@
-﻿import * as Location from 'expo-location';
+import * as Location from 'expo-location';
 import { store } from '../redux/store';
 import { updateLocation } from '../redux/slices/locationSlice';
 import socketService from './socketService';
@@ -207,33 +207,42 @@ class LocationService {
 
   async startBackgroundTracking(): Promise<boolean> {
     try {
-      const hasPermission = await this.requestPermissions();
-      if (!hasPermission) {
+      // ── 1. Request foreground permission first ──────────────────────────────
+      const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
+      if (fgStatus !== 'granted') {
+        console.warn('[LocationService] Foreground location permission denied');
         return false;
       }
 
+      // ── 2. Request background permission (Android 10+ sends user to Settings) ─
+      const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
+      if (bgStatus !== 'granted') {
+        console.warn('[LocationService] Background location permission denied — driver tracking will only work while app is open');
+        // Don't return false — fall through to try foreground-only tracking
+        // Background permission denial shouldn't block the driver from going online
+      }
+
+      // ── 3. Check TaskManager availability ──────────────────────────────────
       if (!this.hasTaskManager()) {
-        if (__DEV__) {
-          console.error('expo-task-manager is not available; background tracking disabled');
-        }
+        console.warn('[LocationService] expo-task-manager not available — background tracking disabled. This is expected in Expo Go.');
         return false;
       }
 
-      // isTaskDefined is synchronous — no await needed (and isTaskDefinedAsync doesn't exist)
+      // ── 4. Check if task is registered ─────────────────────────────────────
       const isTaskDefined = TaskManager.isTaskDefined(LOCATION_TASK_NAME);
       if (!isTaskDefined) {
-        if (__DEV__) {
-          console.error('Background location task is not defined; background tracking disabled');
-        }
+        console.warn('[LocationService] Background task not defined — this should not happen. Ensure locationService.ts is imported in App.tsx root.');
         return false;
       }
 
+      // ── 5. Check if already running ────────────────────────────────────────
       const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
       if (hasStarted) {
         this.isTracking = true;
         return true;
       }
 
+      // ── 6. Start background updates ────────────────────────────────────────
       await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
         accuracy: Location.Accuracy.High,
         timeInterval: 5000,
@@ -248,11 +257,10 @@ class LocationService {
       });
 
       this.isTracking = true;
+      console.info('[LocationService] Background tracking started successfully');
       return true;
-    } catch (err) {
-      if (__DEV__) {
-        console.error('Error starting background tracking:', err);
-      }
+    } catch (err: any) {
+      console.warn('[LocationService] startBackgroundTracking error (non-fatal):', err?.message || err);
       this.isTracking = false;
       return false;
     }

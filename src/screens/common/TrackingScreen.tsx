@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Image } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import {
@@ -2172,6 +2172,8 @@ const TrackingScreen = ({ navigation, route }: any) => {
               }
               licensePlate={(booking as any)?.driver?.driverProfile?.currentVehicle?.registrationNumber ?? null}
               etaMinutes={isRoundTripStarted ? null : eta}
+              roundTripElapsed={isRoundTripStarted ? roundTripElapsed : null}
+              roundTripCountdown={isRoundTripStarted ? roundTripCountdown : null}
               status={String(booking.status)}
               phoneNumber={normalizePhone(
                 (booking as any)?.driver?.phoneNumber ??

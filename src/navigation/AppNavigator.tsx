@@ -31,7 +31,7 @@ const navigationRef = createNavigationContainerRef<any>();
 
 // Deep linking configuration for trip sharing
 const linking = {
-  prefixes: ['drivegaadi://', 'https://v2.kurnm.click'],
+  prefixes: ['drivegaadi://', 'https://v3.kurnm.click'],
   config: {
     screens: {
       Main: {

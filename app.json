@@ -1,8 +1,8 @@
-﻿{
+{
   "expo": {
     "name": "DriveGaadi",
     "slug": "drivemate",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "icon": "./assets/drively_logo.png",
@@ -22,7 +22,8 @@
         "NSLocationWhenInUseUsageDescription": "DriveGaadi needs your location to show nearby drivers and track your ride.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "DriveGaadi needs your location to provide real-time tracking during rides.",
         "NSCameraUsageDescription": "DriveGaadi needs camera access to capture documents and profile photos.",
-        "NSPhotoLibraryUsageDescription": "DriveGaadi needs photo library access to upload documents and profile photos."
+        "NSPhotoLibraryUsageDescription": "DriveGaadi needs photo library access to upload documents and profile photos.",
+        "UIBackgroundModes": ["location", "fetch"]
       },
       "config": {
         "googleMapsApiKey": "USE_ENV_VAR_EXPO_PUBLIC_GOOGLE_MAPS_API_KEY"
@@ -42,6 +43,8 @@
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
         "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
@@ -66,9 +69,11 @@
           "locationAlwaysAndWhenInUsePermission": "DriveGaadi needs your location for real-time ride tracking.",
           "locationAlwaysPermission": "DriveGaadi needs background location access to track active rides.",
           "locationWhenInUsePermission": "DriveGaadi needs your location to show nearby drivers.",
-          "isAndroidBackgroundLocationEnabled": true
+          "isAndroidBackgroundLocationEnabled": true,
+          "isIosBackgroundLocationEnabled": true
         }
       ],
+      "expo-task-manager",
       [
         "expo-notifications",
         {

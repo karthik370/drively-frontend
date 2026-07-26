@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, Share, Linking, Animated } from 'react-native';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { G } from '../../constants/glassStyles';
@@ -14,6 +14,8 @@ interface Props {
     phoneNumber?: string | null;
     maskedPhone?: string | null;
     shareUrl?: string | null;
+    roundTripElapsed?: string | null;
+    roundTripCountdown?: string | null;
     onCall?: () => void;
     onChat?: () => void;
     onShare?: () => void;
@@ -35,6 +37,8 @@ const DriverArrivingCard = ({
     onShare,
     shareUrl,
     onDriverPress,
+    roundTripElapsed,
+    roundTripCountdown,
 }: Props) => {
     const [pulseAnim] = useState(new Animated.Value(1));
 
@@ -109,6 +113,16 @@ const DriverArrivingCard = ({
                     </Animated.View>
                 )}
             </View>
+
+            {/* Round trip elapsed / remaining — shown to customer during active round trip */}
+            {roundTripElapsed ? (
+                <View style={styles.roundTripTimerRow}>
+                    <Icon name="timer-outline" size={14} color="#C9A84C" />
+                    <Text style={styles.roundTripTimerText}>
+                        Elapsed: {roundTripElapsed}{roundTripCountdown ? `  •  Remaining: ${roundTripCountdown}` : ''}
+                    </Text>
+                </View>
+            ) : null}
 
             {/* Driver info */}
             <TouchableOpacity style={styles.driverSection} onPress={onDriverPress} activeOpacity={onDriverPress ? 0.7 : 1} disabled={!onDriverPress}>
@@ -311,6 +325,22 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: '600',
         color: '#CCCCCC',
+    },
+    roundTripTimerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 14,
+        paddingVertical: 7,
+        backgroundColor: 'rgba(201,168,76,0.08)',
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(201,168,76,0.15)',
+    },
+    roundTripTimerText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#C9A84C',
+        letterSpacing: 0.3,
     },
 });
 
