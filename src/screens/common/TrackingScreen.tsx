@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Image } from 'react-native';
-import * as ExpoLocation from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import {
   View,
@@ -2063,43 +2062,52 @@ const TrackingScreen = ({ navigation, route }: any) => {
         {/* Single map action button — fixed top-right in the map area */}
         {(() => {
           const isTripActive = bookingStatus && ['STARTED', 'IN_PROGRESS'].includes(bookingStatus);
+          const isSearching  = bookingStatus && ['SEARCHING', 'REQUESTED', 'PENDING'].includes(bookingStatus as string)
+                              || !bookingStatus;
+
           // Priority 1: Recentre when user has panned the map
           if (isMapPanned) {
             return (
               <TouchableOpacity
                 style={styles.recenterBtn}
-              onPress={async () => {
+                onPress={() => {
                   if (pannedTimerRef.current) clearTimeout(pannedTimerRef.current);
                   setIsMapPanned(false);
                   isMapPannedRef.current = false;
                   lastFitCallTsRef.current = 0;
                   lastCameraTimestampRef.current = 0;
 
-                  const dl = driverLocation;
-                  if (dl && Number.isFinite(dl.latitude) && Number.isFinite(dl.longitude)) {
-                    // Active trip — centre on driver
-                    mapRef.current?.animateToRegion({
-                      latitude: dl.latitude,
-                      longitude: dl.longitude,
-                      latitudeDelta: 0.012,
-                      longitudeDelta: 0.012,
-                    }, 600);
+                  if (isSearching) {
+                    // Searching phase — fit to show pickup + drop together (default view)
+                    const pts: { latitude: number; longitude: number }[] = [];
+                    if (stablePickupCoord) pts.push(stablePickupCoord);
+                    if (stableDropCoord)   pts.push(stableDropCoord);
+                    if (pts.length >= 2) {
+                      mapRef.current?.fitToCoordinates(pts, {
+                        edgePadding: { top: 80, bottom: 200, left: 60, right: 60 },
+                        animated: true,
+                      });
+                    } else if (pts.length === 1) {
+                      mapRef.current?.animateToRegion({
+                        latitude: pts[0].latitude,
+                        longitude: pts[0].longitude,
+                        latitudeDelta: 0.07,
+                        longitudeDelta: 0.07,
+                      }, 600);
+                    } else {
+                      fitMapToRoute();
+                    }
                   } else {
-                    // No driver (searching phase) — centre on user's current GPS
-                    try {
-                      const pos = await ExpoLocation.getLastKnownPositionAsync({}) ||
-                                  await ExpoLocation.getCurrentPositionAsync({ accuracy: ExpoLocation.Accuracy.Balanced });
-                      if (pos) {
-                        mapRef.current?.animateToRegion({
-                          latitude: pos.coords.latitude,
-                          longitude: pos.coords.longitude,
-                          latitudeDelta: 0.015,
-                          longitudeDelta: 0.015,
-                        }, 600);
-                      } else {
-                        fitMapToRoute();
-                      }
-                    } catch {
+                    // Active trip — centre on driver's live position
+                    const dl = driverLocation;
+                    if (dl && Number.isFinite(dl.latitude) && Number.isFinite(dl.longitude)) {
+                      mapRef.current?.animateToRegion({
+                        latitude: dl.latitude,
+                        longitude: dl.longitude,
+                        latitudeDelta: 0.012,
+                        longitudeDelta: 0.012,
+                      }, 600);
+                    } else {
                       fitMapToRoute();
                     }
                   }
@@ -2136,44 +2144,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
               </TouchableOpacity>
             );
           }
-          // Fallback: always show locate-me button so map can always be recentred
-          return (
-            <TouchableOpacity
-              style={styles.recenterBtn}
-              onPress={async () => {
-                lastFitCallTsRef.current = 0;
-                lastCameraTimestampRef.current = 0;
-                const dl = driverLocation;
-                if (dl && Number.isFinite(dl.latitude) && Number.isFinite(dl.longitude)) {
-                  mapRef.current?.animateToRegion({
-                    latitude: dl.latitude,
-                    longitude: dl.longitude,
-                    latitudeDelta: 0.012,
-                    longitudeDelta: 0.012,
-                  }, 600);
-                } else {
-                  try {
-                    const pos = await ExpoLocation.getLastKnownPositionAsync({}) ||
-                                await ExpoLocation.getCurrentPositionAsync({ accuracy: ExpoLocation.Accuracy.Balanced });
-                    if (pos) {
-                      mapRef.current?.animateToRegion({
-                        latitude: pos.coords.latitude,
-                        longitude: pos.coords.longitude,
-                        latitudeDelta: 0.015,
-                        longitudeDelta: 0.015,
-                      }, 600);
-                    } else {
-                      fitMapToRoute();
-                    }
-                  } catch {
-                    fitMapToRoute();
-                  }
-                }
-              }}
-            >
-              <Icon name="crosshairs-gps" size={22} color="#C9A84C" />
-            </TouchableOpacity>
-          );
+          return null;
         })()}
       </View>
 
