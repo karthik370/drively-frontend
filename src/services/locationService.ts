@@ -1,25 +1,21 @@
 import * as Location from 'expo-location';
+import * as TaskManagerModule from 'expo-task-manager';
 import { store } from '../redux/store';
 import { updateLocation } from '../redux/slices/locationSlice';
 import socketService from './socketService';
 
 const LOCATION_TASK_NAME = 'background-location-task';
 
-let TaskManager: any = null;
-try {
-  TaskManager = require('expo-task-manager');
-} catch {
-  TaskManager = null;
-}
+// expo-task-manager exports its API as named exports.
+// Handle both direct and .default interop shapes that Metro may produce.
+const TaskManager: any = (TaskManagerModule as any)?.default ?? TaskManagerModule;
 
 if (TaskManager?.defineTask) {
   TaskManager.defineTask(
     LOCATION_TASK_NAME,
     async ({ data, error }: { data?: unknown; error?: unknown }) => {
       if (error) {
-        if (__DEV__) {
-          console.error('Background location error:', error);
-        }
+        console.warn('[LocationService] Background task error:', error);
         return;
       }
 
@@ -87,13 +83,14 @@ if (TaskManager?.defineTask) {
       }
     }
   );
+} else {
+  console.warn('[LocationService] TaskManager.defineTask not found — keys:', Object.keys(TaskManager ?? {}));
 }
+
 class LocationService {
   private isTracking: boolean = false;
 
   private hasTaskManager(): boolean {
-    // isTaskDefined is sync in expo-task-manager v14+.
-    // isTaskDefinedAsync does NOT exist — using it caused the console error.
     return Boolean(TaskManager?.defineTask && TaskManager?.isTaskDefined);
   }
 
