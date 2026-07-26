@@ -2216,7 +2216,15 @@ const TrackingScreen = ({ navigation, route }: any) => {
               onChat={() => {
                 if (booking?.id) {
                   setUnreadChatCount(0);
-                  navigation.navigate('Chat', { bookingId: booking.id });
+                  navigation.navigate('Chat', {
+                    bookingId: booking.id,
+                    userType: 'customer',
+                    otherName: (() => {
+                      const d = (booking as any)?.driver;
+                      if (!d) return 'Driver';
+                      return `${d.firstName || ''} ${d.lastName || ''}`.trim() || 'Driver';
+                    })(),
+                  });
                 }
               }}
               onDriverPress={!isDriverMode ? () => setShowDriverStatsModal(true) : undefined}
@@ -2594,7 +2602,15 @@ const TrackingScreen = ({ navigation, route }: any) => {
                     onPress={() => {
                       if (booking?.id) {
                         setUnreadChatCount(0);
-                        navigation.navigate('Chat', { bookingId: booking.id });
+                        navigation.navigate('Chat', {
+                          bookingId: booking.id,
+                          userType: 'driver',
+                          otherName: (() => {
+                            const c = (booking as any)?.customer ?? (booking as any)?.user;
+                            if (!c) return 'Customer';
+                            return `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Customer';
+                          })(),
+                        });
                       }
                     }}
                   >

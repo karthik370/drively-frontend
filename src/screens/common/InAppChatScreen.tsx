@@ -20,32 +20,46 @@ interface Props {
     route: any;
 }
 
-// Quick-reply chips (Uber/Ola style)
-const QUICK_REPLIES: Record<string, string[]> = {
+// ─── Quick-reply chip definitions ────────────────────────────────────────────
+// Research-based like Uber / Rapido / Ola — situational, short, tappable
+const QUICK_REPLIES: Record<string, { icon: string; text: string }[]> = {
     customer: [
-        'Where are you? 📍',
-        "I'm at the gate 🚪",
-        'Come to main entrance',
-        "I'll be there in 2 mins ⏱️",
-        'Please hurry 🙏',
+        { icon: '📍', text: "Where are you?" },
+        { icon: '🚪', text: "I'm at the gate" },
+        { icon: '🏢', text: "I'm at the main entrance" },
+        { icon: '⏱️', text: "I'll be there in 2 mins" },
+        { icon: '🙏', text: "Please hurry" },
+        { icon: '📞', text: "Please call me" },
+        { icon: '🅿️', text: "Can you come to parking?" },
+        { icon: '✅', text: "I can see you" },
+        { icon: '🔄', text: "I'm on my way down" },
+        { icon: '❓', text: "Which car are you in?" },
     ],
     driver: [
-        'I am arrived ✅',
-        "I'm on my way 🚗",
-        "Can't find location 📍",
-        'Please wait 2 mins ⏳',
-        'Share exact pin 🗺️',
+        { icon: '✅', text: "I have arrived" },
+        { icon: '🚗', text: "I'm on my way" },
+        { icon: '📍', text: "Can't find the location" },
+        { icon: '⏳', text: "Please wait 2 mins" },
+        { icon: '🗺️', text: "Please share exact pin" },
+        { icon: '📞', text: "Please call me" },
+        { icon: '🅿️', text: "I'm in the parking area" },
+        { icon: '👀', text: "I'm outside, look for me" },
+        { icon: '🚦', text: "Stuck in traffic, coming" },
+        { icon: '🏁', text: "Starting your trip now" },
     ],
 };
 
 const InAppChatScreen = ({ navigation, route }: Props) => {
     const bookingId = route?.params?.bookingId;
     const userType: 'customer' | 'driver' = route?.params?.userType || 'customer';
-    const otherName = route?.params?.otherName || (userType === 'customer' ? 'Driver' : 'Customer');
+    const otherName = route?.params?.otherName
+        || (userType === 'customer' ? 'Driver' : 'Customer');
     const insets = useSafeAreaInsets();
 
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState('');
+    // Track which chip indexes have been used — hide after sending (no re-sending same msg)
+    const [usedChips, setUsedChips] = useState<Set<number>>(new Set());
     const flatListRef = useRef<FlatList>(null);
     const inputRef = useRef<TextInput>(null);
 
@@ -90,20 +104,31 @@ const InAppChatScreen = ({ navigation, route }: Props) => {
         setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
     }, [bookingId, userType]);
 
-    const sendQuickReply = useCallback((text: string) => {
+    const sendQuickReply = useCallback((text: string, index: number) => {
         inputRef.current?.blur();
         sendMessage(text);
+        // Mark chip as used — hide it so it doesn't clutter after sending
+        setUsedChips(prev => new Set(prev).add(index));
     }, [sendMessage]);
 
     const renderMessage = ({ item }: { item: ChatMessage }) => {
         const isMe = item.sender === userType;
+        const timeStr = (() => {
+            try {
+                const d = new Date(item.timestamp);
+                return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+            } catch { return ''; }
+        })();
         return (
             <View style={[styles.msgRow, isMe && styles.msgRowMe]}>
+                {!isMe && (
+                    <View style={styles.avatarDot}>
+                        <Icon name={userType === 'customer' ? 'car' : 'account'} size={12} color="#C9A84C" />
+                    </View>
+                )}
                 <View style={[styles.msgBubble, isMe ? styles.msgBubbleMe : styles.msgBubbleOther]}>
                     <Text style={[styles.msgText, isMe && styles.msgTextMe]}>{item.text}</Text>
-                    <Text style={[styles.msgTime, isMe && styles.msgTimeMe]}>
-                        {new Date(item.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                    </Text>
+                    <Text style={[styles.msgTime, isMe && styles.msgTimeMe]}>{timeStr}</Text>
                 </View>
             </View>
         );
@@ -124,16 +149,22 @@ const InAppChatScreen = ({ navigation, route }: Props) => {
                 </TouchableOpacity>
                 <View style={styles.headerInfo}>
                     <View style={styles.headerAvatar}>
-                        <Icon name={userType === 'customer' ? 'car' : 'account'} size={18} color="#C9A84C" />
+                        <Icon name={userType === 'customer' ? 'car' : 'account-circle'} size={20} color="#C9A84C" />
                     </View>
                     <View>
-                        <Text style={styles.headerName}>{otherName}</Text>
-                        <Text style={styles.headerStatus}>Active trip</Text>
+                        <Text style={styles.headerName} numberOfLines={1}>{otherName}</Text>
+                        <View style={styles.activeDot}>
+                            <View style={styles.greenDot} />
+                            <Text style={styles.headerStatus}>Active trip</Text>
+                        </View>
                     </View>
                 </View>
-                <TouchableOpacity style={styles.callBtn}>
-                    <Icon name="phone" size={18} color="#10b981" />
-                </TouchableOpacity>
+            </View>
+
+            {/* Trip context safety banner */}
+            <View style={styles.contextBanner}>
+                <Icon name="shield-check" size={13} color="#C9A84C" />
+                <Text style={styles.contextText}>Messages are only visible during this trip for your safety</Text>
             </View>
 
             {/* Messages list */}
@@ -162,25 +193,32 @@ const InAppChatScreen = ({ navigation, route }: Props) => {
 
             {/* Bottom panel — quick replies + input row */}
             <View style={[styles.bottomPanel, { paddingBottom: insets.bottom }]}>
-                {/* Quick replies */}
-                <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    keyboardShouldPersistTaps="handled"
-                    contentContainerStyle={styles.quickReplyList}
-                    style={styles.quickReplyScroll}
-                >
-                    {quickReplies.map((qr, i) => (
-                        <TouchableOpacity
-                            key={i}
-                            style={styles.quickReplyChip}
-                            onPress={() => sendQuickReply(qr)}
-                            activeOpacity={0.7}
-                        >
-                            <Text style={styles.quickReplyText}>{qr}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
+                {/* Quick replies section */}
+                <View style={styles.quickReplySection}>
+                    <Text style={styles.quickReplyLabel}>Quick replies</Text>
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        keyboardShouldPersistTaps="handled"
+                        contentContainerStyle={styles.quickReplyList}
+                        style={styles.quickReplyScroll}
+                    >
+                        {quickReplies.map((qr, i) => {
+                            if (usedChips.has(i)) return null;
+                            return (
+                                <TouchableOpacity
+                                    key={i}
+                                    style={styles.quickReplyChip}
+                                    onPress={() => sendQuickReply(qr.text, i)}
+                                    activeOpacity={0.65}
+                                >
+                                    <Text style={styles.chipEmoji}>{qr.icon}</Text>
+                                    <Text style={styles.quickReplyText}>{qr.text}</Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </ScrollView>
+                </View>
 
                 {/* Input row */}
                 <View style={styles.inputRow}>
@@ -214,65 +252,84 @@ const InAppChatScreen = ({ navigation, route }: Props) => {
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: G.bgAlt },
 
-    // Header
     header: {
-        flexDirection: 'row', alignItems: 'center', gap: 10,
-        paddingHorizontal: 16, paddingVertical: 10,
-        backgroundColor: G.bg, borderBottomWidth: 1, borderBottomColor: G.border3,
-        height: 56,
+        flexDirection: 'row', alignItems: 'center', gap: 12,
+        paddingHorizontal: 14, paddingVertical: 10,
+        backgroundColor: G.bg,
+        borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)',
+        height: 64,
     },
     backBtn: {
-        width: 36, height: 36, borderRadius: 10,
+        width: 38, height: 38, borderRadius: 12,
         backgroundColor: G.glass2, alignItems: 'center', justifyContent: 'center',
     },
     headerInfo: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
     headerAvatar: {
-        width: 36, height: 36, borderRadius: 18,
-        backgroundColor: G.glass2, alignItems: 'center', justifyContent: 'center',
+        width: 40, height: 40, borderRadius: 20,
+        backgroundColor: 'rgba(201,168,76,0.12)',
+        alignItems: 'center', justifyContent: 'center',
+        borderWidth: 1.5, borderColor: 'rgba(201,168,76,0.35)',
     },
-    headerName: { fontSize: 14, fontWeight: '800', color: G.textPrimary },
+    headerName: { fontSize: 15, fontWeight: '800', color: G.textPrimary, maxWidth: 180 },
+    activeDot: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+    greenDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#10b981' },
     headerStatus: { fontSize: 11, color: '#10b981', fontWeight: '600' },
-    callBtn: {
-        width: 36, height: 36, borderRadius: 18,
-        backgroundColor: G.glass2, alignItems: 'center', justifyContent: 'center',
-        borderWidth: 1, borderColor: '#bbf7d0',
+
+    // Context safety banner
+    contextBanner: {
+        flexDirection: 'row', alignItems: 'center', gap: 6,
+        backgroundColor: 'rgba(201,168,76,0.07)',
+        paddingHorizontal: 14, paddingVertical: 7,
+        borderBottomWidth: 1, borderBottomColor: 'rgba(201,168,76,0.12)',
     },
+    contextText: { fontSize: 11, color: '#888', flex: 1, lineHeight: 15 },
 
     // Messages
-    list: { flex: 1, paddingHorizontal: 14, paddingTop: 10 },
-    messagesList: { paddingBottom: 12, gap: 8 },
+    list: { flex: 1, paddingHorizontal: 14, paddingTop: 12 },
+    messagesList: { paddingBottom: 16, gap: 10 },
     messagesEmpty: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
-    msgRow: { marginBottom: 8, alignItems: 'flex-start' },
-    msgRowMe: { alignItems: 'flex-end' },
-    msgBubble: { maxWidth: '78%', borderRadius: 18, paddingVertical: 10, paddingHorizontal: 14 },
-    msgBubbleMe: { backgroundColor: G.accent, borderBottomRightRadius: 4 },
+    msgRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginBottom: 2 },
+    msgRowMe: { justifyContent: 'flex-end' },
+    avatarDot: {
+        width: 26, height: 26, borderRadius: 13,
+        backgroundColor: 'rgba(201,168,76,0.1)',
+        alignItems: 'center', justifyContent: 'center',
+        borderWidth: 1, borderColor: 'rgba(201,168,76,0.2)',
+        marginBottom: 2,
+    },
+    msgBubble: { maxWidth: '75%', borderRadius: 18, paddingVertical: 10, paddingHorizontal: 14 },
+    msgBubbleMe: { backgroundColor: '#C9A84C', borderBottomRightRadius: 5 },
     msgBubbleOther: {
-        backgroundColor: G.bg, borderBottomLeftRadius: 4,
-        borderWidth: 1, borderColor: G.border3,
+        backgroundColor: G.bg, borderBottomLeftRadius: 5,
+        borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
     },
     msgText: { fontSize: 14, color: '#CCCCCC', fontWeight: '500', lineHeight: 20 },
-    msgTextMe: { color: '#0A0A0A' },
+    msgTextMe: { color: '#0A0A0A', fontWeight: '600' },
     msgTime: { fontSize: 10, color: G.textMuted, marginTop: 4, textAlign: 'right' },
-    msgTimeMe: { color: 'rgba(0,0,0,0.4)' },
+    msgTimeMe: { color: 'rgba(0,0,0,0.45)', textAlign: 'right' },
     emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
     emptyText: { fontSize: 16, fontWeight: '700', color: G.textSecondary },
-    emptySubtext: { fontSize: 12, color: G.textMuted, textAlign: 'center', paddingHorizontal: 24 },
+    emptySubtext: { fontSize: 12, color: G.textMuted, textAlign: 'center', paddingHorizontal: 32, lineHeight: 18 },
 
     // Bottom panel
-    bottomPanel: {
-        backgroundColor: G.bg,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(255,255,255,0.08)',
+    bottomPanel: { backgroundColor: G.bg, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.07)' },
+    quickReplySection: { paddingTop: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
+    quickReplyLabel: {
+        fontSize: 10, fontWeight: '700', color: '#555',
+        textTransform: 'uppercase', letterSpacing: 0.8,
+        paddingHorizontal: 14, marginBottom: 6,
     },
-    quickReplyScroll: { borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
-    quickReplyList: { paddingHorizontal: 12, paddingVertical: 8, gap: 6 },
+    quickReplyScroll: {},
+    quickReplyList: { paddingHorizontal: 12, paddingBottom: 10, gap: 6 },
     quickReplyChip: {
-        backgroundColor: G.glass2, borderRadius: 20,
-        paddingHorizontal: 14, paddingVertical: 8,
-        borderWidth: 1, borderColor: 'rgba(201,168,76,0.3)',
+        flexDirection: 'row', alignItems: 'center', gap: 5,
+        backgroundColor: G.glass2, borderRadius: 22,
+        paddingHorizontal: 13, paddingVertical: 8,
+        borderWidth: 1, borderColor: 'rgba(201,168,76,0.28)',
         marginRight: 6,
     },
-    quickReplyText: { fontSize: 12, fontWeight: '600', color: G.accent },
+    chipEmoji: { fontSize: 13 },
+    quickReplyText: { fontSize: 12, fontWeight: '600', color: '#D4AF62' },
 
     inputRow: {
         flexDirection: 'row', alignItems: 'flex-end',
@@ -280,17 +337,18 @@ const styles = StyleSheet.create({
     },
     input: {
         flex: 1, minHeight: 44, maxHeight: 120,
-        backgroundColor: G.glass2, borderRadius: 14,
+        backgroundColor: G.glass2, borderRadius: 16,
         paddingHorizontal: 14, paddingVertical: 10,
         fontSize: 14, color: G.textPrimary,
         borderWidth: 1, borderColor: G.border3,
     },
     sendBtn: {
         width: 44, height: 44, borderRadius: 14,
-        backgroundColor: G.accent, alignItems: 'center', justifyContent: 'center',
-        marginBottom: 0,
+        backgroundColor: '#C9A84C',
+        alignItems: 'center', justifyContent: 'center',
+        shadowColor: '#C9A84C', shadowOpacity: 0.4, shadowRadius: 8, elevation: 4,
     },
-    sendBtnDisabled: { opacity: 0.4 },
+    sendBtnDisabled: { opacity: 0.35, shadowOpacity: 0 },
 });
 
 export default InAppChatScreen;
