@@ -1,4 +1,4 @@
-{
+﻿{
   "expo": {
     "name": "DriveGaadi",
     "slug": "drivemate",
@@ -23,7 +23,10 @@
         "NSLocationAlwaysAndWhenInUseUsageDescription": "DriveGaadi needs your location to provide real-time tracking during rides.",
         "NSCameraUsageDescription": "DriveGaadi needs camera access to capture documents and profile photos.",
         "NSPhotoLibraryUsageDescription": "DriveGaadi needs photo library access to upload documents and profile photos.",
-        "UIBackgroundModes": ["location", "fetch"]
+        "UIBackgroundModes": [
+          "location",
+          "fetch"
+        ]
       },
       "config": {
         "googleMapsApiKey": "USE_ENV_VAR_EXPO_PUBLIC_GOOGLE_MAPS_API_KEY"
