@@ -1076,6 +1076,7 @@ const TrackingScreen = ({ navigation, route }: any) => {
         quality: 0.7,
         base64: true,
         allowsEditing: false,
+        // Selfie = front camera (locked). Car photos = back camera.
         cameraType: isSelfie ? ImagePicker.CameraType.front : ImagePicker.CameraType.back,
       });
 

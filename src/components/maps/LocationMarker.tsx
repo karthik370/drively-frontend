@@ -10,7 +10,7 @@
  *
  * ══ DESIGN — Lollipop style ══
  * Large filled circle on top + thin stick at the bottom.
- * • Pickup = green  (#22C55E) + white ↑ arrow  — matches theme.ts success color
+ * • Pickup = green  (#22C55E) — plain filled circle, no symbol — matches theme.ts success color
  * • Drop   = red    (#FF4444) + white ✓ check  — matches theme.ts error color
  * • Both have a thin gold (#C9A84C) ring border — DriveGaadi brand accent
  *
@@ -49,12 +49,12 @@ const WHITE        = '#FFFFFF';
 
 // ── Sub-components ───────────────────────────────────────────────────────────
 
+// Pickup: plain green filled circle with gold border — no icon/symbol inside
 const PickupHead = () => (
-  <View style={[styles.circle, { backgroundColor: PICKUP_COLOR, borderColor: GOLD }]}>
-    <Icon name="arrow-up-bold" size={18} color={WHITE} />
-  </View>
+  <View style={[styles.circle, { backgroundColor: PICKUP_COLOR, borderColor: GOLD }]} />
 );
 
+// Drop: red circle with gold border + white check mark
 const DropHead = () => (
   <View style={[styles.circle, { backgroundColor: DROP_COLOR, borderColor: GOLD }]}>
     <Icon name="check-bold" size={18} color={WHITE} />
