@@ -10,6 +10,7 @@ import socketService from '../../services/socketService';
 import { acceptBooking, calculateRoute, getDriverWalletSummary } from '../../services/api';
 import { BookingStatus, PaymentMethod, VehicleType } from '../../types';
 import type { BookingRequest } from '../../components/driver/BookingRequestCard';
+import LocationMarker from '../../components/maps/LocationMarker';
 import { showAlert } from '../../components/common/CustomAlert';
 import { G } from '../../constants/glassStyles';
 
@@ -292,23 +293,11 @@ const DriverBookingRequestDetailsScreen = ({ navigation, route }: any) => {
         >
           {/* Pickup marker */}
           {stablePickup ? (
-            <Marker
-              coordinate={stablePickup}
-              tracksViewChanges={false}
-              zIndex={5}
-              title="Pickup"
-              pinColor="green"
-            />
+            <LocationMarker type="pickup" latitude={stablePickup.latitude} longitude={stablePickup.longitude} zIndex={5} />
           ) : null}
           {/* Drop marker */}
           {stableDrop ? (
-            <Marker
-              coordinate={stableDrop}
-              tracksViewChanges={false}
-              zIndex={5}
-              title="Drop"
-              pinColor="red"
-            />
+            <LocationMarker type="drop" latitude={stableDrop.latitude} longitude={stableDrop.longitude} zIndex={5} />
           ) : null}
           {/* Driver location marker — pure View, no image load delay */}
           {driverLocation && Number.isFinite(driverLocation.latitude) && Number.isFinite(driverLocation.longitude) ? (

@@ -36,6 +36,7 @@ import {
 } from '../../redux/slices/locationSlice';
 import { showAlert } from '../../components/common/CustomAlert';
 import { CAR_IMAGE } from '../../components/maps/DriverMarker';
+import LocationMarker from '../../components/maps/LocationMarker';
 
 type Props = {
   navigation: any;
@@ -1142,10 +1143,10 @@ const RideConfirmScreen = ({ navigation, route }: Props) => {
           }}
         >
           {pickupLocation ? (
-            <Marker coordinate={pickupLocation} pinColor="#10b981" title="Pickup" zIndex={10} />
+            <LocationMarker type="pickup" latitude={pickupLocation.latitude} longitude={pickupLocation.longitude} zIndex={10} />
           ) : null}
           {effectiveDropLocation && !isSingleLocationRoundTrip ? (
-            <Marker coordinate={effectiveDropLocation} pinColor="#ef4444" title="Drop" zIndex={10} />
+            <LocationMarker type="drop" latitude={effectiveDropLocation.latitude} longitude={effectiveDropLocation.longitude} zIndex={10} />
           ) : null}
           {routeInfo?.polyline?.length ? (
             <Polyline coordinates={routeInfo.polyline} strokeColor="#C9A84C" strokeWidth={4} />

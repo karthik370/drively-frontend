@@ -10,6 +10,7 @@ import { setDropAddress, setDropLocation, setPickupAddress, setPickupLocation, s
 import { BookingStatus } from '../../types';
 import { getNearbyDrivers, type NearbyDriver } from '../../services/api';
 import DriverMarker from '../../components/maps/DriverMarker';
+import LocationMarker from '../../components/maps/LocationMarker';
 import { FadeIn, SlideUp, StaggerItem, PressableScale } from '../../components/premium/AnimatedComponents';
 import { showAlert } from '../../components/common/CustomAlert';
 import NearestDriverBadge from '../../components/customer/NearestDriverBadge';
@@ -387,8 +388,12 @@ const HomeScreen = ({ navigation }: any) => {
         <SlideUp delay={200} distance={40}>
           <View style={styles.mapContainer}>
             <MapView ref={mapRef} style={StyleSheet.absoluteFill} initialRegion={initialRegion} onPress={onMapPress}>
-              {pickupLocation ? <Marker coordinate={pickupLocation} pinColor="#10b981" title="Pickup" /> : null}
-              {dropLocation ? <Marker coordinate={dropLocation} pinColor="#ef4444" title="Drop" /> : null}
+              {pickupLocation ? (
+                <LocationMarker type="pickup" latitude={pickupLocation.latitude} longitude={pickupLocation.longitude} zIndex={10} />
+              ) : null}
+              {dropLocation ? (
+                <LocationMarker type="drop" latitude={dropLocation.latitude} longitude={dropLocation.longitude} zIndex={10} />
+              ) : null}
               {nearbyDrivers.map((d) => {
                 const lat = Number((d as any)?.location?.latitude);
                 const lng = Number((d as any)?.location?.longitude);
