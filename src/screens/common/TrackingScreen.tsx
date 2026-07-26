@@ -62,6 +62,7 @@ import { formatMaskedPhone } from '../../utils/phoneMask';
 import socketService from '../../services/socketService';
 import { decodePolyline } from '../../utils/decodePolyline';
 import DriverMarker, { CAR_IMAGE } from '../../components/maps/DriverMarker';
+import LocationMarker from '../../components/maps/LocationMarker';
 import RoutePolyline from '../../components/maps/RoutePolyline';
 import DriverArrivingCard from '../../components/customer/DriverArrivingCard';
 import SearchingForDriverCard from '../../components/customer/SearchingForDriverCard';
@@ -2012,23 +2013,19 @@ const TrackingScreen = ({ navigation, route }: any) => {
             return coords ? <RoutePolyline coordinates={coords} strokeWidth={5} strokeColor="#4285F4" animated /> : null;
           })()}
           {stablePickupCoord ? (
-            <Marker
-              coordinate={stablePickupCoord}
-              tracksViewChanges={false}
+            <LocationMarker
+              type="pickup"
+              latitude={stablePickupCoord.latitude}
+              longitude={stablePickupCoord.longitude}
               zIndex={5}
-              title="Pickup"
-              pinColor="green"
-              anchor={{ x: 0.5, y: 1 }}
             />
           ) : null}
           {stableDropCoord && !isRoundTripStarted ? (
-            <Marker
-              coordinate={stableDropCoord}
-              tracksViewChanges={false}
+            <LocationMarker
+              type="drop"
+              latitude={stableDropCoord.latitude}
+              longitude={stableDropCoord.longitude}
               zIndex={5}
-              title="Drop"
-              pinColor="red"
-              anchor={{ x: 0.5, y: 1 }}
             />
           ) : null}
           {!isDriverMode && isWaitingForDriver
