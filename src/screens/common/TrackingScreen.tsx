@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Image } from 'react-native';
+import * as ExpoLocation from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import {
   View,
@@ -2067,16 +2068,16 @@ const TrackingScreen = ({ navigation, route }: any) => {
             return (
               <TouchableOpacity
                 style={styles.recenterBtn}
-                onPress={() => {
+              onPress={async () => {
                   if (pannedTimerRef.current) clearTimeout(pannedTimerRef.current);
-                  // Reset both state and ref immediately — don't wait for the useEffect sync
                   setIsMapPanned(false);
                   isMapPannedRef.current = false;
                   lastFitCallTsRef.current = 0;
                   lastCameraTimestampRef.current = 0;
-                  // Animate camera to driver's live position
+
                   const dl = driverLocation;
                   if (dl && Number.isFinite(dl.latitude) && Number.isFinite(dl.longitude)) {
+                    // Active trip — centre on driver
                     mapRef.current?.animateToRegion({
                       latitude: dl.latitude,
                       longitude: dl.longitude,
@@ -2084,7 +2085,23 @@ const TrackingScreen = ({ navigation, route }: any) => {
                       longitudeDelta: 0.012,
                     }, 600);
                   } else {
-                    fitMapToRoute();
+                    // No driver (searching phase) — centre on user's current GPS
+                    try {
+                      const pos = await ExpoLocation.getLastKnownPositionAsync({}) ||
+                                  await ExpoLocation.getCurrentPositionAsync({ accuracy: ExpoLocation.Accuracy.Balanced });
+                      if (pos) {
+                        mapRef.current?.animateToRegion({
+                          latitude: pos.coords.latitude,
+                          longitude: pos.coords.longitude,
+                          latitudeDelta: 0.015,
+                          longitudeDelta: 0.015,
+                        }, 600);
+                      } else {
+                        fitMapToRoute();
+                      }
+                    } catch {
+                      fitMapToRoute();
+                    }
                   }
                 }}
               >
@@ -2119,7 +2136,44 @@ const TrackingScreen = ({ navigation, route }: any) => {
               </TouchableOpacity>
             );
           }
-          return null;
+          // Fallback: always show locate-me button so map can always be recentred
+          return (
+            <TouchableOpacity
+              style={styles.recenterBtn}
+              onPress={async () => {
+                lastFitCallTsRef.current = 0;
+                lastCameraTimestampRef.current = 0;
+                const dl = driverLocation;
+                if (dl && Number.isFinite(dl.latitude) && Number.isFinite(dl.longitude)) {
+                  mapRef.current?.animateToRegion({
+                    latitude: dl.latitude,
+                    longitude: dl.longitude,
+                    latitudeDelta: 0.012,
+                    longitudeDelta: 0.012,
+                  }, 600);
+                } else {
+                  try {
+                    const pos = await ExpoLocation.getLastKnownPositionAsync({}) ||
+                                await ExpoLocation.getCurrentPositionAsync({ accuracy: ExpoLocation.Accuracy.Balanced });
+                    if (pos) {
+                      mapRef.current?.animateToRegion({
+                        latitude: pos.coords.latitude,
+                        longitude: pos.coords.longitude,
+                        latitudeDelta: 0.015,
+                        longitudeDelta: 0.015,
+                      }, 600);
+                    } else {
+                      fitMapToRoute();
+                    }
+                  } catch {
+                    fitMapToRoute();
+                  }
+                }
+              }}
+            >
+              <Icon name="crosshairs-gps" size={22} color="#C9A84C" />
+            </TouchableOpacity>
+          );
         })()}
       </View>
 
