@@ -37,15 +37,15 @@ export type LocationMarkerProps = {
 };
 
 // ── Design tokens ────────────────────────────────────────────────────────────
-const CIRCLE_SIZE = 38;   // diameter of the lollipop head (dp)
-const STICK_W     = 3;    // width of the stick (dp)
-const STICK_H     = 14;   // height of the stick (dp)
-const BORDER_W    = 2.5;  // gold ring border width (dp)
+const CIRCLE_SIZE = 25;   // diameter of the lollipop head (dp)
+const STICK_W = 3;    // width of the stick (dp)
+const STICK_H = 14;   // height of the stick (dp)
+const BORDER_W = 2.5;  // gold ring border width (dp)
 
 const PICKUP_COLOR = '#22C55E';
-const DROP_COLOR   = '#FF4444';
-const GOLD         = '#C9A84C';
-const WHITE        = '#FFFFFF';
+const DROP_COLOR = '#FF4444';
+const GOLD = '#C9A84C';
+const WHITE = '#FFFFFF';
 
 // ── Sub-components ───────────────────────────────────────────────────────────
 
